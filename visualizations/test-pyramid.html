@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pyramide des Tests — Visualisation interactive</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', Tahoma, sans-serif; min-height: 100vh; }
+  h1 { text-align: center; padding: 18px 0 6px; font-size: 1.5rem; color: #c9d1d9; letter-spacing: 1px; }
+  .layout { display: flex; flex-wrap: wrap; gap: 14px; padding: 10px 18px; max-width: 1200px; margin: 0 auto; }
+  .pyramid-panel { flex: 1 1 500px; background: #16213e; border-radius: 12px; padding: 20px; min-height: 420px; display: flex; flex-direction: column; align-items: center; }
+  .info-panel { flex: 0 0 340px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: #16213e; border-radius: 10px; padding: 14px; }
+  .card h3 { font-size: .95rem; margin-bottom: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; }
+  .view-toggle { display: flex; gap: 6px; margin-bottom: 16px; }
+  .view-toggle button { background: #21262d; color: #8b949e; border: 2px solid #30363d; border-radius: 6px; padding: 8px 18px; cursor: pointer; font-size: .85rem; font-weight: 600; transition: all .3s; }
+  .view-toggle button.active { background: #238636; color: #fff; border-color: #238636; }
+  .view-toggle button:hover { filter: brightness(1.15); }
+
+  .pyramid-container { position: relative; width: 400px; height: 320px; margin: 10px 0; }
+  .layer { position: absolute; cursor: pointer; transition: all .5s ease, filter .2s; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1rem; letter-spacing: .5px; border-radius: 4px; }
+  .layer:hover { filter: brightness(1.3); transform: scale(1.03); }
+  .layer.selected { filter: brightness(1.4) drop-shadow(0 0 12px currentColor); transform: scale(1.06); }
+
+  .bar-section { margin-top: 12px; width: 100%; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .bar-label { font-size: .78rem; color: #8b949e; min-width: 80px; text-align: right; }
+  .bar-track { flex: 1; height: 18px; background: #0d1117; border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width .8s ease; }
+
+  .detail-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+  .detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .85rem; }
+  .detail-grid .label { color: #8b949e; }
+  .detail-grid .value { color: #c9d1d9; font-weight: 600; }
+  .detail-example { background: #0d1117; border-radius: 6px; padding: 10px; margin-top: 10px; font-family: 'Consolas', monospace; font-size: .78rem; color: #79c0ff; white-space: pre-wrap; line-height: 1.5; }
+  .placeholder { color: #484f58; font-style: italic; text-align: center; padding: 40px 0; }
+</style>
+</head>
+<body>
+<h1>Pyramide des Tests &mdash; Visualisation interactive</h1>
+<div class="layout">
+  <div class="pyramid-panel">
+    <div class="view-toggle">
+      <button id="btn-pyramid" class="active" onclick="setView('pyramid')">Pyramide</button>
+      <button id="btn-trophy" onclick="setView('trophy')">Trophy</button>
+    </div>
+    <div class="pyramid-container" id="pyramid-container">
+      <div class="layer" id="layer-e2e" onclick="selectLayer('e2e')" style="background: #dc3545;">E2E</div>
+      <div class="layer" id="layer-integration" onclick="selectLayer('integration')" style="background: #e8a838;">Integration</div>
+      <div class="layer" id="layer-unit" onclick="selectLayer('unit')" style="background: #238636;">Unitaires</div>
+    </div>
+    <div class="bar-section">
+      <div class="bar-row"><span class="bar-label">Unitaires</span><div class="bar-track"><div class="bar-fill" id="bar-unit" style="background:#238636;width:0%"></div></div></div>
+      <div class="bar-row"><span class="bar-label">Integration</span><div class="bar-track"><div class="bar-fill" id="bar-integration" style="background:#e8a838;width:0%"></div></div></div>
+      <div class="bar-row"><span class="bar-label">E2E</span><div class="bar-track"><div class="bar-fill" id="bar-e2e" style="background:#dc3545;width:0%"></div></div></div>
+    </div>
+  </div>
+  <div class="info-panel">
+    <div class="card">
+      <h3>Details de la couche</h3>
+      <div id="detail-content"><div class="placeholder">Cliquez sur une couche de la pyramide pour voir les details</div></div>
+    </div>
+    <div class="card">
+      <h3>Legende</h3>
+      <div style="font-size:.82rem;line-height:1.8;">
+        <span style="color:#238636;">&#9632;</span> <strong>Unitaires</strong> — Rapides, isoles, nombreux<br>
+        <span style="color:#e8a838;">&#9632;</span> <strong>Integration</strong> — Interactions entre modules<br>
+        <span style="color:#dc3545;">&#9632;</span> <strong>E2E</strong> — Parcours utilisateur complets
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const data = {
+  unit: {
+    label: 'Tests Unitaires',
+    color: '#238636',
+    count: '~70% des tests',
+    speed: '< 10 ms / test',
+    cost: 'Tres faible',
+    reliability: 'Tres haute (deterministes)',
+    example: `// test unitaire — Vitest
+describe('formatPrice', () => {
+  it('formate en euros', () => {
+    expect(formatPrice(42.5, 'EUR'))
+      .toBe('42,50 €')
+  })
+
+  it('gere les valeurs nulles', () => {
+    expect(formatPrice(0, 'EUR'))
+      .toBe('0,00 €')
+  })
+})`
+  },
+  integration: {
+    label: 'Tests d\'Integration',
+    color: '#e8a838',
+    count: '~20% des tests',
+    speed: '100 ms - 2s / test',
+    cost: 'Moyen',
+    reliability: 'Haute',
+    example: `// test d'integration — Testing Library
+it('soumet le formulaire de contact', async () => {
+  render(ContactForm)
+
+  await userEvent.type(
+    screen.getByLabelText('Email'), 'a@b.com'
+  )
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Envoyer' })
+  )
+
+  expect(mockApi.send).toHaveBeenCalledWith({
+    email: 'a@b.com'
+  })
+})`
+  },
+  e2e: {
+    label: 'Tests End-to-End',
+    color: '#dc3545',
+    count: '~10% des tests',
+    speed: '5 - 30s / test',
+    cost: 'Eleve (infra, maintenance)',
+    reliability: 'Moyenne (flaky possible)',
+    example: `// test E2E — Playwright
+test('parcours achat complet', async ({ page }) => {
+  await page.goto('/catalogue')
+  await page.click('[data-testid="product-1"]')
+  await page.click('text=Ajouter au panier')
+  await page.goto('/panier')
+
+  await expect(
+    page.locator('.cart-total')
+  ).toContainText('49,90 €')
+})`
+  }
+};
+
+const views = {
+  pyramid: {
+    e2e:         { left: 130, top: 10,  width: 140, height: 80 },
+    integration: { left: 70,  top: 100, width: 260, height: 90 },
+    unit:        { left: 10,  top: 200, width: 380, height: 100 },
+    bars: { unit: 80, integration: 30, e2e: 10 }
+  },
+  trophy: {
+    e2e:         { left: 110, top: 10,  width: 180, height: 70 },
+    integration: { left: 40,  top: 90,  width: 320, height: 120 },
+    unit:        { left: 100, top: 220, width: 200, height: 80 },
+    bars: { unit: 30, integration: 60, e2e: 20 }
+  }
+};
+
+let currentView = 'pyramid';
+let selectedLayer = null;
+
+function setView(view) {
+  currentView = view;
+  document.getElementById('btn-pyramid').classList.toggle('active', view === 'pyramid');
+  document.getElementById('btn-trophy').classList.toggle('active', view === 'trophy');
+  applyLayout();
+}
+
+function applyLayout() {
+  const v = views[currentView];
+  ['e2e', 'integration', 'unit'].forEach(key => {
+    const el = document.getElementById('layer-' + key);
+    const pos = v[key];
+    el.style.left = pos.left + 'px';
+    el.style.top = pos.top + 'px';
+    el.style.width = pos.width + 'px';
+    el.style.height = pos.height + 'px';
+  });
+  setTimeout(() => {
+    document.getElementById('bar-unit').style.width = v.bars.unit + '%';
+    document.getElementById('bar-integration').style.width = v.bars.integration + '%';
+    document.getElementById('bar-e2e').style.width = v.bars.e2e + '%';
+  }, 200);
+}
+
+function selectLayer(key) {
+  selectedLayer = key;
+  ['e2e', 'integration', 'unit'].forEach(k => {
+    document.getElementById('layer-' + k).classList.toggle('selected', k === key);
+  });
+  const d = data[key];
+  document.getElementById('detail-content').innerHTML = `
+    <div class="detail-title" style="color:${d.color}">${d.label}</div>
+    <div class="detail-grid">
+      <span class="label">Proportion :</span><span class="value">${d.count}</span>
+      <span class="label">Vitesse :</span><span class="value">${d.speed}</span>
+      <span class="label">Cout :</span><span class="value">${d.cost}</span>
+      <span class="label">Fiabilite :</span><span class="value">${d.reliability}</span>
+    </div>
+    <div class="detail-example">${d.example}</div>
+  `;
+}
+
+applyLayout();
+</script>
+</body>
+</html>

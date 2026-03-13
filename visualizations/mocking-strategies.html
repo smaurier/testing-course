@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strategies de Mocking — Visualisation interactive</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', Tahoma, sans-serif; min-height: 100vh; }
+  h1 { text-align: center; padding: 18px 0 6px; font-size: 1.5rem; color: #c9d1d9; letter-spacing: 1px; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 10px 18px; }
+  .card { background: #16213e; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  .card h3 { font-size: .95rem; margin-bottom: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; }
+
+  .columns { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  @media (max-width: 900px) { .columns { grid-template-columns: repeat(2, 1fr); } }
+
+  .mock-card { background: #0d1117; border: 2px solid #30363d; border-radius: 10px; padding: 14px; cursor: pointer; transition: all .3s; display: flex; flex-direction: column; }
+  .mock-card:hover { border-color: #58a6ff; transform: translateY(-3px); }
+  .mock-card.active { border-color: var(--accent); box-shadow: 0 0 16px var(--accent-glow); transform: scale(1.03); }
+  .mock-card .mock-title { font-weight: 700; font-size: .95rem; margin-bottom: 6px; color: var(--accent); }
+  .mock-card .mock-def { font-size: .78rem; color: #8b949e; line-height: 1.5; margin-bottom: 10px; flex: 1; }
+  .mock-card .mock-use { font-size: .75rem; color: #58a6ff; background: #16213e; border-radius: 4px; padding: 6px; margin-bottom: 8px; }
+  .mock-card .mock-code { font-size: .72rem; font-family: 'Consolas', monospace; background: #16213e; border-radius: 4px; padding: 8px; white-space: pre-wrap; line-height: 1.4; color: #79c0ff; }
+
+  /* Drag & Drop quiz */
+  .quiz-section { margin-top: 14px; }
+  .scenarios { display: flex; flex-wrap: wrap; gap: 8px; min-height: 50px; padding: 8px; background: #0d1117; border-radius: 8px; margin-bottom: 12px; }
+  .scenario { background: #21262d; border: 2px solid #30363d; border-radius: 6px; padding: 8px 14px; cursor: grab; font-size: .82rem; transition: all .2s; user-select: none; }
+  .scenario:active { cursor: grabbing; }
+  .scenario.correct { border-color: #238636; background: #0d2818; }
+  .scenario.wrong { border-color: #dc3545; background: #2d0d0d; animation: shake .4s; }
+  @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+
+  .drop-zones { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  @media (max-width: 900px) { .drop-zones { grid-template-columns: repeat(2, 1fr); } }
+  .drop-zone { border: 2px dashed #30363d; border-radius: 8px; min-height: 80px; padding: 8px; text-align: center; transition: all .3s; }
+  .drop-zone .zone-label { font-size: .78rem; color: #8b949e; font-weight: 600; margin-bottom: 6px; }
+  .drop-zone.over { border-color: #58a6ff; background: #1a3a5c44; }
+  .drop-zone .dropped { font-size: .78rem; padding: 4px 8px; background: #21262d; border-radius: 4px; margin-top: 4px; }
+
+  .score-bar { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .score-bar .score { font-size: 1.1rem; font-weight: 700; color: #58a6ff; }
+  button { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 8px 18px; cursor: pointer; font-size: .85rem; font-weight: 600; transition: background .2s; }
+  button:hover { filter: brightness(1.15); }
+  button.secondary { background: #21262d; color: #8b949e; border: 2px solid #30363d; }
+
+  /* Comparison table */
+  table { width: 100%; border-collapse: collapse; font-size: .8rem; margin-top: 8px; }
+  th, td { padding: 8px; text-align: center; border-bottom: 1px solid #21262d; }
+  th { color: #8b949e; font-weight: 600; text-transform: uppercase; font-size: .72rem; }
+  td { color: #c9d1d9; }
+  .cmp-yes { color: #238636; font-weight: 700; }
+  .cmp-no { color: #484f58; }
+</style>
+</head>
+<body>
+<h1>Strategies de Mocking &mdash; Comparaison interactive</h1>
+<div class="container">
+  <div class="card">
+    <h3>Les 5 types de doublures de test</h3>
+    <div class="columns" id="mock-columns">
+      <!-- Built by JS -->
+    </div>
+  </div>
+
+  <div class="card quiz-section">
+    <h3>Quiz : glissez chaque scenario vers le bon type</h3>
+    <div class="scenarios" id="scenarios">
+      <!-- Built by JS -->
+    </div>
+    <div class="drop-zones" id="drop-zones">
+      <!-- Built by JS -->
+    </div>
+    <div class="score-bar">
+      <span class="score" id="score">0 / 0</span>
+      <button class="secondary" onclick="resetQuiz()">Recommencer le quiz</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Tableau comparatif</h3>
+    <table>
+      <thead>
+        <tr><th></th><th>Dummy</th><th>Stub</th><th>Spy</th><th>Mock</th><th>Fake</th></tr>
+      </thead>
+      <tbody>
+        <tr><td style="text-align:left;color:#8b949e;">Renvoie des donnees</td><td class="cmp-no">-</td><td class="cmp-yes">Oui</td><td class="cmp-yes">Oui</td><td class="cmp-yes">Oui</td><td class="cmp-yes">Oui</td></tr>
+        <tr><td style="text-align:left;color:#8b949e;">Enregistre les appels</td><td class="cmp-no">-</td><td class="cmp-no">-</td><td class="cmp-yes">Oui</td><td class="cmp-yes">Oui</td><td class="cmp-no">-</td></tr>
+        <tr><td style="text-align:left;color:#8b949e;">Verifie les appels</td><td class="cmp-no">-</td><td class="cmp-no">-</td><td class="cmp-no">-</td><td class="cmp-yes">Oui</td><td class="cmp-no">-</td></tr>
+        <tr><td style="text-align:left;color:#8b949e;">Implementation reelle</td><td class="cmp-no">-</td><td class="cmp-no">-</td><td class="cmp-no">-</td><td class="cmp-no">-</td><td class="cmp-yes">Oui</td></tr>
+        <tr><td style="text-align:left;color:#8b949e;">Complexite</td><td>Aucune</td><td>Faible</td><td>Moyenne</td><td>Moyenne</td><td>Elevee</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const mocks = [
+  {
+    id: 'dummy',
+    title: 'Dummy',
+    accent: '#8b949e',
+    def: 'Objet passe en parametre mais jamais utilise. Sert uniquement a remplir une signature.',
+    use: 'Remplir un parametre obligatoire non pertinent pour le test',
+    code: `// Dummy: jamais appele
+const dummyLogger = {} as Logger
+
+const service = new UserService(
+  realRepo, dummyLogger
+)
+// On teste le repo,
+// pas le logger`
+  },
+  {
+    id: 'stub',
+    title: 'Stub',
+    accent: '#e8a838',
+    def: 'Renvoie des reponses pre-programmees. Ne verifie rien — fournit juste des donnees.',
+    use: 'Simuler une reponse API ou une valeur de retour fixe',
+    code: `// Stub: reponse fixe
+const stubApi = {
+  getUser: () => ({
+    id: 1,
+    name: 'Alice'
+  })
+}
+
+const user = await stubApi.getUser()
+expect(user.name).toBe('Alice')`
+  },
+  {
+    id: 'spy',
+    title: 'Spy',
+    accent: '#58a6ff',
+    def: 'Enregistre les appels (arguments, nombre) tout en laissant passer l\'appel reel ou un stub.',
+    use: 'Verifier qu\'une fonction a ete appelee avec les bons arguments',
+    code: `// Spy: enregistre les appels
+const spy = vi.spyOn(
+  emailService, 'send'
+)
+
+await registerUser('a@b.com')
+
+expect(spy).toHaveBeenCalledWith(
+  'a@b.com',
+  expect.stringContaining('Bienvenue')
+)`
+  },
+  {
+    id: 'mock',
+    title: 'Mock',
+    accent: '#bc4a9b',
+    def: 'Pre-programme avec des attentes. Le test echoue si les attentes ne sont pas remplies.',
+    use: 'Verifier un protocole d\'interaction precis entre objets',
+    code: `// Mock: attentes pre-programmees
+const mockNotif = vi.fn()
+
+const service = new OrderService(
+  mockNotif
+)
+await service.place(order)
+
+expect(mockNotif)
+  .toHaveBeenCalledTimes(1)
+expect(mockNotif)
+  .toHaveBeenCalledWith('ORDER_PLACED')`
+  },
+  {
+    id: 'fake',
+    title: 'Fake',
+    accent: '#238636',
+    def: 'Implementation fonctionnelle simplifiee (ex: base en memoire au lieu de PostgreSQL).',
+    use: 'Remplacer une infrastructure lourde par une version legere',
+    code: `// Fake: implementation simplifiee
+class FakeUserRepo implements UserRepo {
+  private users = new Map<string, User>()
+
+  async save(user: User) {
+    this.users.set(user.id, user)
+  }
+  async findById(id: string) {
+    return this.users.get(id) ?? null
+  }
+}`
+  }
+];
+
+const scenarios = [
+  { text: 'Un logger passe a un constructeur mais non teste', answer: 'dummy' },
+  { text: 'Une API qui renvoie toujours { status: 200 }', answer: 'stub' },
+  { text: 'Verifier que sendEmail() a ete appele 2 fois', answer: 'spy' },
+  { text: 'Le test echoue si notify() n\'est pas appele avec "OK"', answer: 'mock' },
+  { text: 'Un Map<> qui remplace Redis pour les tests', answer: 'fake' },
+  { text: 'Un objet vide passe comme 3e argument inutile', answer: 'dummy' },
+  { text: 'vi.fn().mockReturnValue(42)', answer: 'stub' },
+  { text: 'Compter combien de fois console.log est appele', answer: 'spy' },
+  { text: 'Verifier l\'ordre exact des appels a une API', answer: 'mock' },
+  { text: 'SQLite en memoire au lieu de PostgreSQL', answer: 'fake' }
+];
+
+let score = 0, attempts = 0;
+let activeCard = null;
+
+// Build mock cards
+function buildCards() {
+  const container = document.getElementById('mock-columns');
+  container.innerHTML = '';
+  mocks.forEach(m => {
+    const div = document.createElement('div');
+    div.className = 'mock-card';
+    div.id = 'card-' + m.id;
+    div.style.setProperty('--accent', m.accent);
+    div.style.setProperty('--accent-glow', m.accent + '44');
+    div.onclick = () => {
+      document.querySelectorAll('.mock-card').forEach(c => c.classList.remove('active'));
+      div.classList.add('active');
+    };
+    div.innerHTML = `
+      <div class="mock-title">${m.title}</div>
+      <div class="mock-def">${m.def}</div>
+      <div class="mock-use">${m.use}</div>
+      <div class="mock-code">${m.code}</div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+// Build quiz
+let shuffled = [];
+function buildQuiz() {
+  score = 0; attempts = 0;
+  updateScore();
+
+  const scenarioDiv = document.getElementById('scenarios');
+  scenarioDiv.innerHTML = '';
+  shuffled = [...scenarios].sort(() => Math.random() - 0.5);
+  shuffled.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'scenario';
+    el.draggable = true;
+    el.id = 'sc-' + i;
+    el.textContent = s.text;
+    el.dataset.answer = s.answer;
+    el.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', 'sc-' + i);
+    });
+    scenarioDiv.appendChild(el);
+  });
+
+  const zonesDiv = document.getElementById('drop-zones');
+  zonesDiv.innerHTML = '';
+  mocks.forEach(m => {
+    const zone = document.createElement('div');
+    zone.className = 'drop-zone';
+    zone.id = 'zone-' + m.id;
+    zone.innerHTML = `<div class="zone-label">${m.title}</div>`;
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.classList.remove('over');
+      const scId = e.dataTransfer.getData('text/plain');
+      const scEl = document.getElementById(scId);
+      if (!scEl || scEl.classList.contains('correct')) return;
+      attempts++;
+      if (scEl.dataset.answer === m.id) {
+        score++;
+        scEl.classList.add('correct');
+        scEl.draggable = false;
+        const dropped = document.createElement('div');
+        dropped.className = 'dropped';
+        dropped.textContent = scEl.textContent;
+        dropped.style.color = '#238636';
+        zone.appendChild(dropped);
+        scEl.style.display = 'none';
+      } else {
+        scEl.classList.add('wrong');
+        setTimeout(() => scEl.classList.remove('wrong'), 500);
+      }
+      updateScore();
+    });
+    zonesDiv.appendChild(zone);
+  });
+}
+
+function updateScore() {
+  document.getElementById('score').textContent = score + ' / ' + scenarios.length +
+    (attempts > 0 ? ` (${attempts} tentatives)` : '');
+}
+
+function resetQuiz() {
+  buildQuiz();
+}
+
+buildCards();
+buildQuiz();
+</script>
+</body>
+</html>
