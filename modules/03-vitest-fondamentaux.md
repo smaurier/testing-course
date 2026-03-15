@@ -31,6 +31,8 @@ Jest a ete concu pour l'ecosysteme CommonJS. Avec l'adoption massive d'ESM (ES M
 | UI integree | Non (package tiers) | `vitest --ui` inclus |
 | Workspace / monorepo | `projects` config | `vitest.workspace.ts` natif |
 
+> **Node.js Test Runner (`node:test`)** : Depuis Node.js 20+, Node.js inclut un test runner natif (`import { describe, it } from 'node:test'`). Il est leger et ne necessite aucune dependance, mais offre moins de features que Vitest (pas de watch mode avance, pas de couverture integree, pas de mocking avance). Utile pour les bibliotheques simples ou les scripts, mais Vitest reste recommande pour les applications.
+
 ### Migration depuis Jest
 
 L'API est quasi identique. Dans la plupart des cas, il suffit de :
