@@ -2,7 +2,7 @@
 
 | # | Sujet | Lien |
 |---|-------|------|
-| 00 | Prérequis : TypeScript, Node.js, bases du test | [quiz-00-prerequis.html](/quizzes/quiz-00-prerequis.html) |
+| 00 | Prérequis : TypeScript, Node.js, bases du test | [quiz-00-prérequis.html](/quizzes/quiz-00-prerequis.html) |
 | 01 | Pourquoi tester ? Pyramide, ROI, coût des bugs | [quiz-01-pourquoi-tester.html](/quizzes/quiz-01-pourquoi-tester.html) |
 | 02 | Anatomie d'un test : AAA, Given-When-Then, nommage | [quiz-02-anatomie.html](/quizzes/quiz-02-anatomie.html) |
 | 03 | Vitest : matchers, .each, snapshots, config | [quiz-03-vitest.html](/quizzes/quiz-03-vitest.html) |
@@ -11,7 +11,7 @@
 | 06 | Architecture testable : DI, SOLID, hexagonale | [quiz-06-architecture.html](/quizzes/quiz-06-architecture.html) |
 | 07 | Tests de composants : queries, mount, patterns | [quiz-07-composants.html](/quizzes/quiz-07-composants.html) |
 | 08 | MSW : handlers, server lifecycle, simulation d'erreurs | [quiz-08-msw.html](/quizzes/quiz-08-msw.html) |
-| 09 | Tests d'intégration : DB, fixtures, rollback | [quiz-09-integration.html](/quizzes/quiz-09-integration.html) |
+| 09 | Tests d'intégration : DB, fixtures, rollback | [quiz-09-intégration.html](/quizzes/quiz-09-integration.html) |
 | 10 | Playwright : sélecteurs, auto-wait, assertions | [quiz-10-playwright.html](/quizzes/quiz-10-playwright.html) |
 | 11 | Playwright avancé : Page Objects, fixtures, CI | [quiz-11-playwright-avance.html](/quizzes/quiz-11-playwright-avance.html) |
 | 12 | Couverture : types, mutation testing, Stryker | [quiz-12-couverture.html](/quizzes/quiz-12-couverture.html) |

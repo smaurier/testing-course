@@ -4,11 +4,11 @@
 - **Duree estimee** : 15-18 min
 - **Module** : `modules/14-flaky-tests-et-debugging.md`
 - **Lab associe** : Lab 14
-- **Prerequis** : Screencast 13
+- **Prérequis** : Screencast 13
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Projet de demo avec des exemples de tests flaky prepares
 - [ ] Fichier `modules/14-flaky-tests-et-debugging.md` ouvert
 
@@ -16,7 +16,7 @@
 
 ### [00:00-02:00] Introduction — Qu'est-ce qu'un test flaky ?
 
-> Un test flaky est un test qui produit des resultats differents sans changement de code. Il passe parfois, echoue parfois. C'est le pire ennemi d'une suite de tests car il detruit la confiance.
+> Un test flaky est un test qui produit des résultats différents sans changement de code. Il passe parfois, echoue parfois. C'est le pire ennemi d'une suite de tests car il detruit la confiance.
 
 **Action** : Afficher l'impact.
 
@@ -94,7 +94,7 @@ npx playwright test --trace on
 npx playwright show-trace test-results/flaky-test/trace.zip
 ```
 
-> Le trace viewer montre chaque action avec un screenshot avant/apres. On peut voir exactement ce qui etait affiche au moment de l'echec, les requetes reseau, les logs console. C'est comme une camera de surveillance pour les tests.
+> Le trace viewer montre chaque action avec un screenshot avant/après. On peut voir exactement ce qui etait affiche au moment de l'echec, les requêtes réseau, les logs console. C'est comme une camera de surveillance pour les tests.
 
 ### [09:00-12:00] Patterns de correction eprouves
 
@@ -158,9 +158,9 @@ CHECKLIST ANTI-FLAKY :
 □ Quarantine pour les flaky chroniques
 ```
 
-### [14:30-16:00] Diagnostiquer un flaky en 5 etapes
+### [14:30-16:00] Diagnostiquer un flaky en 5 étapes
 
-**Action** : Afficher la methode de diagnostic.
+**Action** : Afficher la méthode de diagnostic.
 
 ```
 ETAPE 1 : Reproduire
@@ -185,9 +185,9 @@ ETAPE 5 : Verifier
 → Monitorer en CI pendant 1 semaine
 ```
 
-### [16:00-17:30] Recapitulatif
+### [16:00-17:30] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -204,6 +204,6 @@ PROCHAINE ETAPE :
 
 ## Points d'attention pour l'enregistrement
 - Les 5 causes avec exemples de code sont le coeur — bien detailler chacune
-- Le trace viewer est visuellement tres parlant — montrer un vrai trace
-- Le checklist anti-flaky est un reference a garder — l'afficher en plein ecran
+- Le trace viewer est visuellement très parlant — montrer un vrai trace
+- Le checklist anti-flaky est un référence a garder — l'afficher en plein ecran
 - Montrer un vrai flaky reproduit avec --retry 50 si possible

@@ -4,11 +4,11 @@
 - **Duree estimee** : 18-20 min
 - **Module** : `modules/11-playwright-avance.md`
 - **Lab associe** : Lab 11
-- **Prerequis** : Screencast 10
+- **Prérequis** : Screencast 10
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Playwright installe avec navigateurs
 - [ ] Application de demo demarree sur localhost:3000
 - [ ] Fichier `modules/11-playwright-avance.md` ouvert
@@ -19,7 +19,7 @@
 
 > Quand la suite de tests grandit, les selecteurs se repetent partout. Le Page Object Model encapsule l'interaction avec une page dans une classe dediee.
 
-**Action** : Creer un Page Object.
+**Action** : Créer un Page Object.
 
 ```typescript
 // e2e/pages/login.page.ts
@@ -73,9 +73,9 @@ test('should show error with invalid credentials', async ({ page }) => {
 
 ### [02:30-06:00] Fixtures personnalisees
 
-> Les fixtures de Playwright permettent d'injecter des dependances dans les tests, comme une authentification reutilisable.
+> Les fixtures de Playwright permettent d'injecter des dépendances dans les tests, comme une authentification réutilisable.
 
-**Action** : Creer une fixture d'authentification.
+**Action** : Créer une fixture d'authentification.
 
 ```typescript
 // e2e/fixtures.ts
@@ -113,7 +113,7 @@ export { expect };
 
 ### [06:00-09:00] storageState — Reutiliser l'authentification
 
-> Se connecter dans `beforeEach` est lent. `storageState` sauvegarde les cookies et le localStorage pour les reutiliser.
+> Se connecter dans `beforeEach` est lent. `storageState` sauvegarde les cookies et le localStorage pour les réutiliser.
 
 **Action** : Configurer le global setup.
 
@@ -153,9 +153,9 @@ export default defineConfig({
 });
 ```
 
-### [09:00-12:00] Interception reseau — page.route()
+### [09:00-12:00] Interception réseau — page.route()
 
-> `page.route()` permet d'intercepter les requetes HTTP dans un test E2E — utile pour simuler des erreurs ou des donnees specifiques.
+> `page.route()` permet d'intercepter les requêtes HTTP dans un test E2E — utile pour simuler des erreurs ou des donnees spécifiques.
 
 **Action** : Demontrer l'interception.
 
@@ -186,9 +186,9 @@ test('should show specific data', async ({ page }) => {
 
 ### [12:00-14:30] Regression visuelle — toHaveScreenshot()
 
-> Les screenshots permettent de detecter des regressions CSS involontaires.
+> Les screenshots permettent de détecter des regressions CSS involontaires.
 
-**Action** : Creer un test visuel.
+**Action** : Créer un test visuel.
 
 ```typescript
 test('should match homepage screenshot', async ({ page }) => {
@@ -213,9 +213,9 @@ npx playwright test --update-snapshots
 npx playwright test
 ```
 
-### [14:30-16:30] Accessibilite — axe-core integration
+### [14:30-16:30] Accessibilité — axe-core intégration
 
-**Action** : Tester l'accessibilite avec axe.
+**Action** : Tester l'accessibilité avec axe.
 
 ```typescript
 import AxeBuilder from '@axe-core/playwright';
@@ -252,9 +252,9 @@ npx playwright test --shard=3/4
 npx playwright test --shard=4/4
 ```
 
-### [18:00-19:30] Recapitulatif
+### [18:00-19:30] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -270,7 +270,7 @@ PROCHAINE ETAPE :
 ```
 
 ## Points d'attention pour l'enregistrement
-- Le POM avant/apres montre clairement la valeur — insister sur la maintenance
+- Le POM avant/après montre clairement la valeur — insister sur la maintenance
 - La demo storageState doit montrer le gain de vitesse
-- Les screenshots de regression visuelle sont tres visuels — montrer la diff
-- Le test d'accessibilite avec axe est un quick win — le presenter comme tel
+- Les screenshots de regression visuelle sont très visuels — montrer la diff
+- Le test d'accessibilité avec axe est un quick win — le présenter comme tel

@@ -9,7 +9,7 @@
 - Comprendre et pratiquer le cycle TDD Red-Green-Refactor
 - Savoir quand TDD est benefique et quand il l'est moins
 - Realiser un kata TDD complet (StringCalculator)
-- Ecrire des specifications BDD en Given-When-Then
+- Écrire des spécifications BDD en Given-When-Then
 - Configurer Cucumber.js avec TypeScript
 - Comparer TDD, BDD et ATDD
 - Choisir entre Outside-in et Inside-out TDD
@@ -41,9 +41,9 @@
 
 ### Les 3 lois du TDD (Robert C. Martin)
 
-1. **Ne pas ecrire de code de production** tant qu'il n'y a pas un test qui echoue
-2. **Ne pas ecrire plus de test** qu'il n'en faut pour echouer (un assert suffit)
-3. **Ne pas ecrire plus de code** qu'il n'en faut pour passer le test
+1. **Ne pas écrire de code de production** tant qu'il n'y a pas un test qui echoue
+2. **Ne pas écrire plus de test** qu'il n'en faut pour echouer (un assert suffit)
+3. **Ne pas écrire plus de code** qu'il n'en faut pour passer le test
 
 ### Exemple minimal
 
@@ -102,9 +102,9 @@ export function add(...numbers: number[]): number {
 
 ## Kata TDD : StringCalculator
 
-Le kata StringCalculator est un exercice classique pour pratiquer le TDD. Voici le deroulement complet, etape par etape.
+Le kata StringCalculator est un exercice classique pour pratiquer le TDD. Voici le deroulement complet, étape par étape.
 
-### Etape 1 : chaine vide retourne 0
+### Étape 1 : chaine vide retourne 0
 
 ```typescript
 // RED
@@ -126,7 +126,7 @@ export function calculate(_input: string): number {
 }
 ```
 
-### Etape 2 : un seul nombre
+### Étape 2 : un seul nombre
 
 ```typescript
 // RED
@@ -147,7 +147,7 @@ export function calculate(input: string): number {
 }
 ```
 
-### Etape 3 : deux nombres separes par une virgule
+### Étape 3 : deux nombres separes par une virgule
 
 ```typescript
 // RED
@@ -166,7 +166,7 @@ export function calculate(input: string): number {
 }
 ```
 
-### Etape 4 : nombre arbitraire de valeurs
+### Étape 4 : nombre arbitraire de valeurs
 
 ```typescript
 // RED
@@ -180,7 +180,7 @@ it('should handle any amount of numbers', () => {
 // REFACTOR — rien a changer, les tests passent
 ```
 
-### Etape 5 : supporter le saut de ligne comme separateur
+### Étape 5 : supporter le saut de ligne comme separateur
 
 ```typescript
 // RED
@@ -201,7 +201,7 @@ export function calculate(input: string): number {
 }
 ```
 
-### Etape 6 : separateur personnalise
+### Étape 6 : separateur personnalise
 
 ```typescript
 // RED
@@ -238,7 +238,7 @@ export function calculate(input: string): number {
 }
 ```
 
-### Etape 7 : nombres negatifs interdits
+### Étape 7 : nombres negatifs interdits
 
 ```typescript
 // RED
@@ -279,7 +279,7 @@ export function calculate(input: string): number {
 }
 ```
 
-### Etape 8 : ignorer les nombres > 1000
+### Étape 8 : ignorer les nombres > 1000
 
 ```typescript
 // RED
@@ -377,10 +377,10 @@ describe('StringCalculator', () => {
 
 | Situation | Pourquoi TDD aide |
 |-----------|-------------------|
-| **Logique metier complexe** | Force a definir les regles avant le code |
-| **Algorithmes** | Decompose le probleme en petites etapes |
+| **Logique metier complexe** | Force a définir les regles avant le code |
+| **Algorithmes** | Decompose le problème en petites étapes |
 | **API design** | Le test est le premier "client" de l'API |
-| **Bug fix** | Ecrire le test qui reproduit le bug d'abord |
+| **Bug fix** | Écrire le test qui reproduit le bug d'abord |
 | **Code critique** | Garantit une couverture exhaustive |
 
 ## Quand TDD est moins adapte
@@ -389,9 +389,9 @@ describe('StringCalculator', () => {
 |-----------|----------|
 | **Prototypage / exploration** | On ne sait pas encore ce qu'on construit |
 | **UI visuelle** | Le rendu est difficile a exprimer en assertions |
-| **Integration systeme** | Les dependances externes sont complexes a simuler |
+| **Intégration système** | Les dépendances externes sont complexes a simuler |
 | **Code jetable** | L'investissement ne sera pas rentabilise |
-| **Refactoring massif** | Ecrire les tests apres est parfois plus pragmatique |
+| **Refactoring massif** | Écrire les tests après est parfois plus pragmatique |
 
 ---
 
@@ -432,7 +432,7 @@ Feature: Shopping Cart
 - **Lisible par tous** : devs, PO, QA, stakeholders
 - **Documentation vivante** : les specs sont executables
 - **Language ubiquitaire** : partage le vocabulaire du domaine
-- **Non-technique** : le PO peut ecrire les scenarios
+- **Non-technique** : le PO peut écrire les scenarios
 
 ---
 
@@ -533,7 +533,7 @@ Feature: Shopping Cart Management
       | Widget  | 10.00  | 100 | 900.00  |
 ```
 
-### Step definitions
+### Step définitions
 
 ```typescript
 // features/step-definitions/cart.steps.ts
@@ -609,12 +609,12 @@ pnpm cucumber-js --name "Add a single item"
 | Aspect | TDD | BDD |
 |--------|-----|-----|
 | **Focus** | Code, unites | Comportement, metier |
-| **Audience** | Developpeurs | Equipe entiere |
+| **Audience** | Développeurs | Équipe entière |
 | **Language** | Code (TypeScript) | Gherkin (naturel) |
-| **Granularite** | Fonction / methode | Feature / scenario |
-| **Quand** | Pendant le developpement | Avant le developpement (specs) |
+| **Granularite** | Fonction / méthode | Feature / scenario |
+| **Quand** | Pendant le développement | Avant le développement (specs) |
 | **Sortie** | Tests unitaires | Specs executables |
-| **Overhead** | Faible | Moyen (step definitions) |
+| **Overhead** | Faible | Moyen (step définitions) |
 
 ### Quand utiliser quoi ?
 
@@ -676,7 +676,7 @@ describe('UserController', () => {
 });
 ```
 
-**Avantages** : pas de mocks, tests reels, design emerge naturellement.
+**Avantages** : pas de mocks, tests réels, design emerge naturellement.
 **Inconvenients** : feedback tardif, peut construire des choses inutiles.
 
 ### Outside-in (London school / top-down)
@@ -753,7 +753,7 @@ describe('UserRepository', () => {
 
 ATDD combine BDD et TDD :
 
-1. **Ecrire un test d'acceptance** (BDD / Gherkin) qui definit le comportement attendu
+1. **Écrire un test d'acceptance** (BDD / Gherkin) qui définit le comportement attendu
 2. **Implementer avec TDD** (Red-Green-Refactor) pour satisfaire le test d'acceptance
 3. **Valider** que le test d'acceptance passe
 
@@ -828,7 +828,7 @@ export function getPasswordStrength(password: string): string {
 
 Les tests BDD generent une **documentation vivante** : toujours a jour car les specs sont les tests.
 
-### Generer un rapport HTML
+### Générer un rapport HTML
 
 ```javascript
 // cucumber.mjs
@@ -841,7 +841,7 @@ export default {
 };
 ```
 
-### Integration avec des outils de documentation
+### Intégration avec des outils de documentation
 
 ```bash
 # Installer le generateur de rapport
@@ -867,12 +867,12 @@ reporter.generate({
 });
 ```
 
-### Avantage cle
+### Avantage clé
 
 > Si un scenario Gherkin passe, la fonctionnalite decrite **fonctionne**.
 > Si un scenario echoue, la fonctionnalite est **cassee** et la doc le dit.
 
-Contrairement a un wiki ou un Confluence qui peut devenir obsolete, la living doc est **mecaniquement liee au code**.
+Contrairement à un wiki ou un Confluence qui peut devenir obsolete, la living doc est **mecaniquement liee au code**.
 
 ---
 
@@ -882,9 +882,9 @@ Contrairement a un wiki ou un Confluence qui peut devenir obsolete, la living do
 
 1. **Commencez petit** : ne faites pas du TDD sur tout, commencez par un bug fix ou un algorithme
 2. **Baby steps** : chaque cycle Red-Green-Refactor doit durer 2-5 minutes max
-3. **N'optimisez pas en Green** : ecrivez le code le plus simple qui passe, meme moche
-4. **Refactor est obligatoire** : ne sautez jamais l'etape Refactor
-5. **Une assertion par test** : soyez specifique, un test = un comportement
+3. **N'optimisez pas en Green** : ecrivez le code le plus simple qui passe, même moche
+4. **Refactor est obligatoire** : ne sautez jamais l'étape Refactor
+5. **Une assertion par test** : soyez spécifique, un test = un comportement
 
 ### BDD au quotidien
 
@@ -892,7 +892,7 @@ Contrairement a un wiki ou un Confluence qui peut devenir obsolete, la living do
 2. **Impliquez le PO** : les scenarios doivent etre comprehensibles par un non-dev
 3. **Evitez les details techniques** : pas de SQL, pas de JSON, pas de HTTP codes dans le Gherkin
 4. **Utilisez les Scenario Outline** : pour les variations parametriques
-5. **Gardez les steps reutilisables** : une step = une action atomique
+5. **Gardez les steps réutilisables** : une step = une action atomique
 
 ### Anti-patterns
 
@@ -931,9 +931,9 @@ it('should waive shipping for orders over 50 euros', () => { /* ... */ });
 - [ ] Je comprends le cycle Red-Green-Refactor
 - [ ] J'ai realise le kata StringCalculator en TDD pur
 - [ ] Je sais quand TDD est adapte et quand il l'est moins
-- [ ] Je sais ecrire des scenarios Given-When-Then en Gherkin
+- [ ] Je sais écrire des scenarios Given-When-Then en Gherkin
 - [ ] J'ai configure Cucumber.js avec TypeScript
-- [ ] Je comprends la difference entre Inside-out et Outside-in TDD
+- [ ] Je comprends la différence entre Inside-out et Outside-in TDD
 - [ ] Je sais quand utiliser TDD, BDD ou ATDD
 - [ ] J'evite les anti-patterns (scenarios techniques, tests trop gros)
 
@@ -949,8 +949,8 @@ Implementez un `RomanNumeralConverter` en TDD strict :
 
 ### Partie 2 : BDD
 
-Ecrivez les scenarios Gherkin et les step definitions pour une feature "Gestion de taches" :
-- Creer une tache
+Ecrivez les scenarios Gherkin et les step définitions pour une feature "Gestion de taches" :
+- Créer une tache
 - Marquer une tache comme terminee
 - Filtrer les taches par statut
 - Supprimer une tache
@@ -961,7 +961,7 @@ Ecrivez les scenarios Gherkin et les step definitions pour une feature "Gestion 
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [14 - Flaky tests et debugging](./14-flaky-tests-et-debugging) | [16 - Contract testing](./16-contract-testing) |
 
@@ -975,3 +975,14 @@ Ecrivez les scenarios Gherkin et les step definitions pour une feature "Gestion 
 - [Cucumber Documentation](https://cucumber.io/docs/cucumber/)
 - [BDD in Action](https://www.manning.com/books/bdd-in-action-second-edition)
 - [The StringCalculator Kata](https://osherove.com/tdd-kata-1/)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 15 tdd bdd](../screencasts/screencast-15-tdd-bdd.md)
+2. **Lab** : [lab-15-tdd-bdd](../labs/lab-15-tdd-bdd/README)
+3. **Visualisation** : [Cycle TDD](../visualizations/tdd-cycle.html)
+4. **Quiz** : [quiz 15 tdd bdd](../quizzes/quiz-15-tdd-bdd.html)
+:::

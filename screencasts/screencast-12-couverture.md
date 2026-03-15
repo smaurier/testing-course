@@ -4,11 +4,11 @@
 - **Duree estimee** : 15-18 min
 - **Module** : `modules/12-couverture-et-mutation-testing.md`
 - **Lab associe** : Lab 12
-- **Prerequis** : Screencast 11
+- **Prérequis** : Screencast 11
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Projet de demo avec Vitest + @vitest/coverage-v8
 - [ ] Fichier `modules/12-couverture-et-mutation-testing.md` ouvert
 
@@ -29,7 +29,7 @@ Functions   | Fonctions appelees au moins une fois       | Declarations, express
 Lines       | Lignes physiques executees                 | Approximation de statements
 ```
 
-### [02:00-05:00] Configuration et execution
+### [02:00-05:00] Configuration et exécution
 
 **Action** : Configurer la couverture dans Vitest.
 
@@ -57,7 +57,7 @@ export default defineConfig({
 });
 ```
 
-**Action** : Executer avec couverture.
+**Action** : Exécuter avec couverture.
 
 ```bash
 npx vitest run --coverage
@@ -67,9 +67,9 @@ npx vitest run --coverage
 
 ### [05:00-08:00] Le piege du 100% — Ce que la couverture ne dit PAS
 
-> La couverture dit "ce code a ete execute". Elle ne dit pas "ce code produit le bon resultat".
+> La couverture dit "ce code a ete exécuté". Elle ne dit pas "ce code produit le bon résultat".
 
-**Action** : Montrer un test avec 100% de couverture mais aucune verification.
+**Action** : Montrer un test avec 100% de couverture mais aucune vérification.
 
 ```typescript
 function divide(a: number, b: number): number {
@@ -91,7 +91,7 @@ it('should divide correctly', () => {
 });
 ```
 
-> C'est pour ca que la couverture est necessaire mais pas suffisante. Elle detecte le code NON teste, mais pas le code MAL teste.
+> C'est pour ça que la couverture est nécessaire mais pas suffisante. Elle détecté le code NON teste, mais pas le code MAL teste.
 
 ### [08:00-10:00] Seuils pragmatiques
 
@@ -113,7 +113,7 @@ RECOMMANDATION :
 
 ### [10:00-14:00] Mutation testing — Tester la qualite des tests
 
-> Le mutation testing repond a la question : "Mes tests sont-ils assez bons pour detecter des bugs ?" Il modifie le code source (mutations) et verifie que les tests detectent le changement.
+> Le mutation testing repond à la question : "Mes tests sont-ils assez bons pour détecter des bugs ?" Il modifie le code source (mutations) et vérifié que les tests detectent le changement.
 
 **Action** : Expliquer le concept.
 
@@ -146,13 +146,13 @@ export default {
 };
 ```
 
-**Action** : Executer Stryker.
+**Action** : Exécuter Stryker.
 
 ```bash
 npx stryker run
 ```
 
-> Un score de mutation de 80% signifie que 80% des mutations ont ete tuees par les tests. Les 20% restants sont des cas ou vos tests ne detecteraient pas un bug.
+> Un score de mutation de 80% signifie que 80% des mutations ont ete tuees par les tests. Les 20% restants sont des cas où vos tests ne detecteraient pas un bug.
 
 ### [14:00-16:00] Interpreter un rapport de mutations
 
@@ -177,9 +177,9 @@ it('should apply discount correctly', () => {
 });
 ```
 
-### [16:00-17:30] Recapitulatif
+### [16:00-17:30] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -195,7 +195,7 @@ PROCHAINE ETAPE :
 ```
 
 ## Points d'attention pour l'enregistrement
-- Le test avec 100% couverture et 0 assertion est le moment cle — bien le montrer
+- Le test avec 100% couverture et 0 assertion est le moment clé — bien le montrer
 - Le rapport HTML de couverture est visuellement parlant — naviguer dans les fichiers
 - Le mutation testing est souvent meconnu — prendre le temps d'expliquer
-- Stryker peut etre lent — preparer un rapport pre-genere pour la demo
+- Stryker peut etre lent — preparer un rapport pre-généré pour la demo

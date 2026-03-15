@@ -2,12 +2,12 @@
 
 ## Objectifs
 
-Apprendre a structurer le code pour qu'il soit facilement testable : injection de dependances, fonctions pures, Repository pattern, Interface Segregation, Ports & Adapters.
+Apprendre a structurer le code pour qu'il soit facilement testable : injection de dépendances, fonctions pures, Repository pattern, Interface Segregation, Ports & Adapters.
 
 ## Exercices
 
-### Exercice 1 : Injection de dependances
-Refactorez un `NotificationService` couple pour utiliser l'injection de dependances.
+### Exercice 1 : Injection de dépendances
+Refactorez un `NotificationService` couple pour utiliser l'injection de dépendances.
 
 ### Exercice 2 : Fonctions pures
 Extrayez des fonctions pures d'un `PriceCalculator` impur.

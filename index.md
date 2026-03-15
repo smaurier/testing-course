@@ -24,11 +24,13 @@ features:
 
 ## Plan du cours
 
+> **Si tu viens du cours 03-Vue** : les modules Vue avances (03-01 a 03-07) couvrent déjà les bases de Vitest, les tests de composants, Playwright E2E et MSW. Ce cours approfondit chaque sujet systematiquement et ajoute TDD/BDD (module 15), mutation testing (module 12), contract testing (module 16) et performance testing (module 17). Les modules 00-05 serviront de consolidation.
+
 ### Phase 1 — Fondamentaux
 
 | # | Module | Difficulte | Quiz |
 |---|--------|-----------|------|
-| 00 | [Prerequis et introduction](/modules/00-prerequis-et-introduction) | 1/5 | [Quiz 00](/quizzes/quiz-00-prerequis.html) |
+| 00 | [Prérequis et introduction](/modules/00-prerequis-et-introduction) | 1/5 | [Quiz 00](/quizzes/quiz-00-prerequis.html) |
 | 01 | [Pourquoi tester](/modules/01-pourquoi-tester) | 1/5 | [Quiz 01](/quizzes/quiz-01-pourquoi-tester.html) |
 | 02 | [Anatomie d'un test](/modules/02-anatomie-dun-test) | 2/5 | [Quiz 02](/quizzes/quiz-02-anatomie.html) |
 
@@ -47,7 +49,7 @@ features:
 | 06 | [Architecture testable](/modules/06-architecture-testable) | 3/5 | [Quiz 06](/quizzes/quiz-06-architecture.html) |
 | 07 | [Tests de composants](/modules/07-tests-de-composants) | 3/5 | [Quiz 07](/quizzes/quiz-07-composants.html) |
 | 08 | [MSW — Mock Service Worker](/modules/08-msw-mock-service-worker) | 3/5 | [Quiz 08](/quizzes/quiz-08-msw.html) |
-| 09 | [Tests d'integration](/modules/09-tests-integration) | 4/5 | [Quiz 09](/quizzes/quiz-09-integration.html) |
+| 09 | [Tests d'intégration](/modules/09-tests-integration) | 4/5 | [Quiz 09](/quizzes/quiz-09-integration.html) |
 
 ### Phase 4 — E2E et CI
 

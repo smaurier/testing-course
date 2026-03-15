@@ -9,9 +9,9 @@
 - Comprendre le principe "shift left" et la pyramide de feedback
 - Configurer un pipeline GitHub Actions complet avec tests
 - Paralleliser les tests (Vitest workers, Playwright sharding)
-- Generer et exploiter les rapports (JUnit, Codecov)
+- Générer et exploiter les rapports (JUnit, Codecov)
 - Mettre en place les pre-commit hooks (Husky + lint-staged)
-- Gerer les tests flaky en CI
+- Gérer les tests flaky en CI
 - Optimiser les couts et la vitesse du pipeline
 
 ---
@@ -335,7 +335,7 @@ export default defineConfig({
         run: pnpm playwright test --shard=${{ matrix.shard }}/4
 ```
 
-Playwright repartit automatiquement les fichiers de test entre les shards de maniere equilibree.
+Playwright repartit automatiquement les fichiers de test entre les shards de manière equilibree.
 
 ---
 
@@ -368,7 +368,7 @@ export default defineConfig({
 </testsuites>
 ```
 
-### Integration Codecov
+### Intégration Codecov
 
 ```yaml
       - name: Upload coverage
@@ -439,11 +439,11 @@ comment:
 ```
 
 **Quand utiliser run-all :**
-- E2E tests avec sharding (on veut tous les resultats)
+- E2E tests avec sharding (on veut tous les résultats)
 - Matrix OS/Node (on veut savoir quels environnements cassent)
-- Tests non-deterministes en investigation
+- Tests non-déterministes en investigation
 
-### Strategie recommandee
+### Stratégie recommandee
 
 ```yaml
 jobs:
@@ -527,13 +527,13 @@ git commit --no-verify -m "hotfix: emergency patch"
 
 ## Detection et gestion des tests flaky en CI
 
-### Le probleme
+### Le problème
 
-Un test flaky passe localement mais echoue aleatoirement en CI (ou l'inverse). Causes typiques :
+Un test flaky passe localement mais echoue aleatoirement en CI (où l'inverse). Causes typiques :
 - Timing (timeouts trop courts en CI)
 - Ressources limitees (CPU/RAM sur runners)
-- Acces reseau
-- Ordre d'execution different
+- Acces réseau
+- Ordre d'exécution différent
 
 ### Detection automatique
 
@@ -636,7 +636,7 @@ export default defineConfig({
 ### Pourquoi Docker en CI ?
 
 - Environnement **identique** local et CI
-- Dependances systeme controlees (Playwright browsers)
+- Dependances système controlees (Playwright browsers)
 - Isolation complete
 - Reproductibilite
 
@@ -659,7 +659,7 @@ COPY . .
 CMD ["pnpm", "test"]
 ```
 
-### Docker Compose pour les tests d'integration
+### Docker Compose pour les tests d'intégration
 
 ```yaml
 # docker-compose.test.yml
@@ -752,7 +752,7 @@ services:
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 ```
 
-### Execution conditionnelle
+### Exécution conditionnelle
 
 ```yaml
   unit-tests:
@@ -790,13 +790,13 @@ services:
         run: timeout 1200 pnpm playwright test # 20 min max
 ```
 
-### Resume des strategies d'optimisation
+### Résumé des stratégies d'optimisation
 
-| Strategie | Gain estime | Complexite |
+| Stratégie | Gain estime | Complexite |
 |-----------|-------------|------------|
 | Cache pnpm/node_modules | 30-60% install time | Faible |
 | Cache Playwright browsers | 2-3 min | Faible |
-| Execution conditionnelle | 100% (skip entier) | Moyenne |
+| Exécution conditionnelle | 100% (skip entier) | Moyenne |
 | Sharding E2E | 50-75% | Moyenne |
 | `fail-fast: true` (unit) | Variable | Faible |
 | `concurrency` + cancel | Evite les runs inutiles | Faible |
@@ -919,7 +919,7 @@ jobs:
 - [ ] Les rapports de couverture sont envoyes a Codecov
 - [ ] Les artefacts (rapports, traces) sont uploades
 - [ ] Les pre-commit hooks verifient lint + tests impactes
-- [ ] La strategie fail-fast est configuree selon le type de tests
+- [ ] La stratégie fail-fast est configuree selon le type de tests
 - [ ] Le caching est en place (pnpm, Playwright browsers)
 - [ ] Les tests flaky sont detectes et mis en quarantaine
 
@@ -942,7 +942,7 @@ Creez un pipeline GitHub Actions pour votre projet :
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [12 - Couverture et mutation testing](./12-couverture-et-mutation-testing) | [14 - Flaky tests et debugging](./14-flaky-tests-et-debugging) |
 
@@ -957,3 +957,14 @@ Creez un pipeline GitHub Actions pour votre projet :
 - [Vitest Coverage](https://vitest.dev/guide/coverage)
 - [Husky](https://typicode.github.io/husky/)
 - [lint-staged](https://github.com/lint-staged/lint-staged)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 13 ci cd](../screencasts/screencast-13-ci-cd.md)
+2. **Lab** : [lab-13-ci-cd](../labs/lab-13-ci-cd/README)
+3. **Visualisation** : [Pipeline CI/CD](../visualizations/ci-pipeline.html)
+4. **Quiz** : [quiz 13 ci cd](../quizzes/quiz-13-ci-cd.html)
+:::

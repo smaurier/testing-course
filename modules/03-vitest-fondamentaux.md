@@ -8,7 +8,7 @@
 
 - Comprendre pourquoi Vitest remplace Jest dans l'ecosysteme moderne
 - Configurer Vitest dans un projet TypeScript
-- Maitriser l'ensemble des matchers disponibles
+- Maîtriser l'ensemble des matchers disponibles
 - Utiliser les modificateurs .only, .skip, .todo, .each
 - Exploiter les snapshots (inline et fichier)
 - Travailler efficacement avec le watch mode et l'UI mode
@@ -23,15 +23,15 @@ Jest a ete concu pour l'ecosysteme CommonJS. Avec l'adoption massive d'ESM (ES M
 
 | Critere | Jest | Vitest |
 |---------|------|--------|
-| Support ESM natif | Partiel, necessite transformations | Natif via Vite |
-| Vitesse de demarrage | Lent (transformations Babel/ts-jest) | Rapide (esbuild / SWC) |
+| Support ESM natif | Partiel, nécessité transformations | Natif via Vite |
+| Vitesse de démarrage | Lent (transformations Babel/ts-jest) | Rapide (esbuild / SWC) |
 | Configuration TypeScript | ts-jest ou @swc/jest requis | Zero config avec Vite |
-| HMR / Watch mode | Re-execute tous les fichiers impactes | Ne re-execute que le strict necessaire |
-| Compatibilite API | Reference historique | Compatible Jest (migration facile) |
-| UI integree | Non (package tiers) | `vitest --ui` inclus |
+| HMR / Watch mode | Re-exécuté tous les fichiers impactes | Ne re-exécuté que le strict nécessaire |
+| Compatibilite API | Référence historique | Compatible Jest (migration facile) |
+| UI intégrée | Non (package tiers) | `vitest --ui` inclus |
 | Workspace / monorepo | `projects` config | `vitest.workspace.ts` natif |
 
-> **Node.js Test Runner (`node:test`)** : Depuis Node.js 20+, Node.js inclut un test runner natif (`import { describe, it } from 'node:test'`). Il est leger et ne necessite aucune dependance, mais offre moins de features que Vitest (pas de watch mode avance, pas de couverture integree, pas de mocking avance). Utile pour les bibliotheques simples ou les scripts, mais Vitest reste recommande pour les applications.
+> **Node.js Test Runner (`node:test`)** : Depuis Node.js 20+, Node.js inclut un test runner natif (`import { describe, it } from 'node:test'`). Il est leger et ne nécessité aucune dépendance, mais offre moins de features que Vitest (pas de watch mode avance, pas de couverture intégrée, pas de mocking avance). Utile pour les bibliotheques simples ou les scripts, mais Vitest reste recommande pour les applications.
 
 ### Migration depuis Jest
 
@@ -53,7 +53,7 @@ vi.spyOn(obj, 'method');
 vi.useFakeTimers();
 ```
 
-La seule difference majeure : `jest.*` devient `vi.*`.
+La seule différence majeure : `jest.*` devient `vi.*`.
 
 ---
 
@@ -527,7 +527,7 @@ expect({
 
 ## Modificateurs : .only, .skip, .todo, .each
 
-### .only — executer un seul test ou groupe
+### .only — exécuter un seul test ou groupe
 
 ```typescript
 describe('MathUtils', () => {
@@ -552,7 +552,7 @@ describe('OtherFeature', () => {
 });
 ```
 
-**Attention** : ne pas committer `.only` ! Configurez ESLint pour le detecter :
+**Attention** : ne pas committer `.only` ! Configurez ESLint pour le détecter :
 
 ```typescript
 // eslint.config.js
@@ -573,7 +573,7 @@ describe.skip('LegacyModule', () => {
 });
 ```
 
-### .todo — marquer un test a ecrire
+### .todo — marquer un test à écrire
 
 ```typescript
 describe('PaymentProcessor', () => {
@@ -590,9 +590,9 @@ describe('PaymentProcessor', () => {
 
 Les `.todo` apparaissent dans le rapport sous "todo" — pas d'echec ni de skip.
 
-### .each — tests parametres
+### .each — tests paramètres
 
-Le pattern `it.each` permet d'executer le meme test avec differentes donnees :
+Le pattern `it.each` permet d'exécuter le même test avec différentes donnees :
 
 ```typescript
 // Syntaxe avec tableau de tableaux
@@ -709,7 +709,7 @@ describe('formatUserProfile', () => {
 });
 ```
 
-Fichier genere (`__snapshots__/user.test.ts.snap`) :
+Fichier généré (`__snapshots__/user.test.ts.snap`) :
 
 ```
 // Vitest Snapshot v1
@@ -814,7 +814,7 @@ pnpm vitest --ui
 # - Code source avec couverture
 ```
 
-### Lancer un fichier specifique
+### Lancer un fichier spécifique
 
 ```bash
 # Par chemin
@@ -832,11 +832,11 @@ pnpm vitest run --coverage
 
 ---
 
-## Integration TypeScript
+## Intégration TypeScript
 
 ### Types et autocompletion
 
-Vitest est ecrit en TypeScript et offre un typage complet :
+Vitest est écrit en TypeScript et offre un typage complet :
 
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
@@ -1084,7 +1084,7 @@ pnpm vitest run -t "should calculate total"
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [02 - Anatomie d'un test](./02-anatomie-dun-test) | [04 - Mocking et test doubles](./04-mocking-et-test-doubles) |
 
@@ -1095,6 +1095,16 @@ pnpm vitest run -t "should calculate total"
 - [Quiz 03 : Testez vos connaissances](../quizzes/quiz-03-vitest.html)
 - [Lab 03 : Vitest fondamentaux](../labs/lab-03-vitest-fondamentaux/)
 - [Documentation officielle Vitest](https://vitest.dev/)
-- [Vitest API Reference](https://vitest.dev/api/)
+- [Vitest API Référence](https://vitest.dev/api/)
 - [Migration depuis Jest](https://vitest.dev/guide/migration.html)
 - [Vitest UI](https://vitest.dev/guide/ui.html)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 03 vitest](../screencasts/screencast-03-vitest.md)
+2. **Lab** : [lab-03-vitest-fondamentaux](../labs/lab-03-vitest-fondamentaux/README)
+3. **Quiz** : [quiz 03 vitest](../quizzes/quiz-03-vitest.html)
+:::

@@ -8,7 +8,7 @@
 
 - Comprendre les metriques de couverture (lignes, branches, fonctions, statements)
 - Configurer Istanbul/c8 avec Vitest
-- Definir des seuils de couverture pragmatiques
+- Définir des seuils de couverture pragmatiques
 - Savoir ce que la couverture dit — et ne dit pas
 - Demystifier le mythe du 100%
 - Decouvrir le mutation testing avec Stryker
@@ -29,7 +29,7 @@ La couverture mesure **quelle proportion du code source est executee** pendant l
 | **Functions** | Fonctions appelees au moins une fois | Declarations, expressions, fleches |
 | **Lines** | Lignes physiques executees | Approximation de statements |
 
-### Visualiser la difference
+### Visualiser la différence
 
 ```typescript
 // fichier: src/pricing.ts
@@ -66,7 +66,7 @@ describe('calculatePrice', () => {
 });
 ```
 
-**Resultat de couverture :**
+**Résultat de couverture :**
 
 | Metrique | Couvert | Total | % |
 |----------|---------|-------|---|
@@ -83,7 +83,7 @@ Branches manquantes : le `else` (total <= 1000) et le `if quantity > 100`.
 
 Vitest supporte deux providers de couverture :
 
-| Provider | Mecanisme | Vitesse | Precision |
+| Provider | Mécanisme | Vitesse | Precision |
 |----------|-----------|---------|-----------|
 | **c8** (v8) | Instrumentation native V8 | Rapide | Bonne (quelques edge cases) |
 | **istanbul** | Instrumentation du code source | Plus lent | Excellente |
@@ -291,10 +291,10 @@ describe('calculatePrice', () => {
 
 ### L'analogie du parachute
 
-> Avoir 100% de couverture, c'est comme avoir verifie que chaque couture
+> Avoir 100% de couverture, c'est comme avoir vérifié que chaque couture
 > du parachute existe. Mais est-ce qu'elles tiennent sous pression ?
 
-La couverture mesure **"est-ce que le code a ete execute"**, pas **"est-ce que le comportement est correctement verifie"**.
+La couverture mesure **"est-ce que le code a ete exécuté"**, pas **"est-ce que le comportement est correctement vérifié"**.
 
 ---
 
@@ -303,8 +303,8 @@ La couverture mesure **"est-ce que le code a ete execute"**, pas **"est-ce que l
 ### Pourquoi 100% est presque toujours une mauvaise cible
 
 1. **Rendements decroissants** : passer de 80% a 90% coute beaucoup plus que de 0% a 80%
-2. **Faux sentiment de securite** : 100% de couverture != 0 bugs
-3. **Tests fragiles** : pour atteindre 100%, on ecrit des tests couples a l'implementation
+2. **Faux sentiment de sécurité** : 100% de couverture != 0 bugs
+3. **Tests fragiles** : pour atteindre 100%, on écrit des tests couples a l'implementation
 4. **Code non testable utilement** : getters triviaux, barrels, types, configurations
 
 ### Exemple de code ou 100% est absurde
@@ -333,11 +333,11 @@ export { UserValidator } from './validator';
 
 | Couche | Statement | Branch | Justification |
 |--------|-----------|--------|---------------|
-| Utils / Logique pure | 90-95% | 85-90% | Facile a tester, critique |
+| Utils / Logique pure | 90-95% | 85-90% | Facile à tester, critique |
 | Services / Use cases | 85-90% | 80-85% | Logique metier importante |
-| API / Controllers | 75-85% | 70-80% | Integration souvent plus utile |
+| API / Controllers | 75-85% | 70-80% | Intégration souvent plus utile |
 | UI Components | 70-80% | 65-75% | Tester le comportement, pas le rendu |
-| **Global** | **80%** | **75%** | Bon equilibre effort/securite |
+| **Global** | **80%** | **75%** | Bon equilibre effort/sécurité |
 
 > **Regle d'or** : 80% de couverture + tests de qualite sur les chemins critiques
 > vaut mieux que 100% de couverture avec des tests superficiels.
@@ -346,15 +346,15 @@ export { UserValidator } from './validator';
 
 ## Introduction au mutation testing
 
-### Le probleme que ca resout
+### Le problème que ça resout
 
-La couverture dit : "Ce code a ete execute pendant les tests."
+La couverture dit : "Ce code a ete exécuté pendant les tests."
 
-Le mutation testing demande : **"Est-ce que les tests detecteraient une erreur dans ce code ?"**
+Le mutation testing demandé : **"Est-ce que les tests detecteraient une erreur dans ce code ?"**
 
 ### Le principe
 
-1. **Creer un mutant** : modifier legerement le code source (ex: `>` devient `>=`)
+1. **Créer un mutant** : modifier legerement le code source (ex: `>` devient `>=`)
 2. **Lancer les tests** sur le mutant
 3. **Observer** :
    - Tests echouent -> le mutant est **tue** (les tests sont bons)
@@ -502,11 +502,11 @@ src/services/pricing.ts
   ...
 ```
 
-### Interpreter les resultats
+### Interpreter les résultats
 
 | Statut | Signification | Action |
 |--------|---------------|--------|
-| **Killed** | Les tests detectent la mutation | Rien a faire |
+| **Killed** | Les tests detectent la mutation | Rien à faire |
 | **Survived** | Les tests NE detectent PAS la mutation | Ameliorer les tests |
 | **Timeout** | La mutation cause une boucle infinie | Generalement OK |
 | **No coverage** | Le code mute n'est pas couvert | Ajouter des tests |
@@ -522,7 +522,7 @@ Un score de 80%+ sur la logique metier est un **excellent indicateur** de qualit
 
 ---
 
-## Exemple complet : ameliorer des tests grace a Stryker
+## Exemple complet : ameliorer des tests grâce à Stryker
 
 ### Code source
 
@@ -720,7 +720,7 @@ describe('calculateSubscription', () => {
 
 ---
 
-## Strategies avancees
+## Stratégies avancees
 
 ### Couverture incrementale (changed files only)
 
@@ -847,9 +847,9 @@ it('should update user', () => {
 ## Checklist du module
 
 - [ ] J'ai configure la couverture v8 ou istanbul dans Vitest
-- [ ] J'ai defini des seuils pragmatiques (80% global, plus haut sur la logique critique)
+- [ ] J'ai défini des seuils pragmatiques (80% global, plus haut sur la logique critique)
 - [ ] Je sais lire un rapport de couverture (texte, HTML)
-- [ ] Je comprends la difference entre "code execute" et "code verifie"
+- [ ] Je comprends la différence entre "code exécuté" et "code vérifié"
 - [ ] J'ai installe et configure Stryker
 - [ ] Je sais interpreter un rapport de mutation (killed, survived, timeout)
 - [ ] J'ai ameliore des tests en corrigeant des mutants survivants
@@ -875,7 +875,7 @@ Reprenez un module de votre projet :
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [11 - Playwright avance](./11-playwright-avance) | [13 - Tests en CI/CD](./13-tests-en-ci-cd) |
 
@@ -889,3 +889,13 @@ Reprenez un module de votre projet :
 - [Stryker Mutator](https://stryker-mutator.io/)
 - [Martin Fowler — Test Coverage](https://martinfowler.com/bliki/TestCoverage.html)
 - [Mutation Testing — Wikipedia](https://en.wikipedia.org/wiki/Mutation_testing)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 12 couverture](../screencasts/screencast-12-couverture.md)
+2. **Lab** : [lab-12-couverture](../labs/lab-12-couverture/README)
+3. **Quiz** : [quiz 12 couverture](../quizzes/quiz-12-couverture.html)
+:::

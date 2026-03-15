@@ -6,10 +6,10 @@
 
 ## Objectifs
 
-- Comprendre le cout des bugs a chaque phase du cycle de vie
-- Connaitre la pyramide de tests et ses variantes
+- Comprendre le cout des bugs à chaque phase du cycle de vie
+- Connaître la pyramide de tests et ses variantes
 - Savoir quand tester et quand ne PAS tester
-- Evaluer le ROI du testing dans un projet reel
+- Evaluer le ROI du testing dans un projet réel
 
 ---
 
@@ -48,14 +48,14 @@ function calculateTotal(items: CartItem[]): number {
 Au-dela du fix technique :
 - **Temps de debugging** : identifier la cause racine
 - **Regression** : le fix introduit un nouveau bug
-- **Confiance** : l'equipe doute de la qualite du code
+- **Confiance** : l'équipe doute de la qualite du code
 - **Velocite** : chaque modification devient risquee sans tests
 
 ---
 
 ## La pyramide de tests
 
-### Le modele classique
+### Le modèle classique
 
 ```
         /\
@@ -113,9 +113,9 @@ async function createOrder(userId: number, items: CartItem[]): Promise<Order> {
    Static       (TypeScript, ESLint)
 ```
 
-Difference clef : **plus de tests d'integration**, moins de tests unitaires.
+Différence clef : **plus de tests d'intégration**, moins de tests unitaires.
 
-Raisonnement : "Write tests. Not too many. Mostly integration."
+Raisonnement : "Write tests. Not too many. Mostly intégration."
 
 ```typescript
 // Approche pyramide : tester calculateTotal et formatCurrency separement
@@ -130,8 +130,8 @@ Raisonnement : "Write tests. Not too many. Mostly integration."
 | Backend / logique metier | ✓ Beaucoup de logique pure | |
 | Frontend / composants UI | | ✓ Interactions complexes |
 | Algorithmes | ✓ Beaucoup de branches | |
-| CRUD basique | | ✓ Integration suffit |
-| Systeme critique (finance) | ✓ Maximum de couverture | |
+| CRUD basique | | ✓ Intégration suffit |
+| Système critique (finance) | ✓ Maximum de couverture | |
 
 ---
 
@@ -180,9 +180,9 @@ test('user can checkout', async ({ page }) => {
 
 | Type | Question | Quand |
 |------|----------|-------|
-| **Regression** | "Ca marche encore ?" | Apres chaque changement |
-| **Smoke** | "L'app demarre ?" | Deploiement, CI |
-| **Sanity** | "Les fonctions critiques marchent ?" | Apres un hotfix |
+| **Regression** | "Ça marche encore ?" | Après chaque changement |
+| **Smoke** | "L'app demarre ?" | Déploiement, CI |
+| **Sanity** | "Les fonctions critiques marchent ?" | Après un hotfix |
 | **Acceptance** | "Le client est satisfait ?" | Fin de sprint |
 | **Exploratoire** | "Que se passe-t-il si... ?" | Manuellement, ad hoc |
 
@@ -190,7 +190,7 @@ test('user can checkout', async ({ page }) => {
 
 ## Quand NE PAS tester
 
-### Le testing a un cout
+### Le testing à un cout
 
 ```typescript
 // NE PAS TESTER : code trivial sans logique
@@ -246,9 +246,9 @@ En pratique :
 
 1. **Confiance pour refactorer** — les tests garantissent que le comportement est preserve
 2. **Documentation vivante** — les tests decrivent le comportement attendu
-3. **Design feedback** — du code dur a tester = du code mal concu
+3. **Design feedback** — du code dur à tester = du code mal concu
 4. **Onboarding** — les nouveaux lisent les tests pour comprendre le code
-5. **Deploiement continu** — impossible sans tests automatises
+5. **Déploiement continu** — impossible sans tests automatises
 
 ---
 
@@ -319,16 +319,16 @@ Le Module 15 approfondira TDD et BDD.
 
 Avant de passer au lab, reflechissez :
 
-> Pour votre dernier projet, quels bugs auriez-vous pu eviter avec des tests ?
+> Pour votre dernier projet, quels bugs auriez-vous pu éviter avec des tests ?
 > Ou se situaient-ils dans la courbe de cout ?
 
 ---
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
-| [00 - Prerequis et introduction](./00-prerequis-et-introduction) | [02 - Anatomie d'un test](./02-anatomie-dun-test) |
+| [00 - Prérequis et introduction](./00-prerequis-et-introduction) | [02 - Anatomie d'un test](./02-anatomie-dun-test) |
 
 ---
 
@@ -338,4 +338,15 @@ Avant de passer au lab, reflechissez :
 - [Lab 01 : Premiers tests pratiques](../labs/lab-01-pourquoi-tester/)
 - [Visualisation : Pyramide de tests interactive](../visualizations/test-pyramid.html)
 - Martin Fowler — [Test Pyramid](https://martinfowler.com/bliki/TestPyramid.html)
-- Kent C. Dodds — [Write tests. Not too many. Mostly integration.](https://kentcdodds.com/blog/write-tests)
+- Kent C. Dodds — [Write tests. Not too many. Mostly intégration.](https://kentcdodds.com/blog/write-tests)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 01 pourquoi tester](../screencasts/screencast-01-pourquoi-tester.md)
+2. **Lab** : [lab-01-pourquoi-tester](../labs/lab-01-pourquoi-tester/README)
+3. **Visualisation** : [Pyramide des tests](../visualizations/test-pyramid.html)
+4. **Quiz** : [quiz 01 pourquoi tester](../quizzes/quiz-01-pourquoi-tester.html)
+:::

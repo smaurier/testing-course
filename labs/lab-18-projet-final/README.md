@@ -1,4 +1,4 @@
-# Lab 18 — Projet Final : Integration Complete
+# Lab 18 — Projet Final : Intégration Complete
 
 | Difficulte | Duree estimee | Module |
 |------------|---------------|--------|
@@ -6,23 +6,23 @@
 
 ## Objectifs
 
-- Elaborer une strategie de test avec distribution pyramidale
-- Ecrire une suite de tests unitaires pour un TaskService (CRUD + validation)
-- Ecrire des tests d'integration avec une base en memoire
-- Creer des mock handlers pour les endpoints REST
+- Elaborer une stratégie de test avec distribution pyramidale
+- Écrire une suite de tests unitaires pour un TaskService (CRUD + validation)
+- Écrire des tests d'intégration avec une base en mémoire
+- Créer des mock handlers pour les endpoints REST
 - Simuler un scenario e2e complet (create, edit, complete, delete)
-- Generer un rapport de test agrege avec couverture
+- Générer un rapport de test agrege avec couverture
 
 ## Exercices
 
 ### Exercice 1 — `createTestStrategy(app)`
-Generez un plan de test avec la distribution pyramidale (unit > integration > e2e).
+Generez un plan de test avec la distribution pyramidale (unit > intégration > e2e).
 
 ### Exercice 2 — Unit test suite: TaskService
 Testez le CRUD et la validation d'un TaskService.
 
-### Exercice 3 — Integration test suite: TaskService + InMemoryDB
-Testez le service avec un vrai store en memoire.
+### Exercice 3 — Intégration test suite: TaskService + InMemoryDB
+Testez le service avec un vrai store en mémoire.
 
 ### Exercice 4 — Mock API handlers
 Creez des handlers mock pour les endpoints REST (GET/POST/PUT/DELETE).
@@ -31,7 +31,7 @@ Creez des handlers mock pour les endpoints REST (GET/POST/PUT/DELETE).
 Simulez un scenario complet : create -> edit -> complete -> delete.
 
 ### Exercice 6 — Full test report
-Agregez tous les resultats et generez un rapport avec couverture.
+Agregez tous les résultats et generez un rapport avec couverture.
 
 ## Lancer les tests
 

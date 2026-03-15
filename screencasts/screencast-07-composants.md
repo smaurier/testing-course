@@ -4,11 +4,11 @@
 - **Duree estimee** : 18-20 min
 - **Module** : `modules/07-tests-de-composants.md`
 - **Lab associe** : Lab 07
-- **Prerequis** : Screencast 06
+- **Prérequis** : Screencast 06
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Projet de demo avec Vitest + jsdom
 - [ ] Fichier `modules/07-tests-de-composants.md` ouvert
 
@@ -16,7 +16,7 @@
 
 ### [00:00-02:00] Introduction — Qu'est-ce qu'un test de composant ?
 
-> Un test de composant se situe entre le test unitaire pur et le test d'integration. Il teste un composant UI de maniere isolee, avec son rendu reel dans un DOM simule.
+> Un test de composant se situe entre le test unitaire pur et le test d'intégration. Il teste un composant UI de manière isolee, avec son rendu réel dans un DOM simule.
 
 **Action** : Afficher la place dans la pyramide.
 
@@ -26,7 +26,7 @@
     Test unitaire    Test de composant    Test d'integration         Test E2E
 ```
 
-> La philosophie cle : tester le COMPORTEMENT, pas l'IMPLEMENTATION. On ne verifie pas que `setState` a ete appele — on verifie que l'utilisateur voit le bon texte.
+> La philosophie clé : tester le COMPORTEMENT, pas l'IMPLEMENTATION. On ne vérifié pas que `setState` a ete appele — on vérifié que l'utilisateur voit le bon texte.
 
 ### [02:00-05:00] Philosophie — Tester comme un utilisateur
 
@@ -54,9 +54,9 @@ it('should show dropdown content when button is clicked', () => {
 
 ### [05:00-08:30] Priorite des selecteurs
 
-> Comment trouver un element dans le DOM ? Il y a une hierarchie de selecteurs, du plus resilient au plus fragile.
+> Comment trouver un élément dans le DOM ? Il y à une hiérarchie de selecteurs, du plus resilient au plus fragile.
 
-**Action** : Afficher la hierarchie.
+**Action** : Afficher la hiérarchie.
 
 ```
 PRIORITE | SELECTEUR              | EXEMPLE                         | POURQUOI
@@ -73,7 +73,7 @@ PRIORITE | SELECTEUR              | EXEMPLE                         | POURQUOI
 
 ### [08:30-12:00] Demo — Tester un formulaire complet
 
-**Action** : Creer un test de formulaire (approche framework-agnostique).
+**Action** : Créer un test de formulaire (approche framework-agnostique).
 
 ```typescript
 import { describe, it, expect } from 'vitest';
@@ -117,7 +117,7 @@ describe('LoginForm', () => {
 
 ### [12:00-14:30] Props, events, slots — Les contrats du composant
 
-> Chaque composant a un contrat : les props qu'il recoit, les events qu'il emet, et les slots qu'il expose.
+> Chaque composant à un contrat : les props qu'il recoit, les events qu'il emet, et les slots qu'il expose.
 
 **Action** : Montrer les tests par contrat.
 
@@ -153,7 +153,7 @@ describe('UserCard', () => {
 
 ### [14:30-16:30] Etats asynchrones — Loading, error, success
 
-**Action** : Tester les differents etats.
+**Action** : Tester les différents états.
 
 ```typescript
 describe('UserList', () => {
@@ -178,9 +178,9 @@ describe('UserList', () => {
 });
 ```
 
-### [16:30-18:30] Recapitulatif
+### [16:30-18:30] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -195,7 +195,7 @@ PROCHAINE ETAPE :
 ```
 
 ## Points d'attention pour l'enregistrement
-- La comparaison implementation vs comportement est le moment cle
-- La hierarchie des selecteurs est un reference a afficher en plein ecran
+- La comparaison implementation vs comportement est le moment clé
+- La hiérarchie des selecteurs est un référence a afficher en plein ecran
 - Le formulaire de login est un cas concret que tout le monde comprend
 - Montrer findBy vs getBy vs queryBy clairement

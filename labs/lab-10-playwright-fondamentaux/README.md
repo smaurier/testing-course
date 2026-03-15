@@ -2,16 +2,16 @@
 
 ## Objectifs
 
-Apprendre les patterns fondamentaux de Playwright en simulant les interactions de page (sans vrai navigateur). On reconstruit les APIs cles : locateurs, auto-wait, formulaires, navigation et assertions.
+Apprendre les patterns fondamentaux de Playwright en simulant les interactions de page (sans vrai navigateur). On reconstruit les APIs clés : locateurs, auto-wait, formulaires, navigation et assertions.
 
-## Concepts cles
+## Concepts clés
 
 - Page simulee avec `goto`, `getByRole`, `getByText`, `click`, `fill`
-- Auto-wait : les actions attendent que l'element soit visible/enabled
-- Tests de formulaire : remplir, soumettre, verifier
+- Auto-wait : les actions attendent que l'élément soit visible/enabled
+- Tests de formulaire : remplir, soumettre, vérifier
 - Tests de navigation : changement d'URL, contenu dynamique
 - Assertions Playwright : `toBeVisible`, `toHaveText`, `toHaveValue`, `toHaveCount`
-- Scenario complet : login -> dashboard -> creation -> verification
+- Scenario complet : login -> dashboard -> création -> vérification
 
 ## Exercices
 
@@ -19,10 +19,10 @@ Apprendre les patterns fondamentaux de Playwright en simulant les interactions d
 Implementez une page avec `goto`, `getByRole`, `getByText`, `click`, `fill`.
 
 ### Exercice 2 : Auto-wait
-Les actions attendent que l'element soit visible et enabled avant d'agir.
+Les actions attendent que l'élément soit visible et enabled avant d'agir.
 
 ### Exercice 3 : Tests de formulaire
-Remplir les champs, soumettre, verifier le resultat.
+Remplir les champs, soumettre, vérifier le résultat.
 
 ### Exercice 4 : Tests de navigation
 `goto` change l'URL et le contenu de la page.
@@ -31,7 +31,7 @@ Remplir les champs, soumettre, verifier le resultat.
 Implementez `toBeVisible`, `toHaveText`, `toHaveValue`, `toHaveCount`.
 
 ### Exercice 6 : Scenario complet
-Login -> dashboard -> creer un item -> verifier la liste.
+Login -> dashboard -> créer un item -> vérifier la liste.
 
 ## Lancer le lab
 

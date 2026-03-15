@@ -8,16 +8,16 @@
 
 - Comprendre ce qu'est un test de composant et sa place dans la pyramide des tests
 - Adopter la philosophie "tester le comportement, pas l'implementation"
-- Maitriser les strategies de rendu : full mount vs shallow mount
-- Ecrire des tests centres sur l'utilisateur avec la bonne priorite de selecteurs
-- Tester props, events, slots, rendu conditionnel, listes, formulaires et etats asynchrones
+- Maîtriser les stratégies de rendu : full mount vs shallow mount
+- Écrire des tests centres sur l'utilisateur avec la bonne priorite de selecteurs
+- Tester props, events, slots, rendu conditionnel, listes, formulaires et états asynchrones
 - Comparer les approches Vue Test Utils, React Testing Library et Angular TestBed
 
 ---
 
 ## Qu'est-ce qu'un test de composant ?
 
-Un test de composant se situe entre le test unitaire pur et le test d'integration. Il teste un composant UI de maniere isolee, mais avec son rendu reel dans un DOM (reel ou simule).
+Un test de composant se situe entre le test unitaire pur et le test d'intégration. Il teste un composant UI de manière isolee, mais avec son rendu réel dans un DOM (réel ou simule).
 
 ```
                      Test unitaire
@@ -63,7 +63,7 @@ describe('ProductPage integration', () => {
 });
 ```
 
-### Quand ecrire un test de composant ?
+### Quand écrire un test de composant ?
 
 | Situation | Type recommande |
 |-----------|----------------|
@@ -71,7 +71,7 @@ describe('ProductPage integration', () => {
 | Un composant avec ses props/events | **Test de composant** |
 | Un composant avec ses enfants directs | **Test de composant** |
 | Flux utilisateur complet (login → dashboard) | Test E2E |
-| Composant + store + API reelle | Test d'integration |
+| Composant + store + API réelle | Test d'intégration |
 
 ---
 
@@ -126,8 +126,8 @@ describe('Counter', () => {
 
 Cela signifie :
 - Pas d'acces a `wrapper.vm` ou `component.instance`
-- Pas d'appel direct aux methodes internes
-- Chercher les elements par leur role, label, ou texte visible
+- Pas d'appel direct aux méthodes internes
+- Chercher les éléments par leur role, label, ou texte visible
 - Interagir via click, type, submit — pas via des appels programmatiques
 
 ---
@@ -176,7 +176,7 @@ expect(wrapper.find('price-display-stub').exists()).toBe(true);
 | Critere | Full mount | Shallow mount |
 |---------|-----------|---------------|
 | Realisme | Rendu complet, proche de la realite | Stubs pour les enfants |
-| Vitesse | Plus lent (plus de DOM a creer) | Plus rapide |
+| Vitesse | Plus lent (plus de DOM a créer) | Plus rapide |
 | Isolation | Moins isole (depend des enfants) | Plus isole |
 | Confiance | Plus de confiance | Moins de confiance |
 | Fragilite | Peut casser si un enfant change | Isole des changements enfants |
@@ -185,9 +185,9 @@ expect(wrapper.find('price-display-stub').exists()).toBe(true);
 ### Recommandation actuelle
 
 La tendance est au **full mount** car :
-- Il teste ce que l'utilisateur voit reellement
-- Il detecte les regressions dans les composants enfants
-- Il est plus proche du comportement reel de l'application
+- Il teste ce que l'utilisateur voit réellement
+- Il détecté les regressions dans les composants enfants
+- Il est plus proche du comportement réel de l'application
 - Les gains de vitesse du shallow mount sont negligeables avec les outils modernes
 
 ```typescript
@@ -212,7 +212,7 @@ const wrapper = mount(ProductCard, {
 
 ## Priorite des selecteurs
 
-L'ordre de priorite pour trouver un element dans le DOM teste reflete l'accessibilite et la robustesse :
+L'ordre de priorite pour trouver un élément dans le DOM teste reflete l'accessibilité et la robustesse :
 
 ### 1. getByRole — meilleur choix
 
@@ -274,11 +274,11 @@ screen.getByTestId('loading-spinner');
 screen.getByTestId('avatar-placeholder');
 ```
 
-### Tableau recapitulatif
+### Tableau récapitulatif
 
 | Priorite | Query | Quand l'utiliser |
 |----------|-------|------------------|
-| 1 | `getByRole` | Elements interactifs, headings, landmarks |
+| 1 | `getByRole` | Éléments interactifs, headings, landmarks |
 | 2 | `getByLabelText` | Champs de formulaire |
 | 3 | `getByPlaceholderText` | Si pas de label (deconseille mais pragmatique) |
 | 4 | `getByText` | Contenu textuel non-interactif |
@@ -289,11 +289,11 @@ screen.getByTestId('avatar-placeholder');
 
 ---
 
-## Patterns de test : rendu et verification
+## Patterns de test : rendu et vérification
 
 ### Pattern 1 : Render + Verify
 
-Le pattern le plus simple — rendre le composant et verifier le contenu affiche.
+Le pattern le plus simple — rendre le composant et vérifier le contenu affiche.
 
 ```typescript
 // Illustration avec le DOM natif (sans framework)
@@ -1058,18 +1058,18 @@ describe('createCounter (vanilla DOM)', () => {
 |----------------|---------------|----------------------|-----------------|
 | **Rendu** | `mount(Comp, { props })` | `render(<Comp prop={v} />)` | `TestBed.createComponent(Comp)` |
 | **Shallow render** | `shallowMount(Comp)` | Non recommande | `NO_ERRORS_SCHEMA` |
-| **Trouver element** | `wrapper.find('.class')` | `screen.getByRole(...)` | `fixture.debugElement.query(By.css(...))` |
+| **Trouver élément** | `wrapper.find('.class')` | `screen.getByRole(...)` | `fixture.debugElement.query(By.css(...))` |
 | **Clic** | `wrapper.trigger('click')` | `userEvent.click(el)` | `el.triggerEventHandler('click')` |
 | **Saisie texte** | `wrapper.setValue('text')` | `userEvent.type(el, 'text')` | `input.value = 'text'; dispatchEvent(...)` |
-| **Verifier events** | `wrapper.emitted('event')` | `vi.fn()` callback prop | `spyOn(comp.eventEmitter, 'emit')` |
+| **Vérifier events** | `wrapper.emitted('event')` | `vi.fn()` callback prop | `spyOn(comp.eventEmitter, 'emit')` |
 | **Attente async** | `await nextTick()` | `await findBy...()` | `fixture.detectChanges()` |
 | **Props** | `wrapper.setProps({...})` | `rerender(<Comp newProp />)` | `comp.input = val; detectChanges()` |
 | **Slots / Children** | `slots: { default: '...' }` | JSX children | `<ng-content>` + wrapper comp |
-| **Store integration** | `createTestPinia()` | `<Provider store={store}>` | `provideMockStore()` |
+| **Store intégration** | `createTestPinia()` | `<Provider store={store}>` | `provideMockStore()` |
 | **Router** | `global: { plugins: [router] }` | `<MemoryRouter>` | `RouterTestingModule` |
 | **Philosophie** | Acces au `wrapper.vm` possible | Interdit acces interne | Mixte (DI accessible) |
 
-### Exemple comparatif — meme composant, 3 frameworks
+### Exemple comparatif — même composant, 3 frameworks
 
 ```typescript
 // === VUE TEST UTILS ===
@@ -1124,18 +1124,18 @@ it('should add item to todo list', () => {
 
 ---
 
-## Bonnes pratiques — resume
+## Bonnes pratiques — résumé
 
 1. **Tester le comportement** : ce que l'utilisateur voit et fait
-2. **Preferer getByRole** : meilleur pour l'accessibilite et la robustesse
+2. **Preferer getByRole** : meilleur pour l'accessibilité et la robustesse
 3. **Full mount par defaut** : plus realiste, plus de confiance
-4. **userEvent > fireEvent** : simule mieux le comportement reel (hover, focus, etc.)
+4. **userEvent > fireEvent** : simule mieux le comportement réel (hover, focus, etc.)
 5. **Un seul concept par test** : facile a diagnostiquer en cas d'echec
 6. **Noms descriptifs** : le nom du test doit decrire le scenario
-7. **Pas de `wrapper.vm`** : ne pas acceder a l'etat interne du composant
-8. **findBy pour l'async** : utiliser `findByRole`, `findByText` pour les elements qui apparaissent apres un delai
+7. **Pas de `wrapper.vm`** : ne pas acceder a l'état interne du composant
+8. **findBy pour l'async** : utiliser `findByRole`, `findByText` pour les éléments qui apparaissent après un delai
 9. **cleanup automatique** : Testing Library nettoie le DOM entre chaque test
-10. **Pas de snapshots DOM** : fragiles et peu informatifs, preferer des assertions explicites
+10. **Pas de snapshots DOM** : fragiles et peu informatifs, préférer des assertions explicites
 
 ---
 
@@ -1143,8 +1143,8 @@ it('should add item to todo list', () => {
 
 Creez les tests de composant pour un composant `ProductCard` qui :
 - Affiche le nom, le prix, l'image et la description d'un produit
-- A un bouton "Ajouter au panier" qui emet un evenement avec le produit
-- Affiche "En rupture de stock" si `stock === 0` et desactive le bouton
+- A un bouton "Ajouter au panier" qui emet un événement avec le produit
+- Affiche "En rupture de stock" si `stock === 0` et désactivé le bouton
 - Affiche un badge "Promotion" si `discount > 0`
 - Le prix barre et le prix remise doivent s'afficher correctement
 
@@ -1154,7 +1154,7 @@ Creez les tests de composant pour un composant `ProductCard` qui :
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [06 - Architecture testable](./06-architecture-testable) | [08 - MSW Mock Service Worker](./08-msw-mock-service-worker) |
 
@@ -1169,3 +1169,13 @@ Creez les tests de composant pour un composant `ProductCard` qui :
 - Testing Library — [Which Query Should I Use?](https://testing-library.com/docs/queries/about#priority)
 - Vue Test Utils — [Documentation](https://test-utils.vuejs.org/)
 - Angular — [Component Testing](https://angular.dev/guide/testing/components-scenarios)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 07 composants](../screencasts/screencast-07-composants.md)
+2. **Lab** : [lab-07-tests-composants](../labs/lab-07-tests-composants/README)
+3. **Quiz** : [quiz 07 composants](../quizzes/quiz-07-composants.html)
+:::

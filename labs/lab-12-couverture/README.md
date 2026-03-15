@@ -4,11 +4,11 @@
 
 Comprendre les metriques de couverture de code (lignes, branches) et le mutation testing. On implemente les algorithmes de calcul sans outil externe.
 
-## Concepts cles
+## Concepts clés
 
 - Couverture de lignes : pourcentage de lignes executees
 - Couverture de branches : pourcentage de branches parcourues
-- Generation de mutants : remplacement d'operateurs, conditions
+- Génération de mutants : remplacement d'operateurs, conditions
 - Detection de mutants : tues vs survivants
 - Rapport de couverture agrege avec seuils
 - Score de mutation complet
@@ -21,7 +21,7 @@ Calculez le pourcentage de lignes executees.
 ### Exercice 2 : analyzeBranchCoverage — Couverture de branches
 Calculez le pourcentage de branches parcourues.
 
-### Exercice 3 : generateMutants — Generation de mutants
+### Exercice 3 : generateMutants — Génération de mutants
 Creez des mutations du code source (remplacement d'operateurs, negation de conditions).
 
 ### Exercice 4 : runMutationTest — Detection de mutants

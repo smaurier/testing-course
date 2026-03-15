@@ -6,22 +6,22 @@
 
 ## Objectifs
 
-- Connaitre la taxonomie des test doubles (dummy, stub, spy, mock, fake)
-- Maitriser vi.fn(), vi.spyOn(), vi.mock() et vi.hoisted()
+- Connaître la taxonomie des test doubles (dummy, stub, spy, mock, fake)
+- Maîtriser vi.fn(), vi.spyOn(), vi.mock() et vi.hoisted()
 - Savoir mocker des modules, des timers et des dates
 - Comprendre le mocking partiel
 - Identifier l'anti-pattern du sur-mocking (over-mocking)
-- Considerer l'injection de dependances comme alternative
+- Considerer l'injection de dépendances comme alternative
 
 ---
 
 ## Taxonomie des test doubles
 
-Gerard Meszaros (puis Martin Fowler) definit 5 types de "doublures" de test :
+Gerard Meszaros (puis Martin Fowler) définit 5 types de "doublures" de test :
 
 ### 1. Dummy
 
-Un objet passe en parametre mais jamais utilise. Il remplit un slot obligatoire.
+Un objet passe en paramètre mais jamais utilise. Il remplit un slot obligatoire.
 
 ```typescript
 interface Logger {
@@ -48,7 +48,7 @@ it('should create a user', () => {
 
 ### 2. Stub
 
-Retourne des reponses predefinies. Ne verifie pas comment il est appele.
+Retourne des réponses predefinies. Ne vérifié pas comment il est appele.
 
 ```typescript
 interface PricingAPI {
@@ -92,7 +92,7 @@ it('should log a warning when user has weak password', () => {
 
 ### 4. Mock
 
-Comme un spy, mais avec des attentes predefinies sur la facon dont il sera appele. L'echec du test vient du mock, pas de l'assertion finale.
+Comme un spy, mais avec des attentes predefinies sur la façon dont il sera appele. L'echec du test vient du mock, pas de l'assertion finale.
 
 ```typescript
 it('should send exactly one confirmation email', () => {
@@ -164,21 +164,21 @@ describe('UserService with FakeRepository', () => {
 });
 ```
 
-### Resume : quand utiliser quoi ?
+### Résumé : quand utiliser quoi ?
 
-| Type | Comportement | Verification | Cas d'usage |
+| Type | Comportement | Vérification | Cas d'usage |
 |------|-------------|--------------|-------------|
-| Dummy | Aucun | Non | Remplir un parametre obligatoire |
+| Dummy | Aucun | Non | Remplir un paramètre obligatoire |
 | Stub | Reponse fixe | Non | Controler les donnees d'entree |
-| Spy | Reel + enregistre | Oui (appels) | Verifier les interactions |
-| Mock | Configure + enregistre | Oui (attentes) | Verifier le protocole |
+| Spy | Reel + enregistre | Oui (appels) | Vérifier les interactions |
+| Mock | Configure + enregistre | Oui (attentes) | Vérifier le protocole |
 | Fake | Simplifie | Non | Remplacer infrastructure (DB, API) |
 
 ---
 
 ## vi.fn() — mock functions
 
-### Creation et utilisation
+### Création et utilisation
 
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
@@ -321,7 +321,7 @@ afterEach(() => {
 
 ---
 
-## vi.spyOn() — espionner des methodes
+## vi.spyOn() — espionner des méthodes
 
 ### Espionner sans modifier
 
@@ -508,7 +508,7 @@ it('should track order event', () => {
 
 ## vi.hoisted() — hoisting des variables mock
 
-`vi.mock()` est hisse (hoisted) en haut du fichier par Vitest. Cela pose un probleme si la factory utilise des variables :
+`vi.mock()` est hisse (hoisted) en haut du fichier par Vitest. Cela pose un problème si la factory utilise des variables :
 
 ```typescript
 // PROBLEME : mockFn n'est pas encore defini quand vi.mock est hisse
@@ -540,7 +540,7 @@ it('should call doSomething', () => {
 });
 ```
 
-### Ordre d'execution reel
+### Ordre d'exécution réel
 
 ```typescript
 // Ce que vous ecrivez :
@@ -560,7 +560,7 @@ import { bar } from './bar';
 
 ## Mocking partiel
 
-Parfois on veut mocker UNE fonction d'un module et garder le reste reel :
+Parfois on veut mocker UNE fonction d'un module et garder le reste réel :
 
 ```typescript
 // src/utils/math.ts
@@ -669,7 +669,7 @@ describe('debounce', () => {
 });
 ```
 
-### Autres methodes de controle des timers
+### Autres méthodes de controle des timers
 
 ```typescript
 describe('Timer control methods', () => {
@@ -1002,7 +1002,7 @@ describe('UserRepository', () => {
 
 ### Mocker quand :
 
-1. **I/O externe** : reseau, base de donnees, systeme de fichiers
+1. **I/O externe** : réseau, base de donnees, système de fichiers
 2. **Non-determinisme** : Date.now(), Math.random(), crypto
 3. **Lenteur** : appels API, timers longs
 4. **Effets de bord** : envoi d'email, paiement, logs
@@ -1074,9 +1074,9 @@ it('should create order with correct total', async () => {
 
 ---
 
-## L'injection de dependances comme alternative
+## L'injection de dépendances comme alternative
 
-Au lieu de mocker des modules avec `vi.mock()`, on peut injecter les dependances :
+Au lieu de mocker des modules avec `vi.mock()`, on peut injecter les dépendances :
 
 ```typescript
 // SANS injection (difficile a tester)
@@ -1122,13 +1122,13 @@ it('should register user and send email', async () => {
 });
 ```
 
-L'injection de dependances sera approfondie dans le Module 06.
+L'injection de dépendances sera approfondie dans le Module 06.
 
 ---
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [03 - Vitest fondamentaux](./03-vitest-fondamentaux) | [05 - Tests asynchrones](./05-tests-asynchrones) |
 
@@ -1142,3 +1142,14 @@ L'injection de dependances sera approfondie dans le Module 06.
 - Gerard Meszaros — [Test Double](http://xunitpatterns.com/Test%20Double.html)
 - [Documentation Vitest : vi](https://vitest.dev/api/vi.html)
 - [Documentation Vitest : Mock Functions](https://vitest.dev/api/mock.html)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 04 mocking](../screencasts/screencast-04-mocking.md)
+2. **Lab** : [lab-04-mocking](../labs/lab-04-mocking/README)
+3. **Visualisation** : [Stratégies de mocking](../visualizations/mocking-strategies.html)
+4. **Quiz** : [quiz 04 mocking](../quizzes/quiz-04-mocking.html)
+:::

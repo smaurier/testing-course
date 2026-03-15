@@ -6,14 +6,14 @@
 
 ## Objectifs
 
-- Maitriser async/await dans les tests Vitest
+- Maîtriser async/await dans les tests Vitest
 - Utiliser resolves/rejects pour les assertions sur promesses
 - Tester les callbacks converties en promesses
 - Controler le temps avec vi.useFakeTimers et vi.advanceTimersByTime
 - Tester les event emitters
 - Implementer le pattern waitFor pour le polling
 - Tester debounce et throttle
-- Eviter les pieges courants (await oublie, rejections non-gerees)
+- Éviter les pieges courants (await oublie, rejections non-gerees)
 
 ---
 
@@ -1161,7 +1161,7 @@ describe('NotificationService', () => {
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [04 - Mocking et test doubles](./04-mocking-et-test-doubles) | [06 - Architecture testable](./06-architecture-testable) |
 
@@ -1175,3 +1175,13 @@ describe('NotificationService', () => {
 - [Documentation Vitest : Fake Timers](https://vitest.dev/api/vi.html#vi-usefaketimers)
 - MDN — [Using Promises](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises)
 - Jake Archibald — [Tasks, microtasks, queues and schedules](https://jakearchibald.com/2015/tasks-microtasks-queues-and-schedules/)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 05 async](../screencasts/screencast-05-async.md)
+2. **Lab** : [lab-05-tests-asynchrones](../labs/lab-05-tests-asynchrones/README)
+3. **Quiz** : [quiz 05 async](../quizzes/quiz-05-async.html)
+:::

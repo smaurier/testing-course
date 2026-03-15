@@ -6,19 +6,19 @@
 
 ## Objectifs
 
-- Comprendre pourquoi intercepter au niveau reseau plutot que mocker les modules
+- Comprendre pourquoi intercepter au niveau réseau plutot que mocker les modules
 - Installer et configurer MSW pour Node (tests) et navigateur (dev)
-- Ecrire des handlers pour GET, POST, PUT, DELETE
-- Gerer les parametres dynamiques (path, query, body)
-- Maitriser le cycle de vie du serveur MSW
-- Ecrire des overrides per-test pour les cas d'erreur
-- Appliquer MSW a des patterns de tests reels (CRUD, pagination, retry)
+- Écrire des handlers pour GET, POST, PUT, DELETE
+- Gérer les paramètres dynamiques (path, query, body)
+- Maîtriser le cycle de vie du serveur MSW
+- Écrire des overrides per-test pour les cas d'erreur
+- Appliquer MSW a des patterns de tests réels (CRUD, pagination, retry)
 
 ---
 
 ## Pourquoi MSW ?
 
-### Le probleme des mocks traditionnels
+### Le problème des mocks traditionnels
 
 Quand on teste du code qui fait des appels HTTP, on a plusieurs options :
 
@@ -47,9 +47,9 @@ vi.mock('axios', () => ({
 // Probleme : syntaxe complexe pour recreer l'API d'axios
 ```
 
-### La solution MSW : interception au niveau reseau
+### La solution MSW : interception au niveau réseau
 
-MSW intercepte les requetes **au niveau de la couche reseau**, pas au niveau du code.
+MSW intercepte les requêtes **au niveau de la couche réseau**, pas au niveau du code.
 
 ```
 Votre code  →  fetch() / axios  →  [MSW intercepte ici]  →  Reponse simulee
@@ -59,16 +59,16 @@ Votre code  →  fetch() / axios  →  [MSW intercepte ici]  →  Reponse simule
 ```
 
 Avantages :
-- Le vrai code de `fetch()` ou `axios` est execute
-- Les headers, l'URL, le body sont reellement construits et envoyes
+- Le vrai code de `fetch()` ou `axios` est exécuté
+- Les headers, l'URL, le body sont réellement construits et envoyes
 - Si vous changez de client HTTP, les tests continuent de fonctionner
-- Les handlers sont reutilisables entre tests Node et navigateur
+- Les handlers sont réutilisables entre tests Node et navigateur
 
 ### Comparaison des approches
 
 | Critere | `vi.mock()` | Axios mock | MSW |
 |---------|-------------|------------|-----|
-| Niveau d'interception | Module | Client HTTP | Reseau |
+| Niveau d'interception | Module | Client HTTP | Réseau |
 | Teste le vrai fetch/axios | Non | Non | Oui |
 | Agnostique du client HTTP | Non | Non | Oui |
 | Reutilisable navigateur/Node | Non | Non | Oui |
@@ -109,7 +109,7 @@ src/
 
 ## Handlers : les bases
 
-Un handler MSW definit comment repondre a une requete HTTP donnee.
+Un handler MSW définit comment repondre à une requête HTTP donnee.
 
 ### Import et syntaxe de base
 
@@ -123,7 +123,7 @@ import { http, HttpResponse } from 'msw';
 // });
 ```
 
-### GET — recuperer des donnees
+### GET — récupérer des donnees
 
 ```typescript
 import { http, HttpResponse } from 'msw';
@@ -164,7 +164,7 @@ export const handlers = [
 ];
 ```
 
-### POST — creer une ressource
+### POST — créer une ressource
 
 ```typescript
 export const handlers = [
@@ -260,7 +260,7 @@ http.get('/api/organizations/:orgId/teams/:teamId/members', ({ params }) => {
 }),
 ```
 
-### Parametres de requete (query params)
+### Parametres de requête (query params)
 
 ```typescript
 // URL : /api/users?page=2&limit=10&sort=name&role=admin
@@ -301,7 +301,7 @@ http.get('/api/users', ({ request }) => {
 }),
 ```
 
-### Corps de requete (request body)
+### Corps de requête (request body)
 
 ```typescript
 interface LoginRequest {
@@ -337,7 +337,7 @@ http.post('/api/auth/login', async ({ request }) => {
 
 ---
 
-## HttpResponse : types de reponse
+## HttpResponse : types de réponse
 
 ### JSON
 
@@ -373,7 +373,7 @@ HttpResponse.text('name,email\nAlice,alice@test.com\nBob,bob@test.com', {
 });
 ```
 
-### Erreurs reseau
+### Erreurs réseau
 
 ```typescript
 import { HttpResponse, http } from 'msw';
@@ -442,7 +442,7 @@ import { handlers } from './handlers';
 export const server = setupServer(...handlers);
 ```
 
-### Integration avec Vitest
+### Intégration avec Vitest
 
 ```typescript
 // src/setupTests.ts (ou vitest.setup.ts)
@@ -518,7 +518,7 @@ server.listen({
 
 ## Overrides per-test avec `server.use()`
 
-Le mecanisme le plus puissant de MSW : pouvoir redefinir un handler pour un test specifique.
+Le mécanisme le plus puissant de MSW : pouvoir redefinir un handler pour un test spécifique.
 
 ### Pattern de base
 
@@ -635,7 +635,7 @@ server.use(
 
 ## Mode navigateur : `setupWorker`
 
-MSW peut aussi intercepter les requetes dans un vrai navigateur, utile pour le developpement.
+MSW peut aussi intercepter les requêtes dans un vrai navigateur, utile pour le développement.
 
 ### Configuration
 
@@ -672,26 +672,26 @@ enableMocking().then(() => {
 });
 ```
 
-### Generer le service worker
+### Générer le service worker
 
 ```bash
 # Generer le fichier mockServiceWorker.js dans le dossier public
 npx msw init ./public --save
 ```
 
-### Difference serveur vs worker
+### Différence serveur vs worker
 
 | Aspect | `setupServer` (Node) | `setupWorker` (Navigateur) |
 |--------|---------------------|---------------------------|
 | Environnement | Node.js (tests) | Navigateur (dev) |
-| Mecanisme | Interception de `http`/`https` module | Service Worker |
+| Mécanisme | Interception de `http`/`https` module | Service Worker |
 | Necessite fichier SW | Non | Oui (`mockServiceWorker.js`) |
-| DevTools reseau | Non visible | Visible dans l'onglet Network |
+| DevTools réseau | Non visible | Visible dans l'onglet Network |
 | Usage typique | Vitest, Jest | Storybook, dev local |
 
 ---
 
-## Patterns de tests reels
+## Patterns de tests réels
 
 ### Pattern 1 : GET — afficher une liste
 
@@ -780,7 +780,7 @@ describe('ProductList', () => {
 });
 ```
 
-### Pattern 2 : POST — creer une ressource
+### Pattern 2 : POST — créer une ressource
 
 ```typescript
 describe('CreateProductForm', () => {
@@ -1182,12 +1182,12 @@ describe('ArticleList', () => {
 
 1. **Handlers par defaut = happy path** : les handlers dans `handlers.ts` representent le scenario nominal
 2. **Overrides per-test pour les erreurs** : utiliser `server.use()` pour les cas d'erreur, pas les handlers par defaut
-3. **`onUnhandledRequest: 'error'`** : detecter les appels API non prevus
+3. **`onUnhandledRequest: 'error'`** : détecter les appels API non prévus
 4. **Fixtures typees** : utiliser les memes interfaces TypeScript que le code de production
 5. **`resetHandlers()` dans `afterEach`** : garantir l'isolation entre tests
 6. **Pas de logique metier dans les handlers** : garder les handlers simples, pas de vraie base de donnees
 7. **Organiser par domaine** : un fichier de handlers par feature (`userHandlers.ts`, `productHandlers.ts`)
-8. **Tester les headers** : verifier que les tokens d'authentification sont envoyes
+8. **Tester les headers** : vérifier que les tokens d'authentification sont envoyes
 9. **Utiliser `delay()` avec parcimonie** : seulement quand on teste le loading state
 10. **`once: true`** pour les scenarios de retry : le premier appel echoue, le suivant reussit
 
@@ -1197,13 +1197,13 @@ describe('ArticleList', () => {
 
 Implementez les handlers MSW et les tests pour une API de gestion de taches (todos) :
 - `GET /api/todos` — lister toutes les taches (avec filtre `?status=completed`)
-- `POST /api/todos` — creer une tache
+- `POST /api/todos` — créer une tache
 - `PATCH /api/todos/:id` — mettre a jour le statut
 - `DELETE /api/todos/:id` — supprimer une tache
 
-Tests a ecrire :
+Tests à écrire :
 1. Afficher la liste des taches
-2. Creer une nouvelle tache (happy path + erreur validation)
+2. Créer une nouvelle tache (happy path + erreur validation)
 3. Cocher/decocher une tache (optimistic update + revert on error)
 4. Supprimer une tache (avec confirmation)
 
@@ -1213,9 +1213,9 @@ Tests a ecrire :
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
-| [07 - Tests de composants](./07-tests-de-composants) | [09 - Tests d'integration](./09-tests-integration) |
+| [07 - Tests de composants](./07-tests-de-composants) | [09 - Tests d'intégration](./09-tests-integration) |
 
 ---
 
@@ -1228,3 +1228,13 @@ Tests a ecrire :
 - MSW — [Network behavior](https://mswjs.io/docs/concepts/request-handler)
 - Kent C. Dodds — [Stop mocking fetch](https://kentcdodds.com/blog/stop-mocking-fetch)
 - Artem Zakharchenko — [Thinking in MSW](https://mswjs.io/docs/philosophy)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 08 msw](../screencasts/screencast-08-msw.md)
+2. **Lab** : [lab-08-msw](../labs/lab-08-msw/README)
+3. **Quiz** : [quiz 08 msw](../quizzes/quiz-08-msw.html)
+:::

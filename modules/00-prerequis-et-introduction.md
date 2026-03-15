@@ -1,4 +1,8 @@
-# Module 00 — Prerequis et Introduction
+# Module 00 — Prérequis et Introduction
+
+<!-- nav-cours-précédent -->
+> **Cours précédent** : [React](../../08-react/cours/12-recettes-esn/02-entretien-technique.md). Si tu arrives ici sans avoir fait les cours précédents, consulte le [guide de démarrage](../../GUIDE-DEMARRAGE.md).
+
 
 | Difficulte | Duree estimee | Lab | Quiz |
 |------------|---------------|-----|------|
@@ -6,23 +10,23 @@
 
 ## Objectifs
 
-- Comprendre pourquoi un cours dedie au testing est necessaire
+- Comprendre pourquoi un cours dedie au testing est nécessaire
 - Installer les outils : Vitest, Playwright, MSW
-- Ecrire et executer un premier test
+- Écrire et exécuter un premier test
 - Naviguer dans la structure du cours
 
 ---
 
 ## Pourquoi un cours dedie au testing ?
 
-Le testing est une competence **transversale**. Que vous travailliez avec Vue, React, Angular, ou un backend Node.js, les fondamentaux sont les memes :
+Le testing est une compétence **transversale**. Que vous travailliez avec Vue, React, Angular, ou un backend Node.js, les fondamentaux sont les memes :
 
 - **Les principes** : pyramide de tests, isolation, determinisme
 - **Les outils** : Vitest (runner), Playwright (E2E), MSW (mocking API)
 - **Les patterns** : AAA, test doubles, Page Object, fixtures
 - **Les methodologies** : TDD, BDD, contract testing
 
-Ce cours extrait ces fondamentaux des cours framework-specifiques pour les traiter en profondeur.
+Ce cours extrait ces fondamentaux des cours framework-spécifiques pour les traiter en profondeur.
 
 ---
 
@@ -132,7 +136,7 @@ export default defineConfig({
 
 ## Votre premier test
 
-### Le code a tester
+### Le code à tester
 
 ```typescript
 // src/math.ts
@@ -200,7 +204,7 @@ describe('clamp', () => {
 });
 ```
 
-### Executer
+### Exécuter
 
 ```bash
 npx vitest run          # Une seule execution
@@ -208,7 +212,7 @@ npx vitest              # Mode watch (re-execute a chaque modification)
 npx vitest --ui         # Interface graphique
 ```
 
-Resultat attendu :
+Résultat attendu :
 
 ```
  ✓ src/math.test.ts (9)
@@ -238,9 +242,9 @@ testing-course/
 
 | Phase | Modules | Niveau | Theme |
 |-------|---------|--------|-------|
-| 1 | 00-02 | Debutant | Fondamentaux : pourquoi, anatomie, patterns |
-| 2 | 03-05 | Intermediaire | Outils : Vitest, mocking, async |
-| 3 | 06-09 | Avance | Applicatif : architecture, composants, MSW, integration |
+| 1 | 00-02 | Débutant | Fondamentaux : pourquoi, anatomie, patterns |
+| 2 | 03-05 | Intermédiaire | Outils : Vitest, mocking, async |
+| 3 | 06-09 | Avance | Applicatif : architecture, composants, MSW, intégration |
 | 4 | 10-13 | Avance | E2E : Playwright, couverture, CI/CD |
 | 5 | 14-18 | Expert | Methodologies : TDD, BDD, contract, performance |
 
@@ -260,7 +264,7 @@ npx tsx labs/lab-03-vitest-fondamentaux/solution.ts    # Solution
 
 ## Liens avec les cours frameworks
 
-Ce cours est concu pour etre **prerequis** aux modules de testing des cours Vue, React et Angular :
+Ce cours est concu pour etre **prérequis** aux modules de testing des cours Vue, React et Angular :
 
 | Testing Course | Vue | React | Angular |
 |---------------|-----|-------|---------|
@@ -273,7 +277,7 @@ Ce cours est concu pour etre **prerequis** aux modules de testing des cours Vue,
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | -- | [01 - Pourquoi tester](./01-pourquoi-tester) |
 
@@ -285,3 +289,12 @@ Ce cours est concu pour etre **prerequis** aux modules de testing des cours Vue,
 - [Playwright Documentation](https://playwright.dev/)
 - [MSW Documentation](https://mswjs.io/)
 - [Testing Library Principles](https://testing-library.com/docs/guiding-principles)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 00 prérequis](../screencasts/screencast-00-prerequis.md)
+2. **Quiz** : [quiz 00 prérequis](../quizzes/quiz-00-prerequis.html)
+:::

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Page Object Model — Visualisation interactive</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', Tahoma, sans-serif; min-height: 100vh; }
+  h1 { text-align: center; padding: 18px 0 6px; font-size: 1.5rem; color: #c9d1d9; letter-spacing: 1px; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 10px 18px; }
+  .card { background: #16213e; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  .card h3 { font-size: .95rem; margin-bottom: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; }
+
+  .view-toggle { display: flex; gap: 6px; margin-bottom: 16px; justify-content: center; }
+  .view-toggle button { background: #21262d; color: #8b949e; border: 2px solid #30363d; border-radius: 6px; padding: 10px 24px; cursor: pointer; font-size: .9rem; font-weight: 600; transition: all .3s; }
+  .view-toggle button.active { border-color: #58a6ff; color: #fff; background: #1a3a5c; }
+  .view-toggle button:hover { filter: brightness(1.15); }
+
+  .diagram-panel { display: flex; gap: 14px; min-height: 420px; }
+  .diagram-panel .side { flex: 1; position: relative; }
+  .diagram-panel .side.hidden { display: none; }
+
+  /* Boxes */
+  .box { border-radius: 8px; padding: 10px 14px; cursor: pointer; transition: all .3s; position: relative; text-align: center; margin-bottom: 8px; }
+  .box:hover { filter: brightness(1.2); transform: translateY(-2px); }
+  .box.highlight { filter: brightness(1.4); box-shadow: 0 0 16px currentColor; transform: scale(1.05); }
+  .box .title { font-weight: 700; font-size: .85rem; }
+  .box .subtitle { font-size: .72rem; opacity: .7; }
+
+  .test-box { background: #1a3a5c; border: 2px solid #58a6ff; color: #79c0ff; }
+  .page-box { background: #1a3e2a; border: 2px solid #238636; color: #7ee787; }
+  .selector-box { background: #3a1a2e; border: 2px solid #bc4a9b; color: #e48cc1; }
+  .base-box { background: #2a2a1a; border: 2px solid #e8a838; color: #f0c060; }
+
+  /* SVG overlay for arrows */
+  .arrow-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+  .arrow-layer line, .arrow-layer path { transition: opacity .3s, stroke-width .3s; }
+
+  .columns { display: flex; gap: 12px; }
+  .column { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .column-header { font-size: .78rem; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; text-align: center; padding-bottom: 6px; border-bottom: 1px solid #21262d; margin-bottom: 4px; }
+
+  .code-panel { background: #0d1117; border-radius: 6px; padding: 12px; font-family: 'Consolas', monospace; font-size: .78rem; white-space: pre-wrap; line-height: 1.5; color: #79c0ff; min-height: 120px; transition: all .3s; }
+
+  .hierarchy { display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .hierarchy-arrow { color: #8b949e; font-size: 1.2rem; line-height: 1; }
+
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; font-size: .8rem; margin-top: 10px; }
+  .legend span { display: flex; align-items: center; gap: 4px; }
+  .legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body>
+<h1>Page Object Model &mdash; Visualisation interactive</h1>
+<div class="container">
+  <div class="view-toggle">
+    <button id="btn-without" class="active" onclick="setView('without')">Sans POM (spaghetti)</button>
+    <button id="btn-with" onclick="setView('with')">Avec POM (structure)</button>
+  </div>
+
+  <!-- WITHOUT POM -->
+  <div class="card" id="view-without">
+    <h3>Sans Page Object Model</h3>
+    <div class="columns">
+      <div class="column">
+        <div class="column-header">Tests</div>
+        <div class="box test-box" id="nopom-t1" onclick="highlightNoPom('t1')">
+          <div class="title">test_login.spec.ts</div>
+          <div class="subtitle">Selectors + assertions mixes</div>
+        </div>
+        <div class="box test-box" id="nopom-t2" onclick="highlightNoPom('t2')">
+          <div class="title">test_dashboard.spec.ts</div>
+          <div class="subtitle">Selectors dupliques</div>
+        </div>
+        <div class="box test-box" id="nopom-t3" onclick="highlightNoPom('t3')">
+          <div class="title">test_profile.spec.ts</div>
+          <div class="subtitle">Selectors dupliques</div>
+        </div>
+      </div>
+      <div class="column">
+        <div class="column-header">Selectors dupliques</div>
+        <div class="box selector-box" id="nopom-s1"><div class="title">#email-input</div><div class="subtitle">Utilise dans 3 tests</div></div>
+        <div class="box selector-box" id="nopom-s2"><div class="title">#password-input</div><div class="subtitle">Utilise dans 3 tests</div></div>
+        <div class="box selector-box" id="nopom-s3"><div class="title">.submit-btn</div><div class="subtitle">Utilise dans 2 tests</div></div>
+        <div class="box selector-box" id="nopom-s4"><div class="title">.nav-menu .profile</div><div class="subtitle">Utilise dans 2 tests</div></div>
+      </div>
+    </div>
+    <div class="code-panel" id="code-nopom" style="margin-top:12px;">
+// Probleme: selectors dupliques partout
+// Si #email-input change → 3 fichiers a modifier!
+
+test('connexion valide', async ({ page }) => {
+  await page.fill('#email-input', 'user@test.com')
+  await page.fill('#password-input', 'secret')
+  await page.click('.submit-btn')
+  await expect(page.locator('.welcome')).toBeVisible()
+})
+
+test('affiche erreur mot de passe', async ({ page }) => {
+  await page.fill('#email-input', 'user@test.com')
+  await page.fill('#password-input', 'wrong')
+  await page.click('.submit-btn')
+  await expect(page.locator('.error-msg')).toBeVisible()
+})</div>
+  </div>
+
+  <!-- WITH POM -->
+  <div class="card hidden" id="view-with">
+    <h3>Avec Page Object Model</h3>
+    <div class="columns">
+      <div class="column">
+        <div class="column-header">Tests</div>
+        <div class="box test-box" id="pom-t1" onclick="highlightPom('t1')">
+          <div class="title">test_login.spec.ts</div>
+          <div class="subtitle">Utilise LoginPage</div>
+        </div>
+        <div class="box test-box" id="pom-t2" onclick="highlightPom('t2')">
+          <div class="title">test_dashboard.spec.ts</div>
+          <div class="subtitle">Utilise DashboardPage</div>
+        </div>
+        <div class="box test-box" id="pom-t3" onclick="highlightPom('t3')">
+          <div class="title">test_profile.spec.ts</div>
+          <div class="subtitle">Utilise LoginPage + DashboardPage</div>
+        </div>
+      </div>
+      <div class="column">
+        <div class="column-header">Page Objects</div>
+        <div class="box page-box" id="pom-login" onclick="highlightPage('login')">
+          <div class="title">LoginPage</div>
+          <div class="subtitle">login(), fillEmail(), fillPassword()</div>
+        </div>
+        <div class="box page-box" id="pom-dashboard" onclick="highlightPage('dashboard')">
+          <div class="title">DashboardPage</div>
+          <div class="subtitle">getWelcome(), navigateTo()</div>
+        </div>
+      </div>
+      <div class="column">
+        <div class="column-header">Hierarchie</div>
+        <div class="hierarchy">
+          <div class="box base-box" id="pom-base" onclick="highlightPage('base')">
+            <div class="title">BasePage</div>
+            <div class="subtitle">page, goto(), waitForLoad()</div>
+          </div>
+          <div class="hierarchy-arrow">&#9660;</div>
+          <div style="display:flex;gap:8px;">
+            <div class="box page-box" style="font-size:.75rem;padding:6px 8px;">
+              <div class="title">LoginPage</div>
+            </div>
+            <div class="box page-box" style="font-size:.75rem;padding:6px 8px;">
+              <div class="title">DashboardPage</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="code-panel" id="code-pom" style="margin-top:12px;">
+// Page Object: encapsule les selectors
+class LoginPage extends BasePage {
+  readonly emailInput = this.page.locator('#email-input')
+  readonly passwordInput = this.page.locator('#password-input')
+  readonly submitBtn = this.page.locator('.submit-btn')
+
+  async login(email: string, password: string) {
+    await this.emailInput.fill(email)
+    await this.passwordInput.fill(password)
+    await this.submitBtn.click()
+  }
+}
+
+// Test propre: aucun selector visible
+test('connexion valide', async ({ page }) => {
+  const loginPage = new LoginPage(page)
+  await loginPage.login('user@test.com', 'secret')
+  await expect(loginPage.welcome).toBeVisible()
+})</div>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot" style="background:#58a6ff"></span> Fichiers de test</span>
+    <span><span class="dot" style="background:#238636"></span> Page Objects</span>
+    <span><span class="dot" style="background:#bc4a9b"></span> Selectors</span>
+    <span><span class="dot" style="background:#e8a838"></span> Classe de base</span>
+  </div>
+</div>
+
+<script>
+let currentView = 'without';
+
+function setView(view) {
+  currentView = view;
+  document.getElementById('btn-without').classList.toggle('active', view === 'without');
+  document.getElementById('btn-with').classList.toggle('active', view === 'with');
+  document.getElementById('view-without').classList.toggle('hidden', view !== 'without');
+  document.getElementById('view-with').classList.toggle('hidden', view !== 'with');
+  clearHighlights();
+}
+
+function clearHighlights() {
+  document.querySelectorAll('.box').forEach(b => b.classList.remove('highlight'));
+}
+
+const noPomLinks = {
+  t1: ['nopom-s1', 'nopom-s2', 'nopom-s3'],
+  t2: ['nopom-s1', 'nopom-s3', 'nopom-s4'],
+  t3: ['nopom-s1', 'nopom-s2', 'nopom-s4']
+};
+
+const noPomCode = {
+  t1: `// test_login.spec.ts — selectors en dur
+test('connexion valide', async ({ page }) => {
+  await page.fill('#email-input', 'user@test.com')
+  await page.fill('#password-input', 'secret')
+  await page.click('.submit-btn')
+  await expect(page.locator('.welcome')).toBeVisible()
+})
+
+test('erreur mot de passe', async ({ page }) => {
+  await page.fill('#email-input', 'user@test.com')
+  await page.fill('#password-input', 'wrong')
+  await page.click('.submit-btn')
+  await expect(page.locator('.error-msg')).toBeVisible()
+})`,
+  t2: `// test_dashboard.spec.ts — memes selectors dupliques!
+test('affiche le dashboard', async ({ page }) => {
+  await page.fill('#email-input', 'admin@test.com')
+  await page.fill('#password-input', 'admin')
+  await page.click('.submit-btn')
+  await expect(page.locator('.nav-menu .profile')).toBeVisible()
+})`,
+  t3: `// test_profile.spec.ts — encore des duplications!
+test('modifie le profil', async ({ page }) => {
+  await page.fill('#email-input', 'user@test.com')
+  await page.fill('#password-input', 'secret')
+  await page.click('.submit-btn')
+  await page.click('.nav-menu .profile')
+  await expect(page.locator('.profile-form')).toBeVisible()
+})`
+};
+
+function highlightNoPom(testId) {
+  clearHighlights();
+  document.getElementById('nopom-' + testId).classList.add('highlight');
+  (noPomLinks[testId] || []).forEach(id => document.getElementById(id).classList.add('highlight'));
+  document.getElementById('code-nopom').textContent = noPomCode[testId] || '';
+}
+
+const pomLinks = {
+  t1: ['pom-login'],
+  t2: ['pom-dashboard'],
+  t3: ['pom-login', 'pom-dashboard']
+};
+
+const pomCode = {
+  t1: `// test_login.spec.ts — propre, sans selectors
+test('connexion valide', async ({ page }) => {
+  const loginPage = new LoginPage(page)
+  await loginPage.login('user@test.com', 'secret')
+  await expect(loginPage.welcome).toBeVisible()
+})
+
+test('erreur mot de passe', async ({ page }) => {
+  const loginPage = new LoginPage(page)
+  await loginPage.login('user@test.com', 'wrong')
+  await expect(loginPage.errorMessage).toBeVisible()
+})`,
+  t2: `// test_dashboard.spec.ts — utilise DashboardPage
+test('affiche le dashboard', async ({ page }) => {
+  const login = new LoginPage(page)
+  await login.login('admin@test.com', 'admin')
+
+  const dashboard = new DashboardPage(page)
+  await expect(dashboard.profileLink).toBeVisible()
+})`,
+  t3: `// test_profile.spec.ts — compose les Page Objects
+test('modifie le profil', async ({ page }) => {
+  const login = new LoginPage(page)
+  await login.login('user@test.com', 'secret')
+
+  const dashboard = new DashboardPage(page)
+  await dashboard.navigateTo('profile')
+  await expect(dashboard.profileForm).toBeVisible()
+})`,
+  login: `// LoginPage — encapsule les selectors de login
+class LoginPage extends BasePage {
+  readonly emailInput = this.page.locator('#email-input')
+  readonly passwordInput = this.page.locator('#password-input')
+  readonly submitBtn = this.page.locator('.submit-btn')
+  readonly welcome = this.page.locator('.welcome')
+  readonly errorMessage = this.page.locator('.error-msg')
+
+  async login(email: string, password: string) {
+    await this.goto('/login')
+    await this.emailInput.fill(email)
+    await this.passwordInput.fill(password)
+    await this.submitBtn.click()
+  }
+}`,
+  dashboard: `// DashboardPage — encapsule le dashboard
+class DashboardPage extends BasePage {
+  readonly profileLink = this.page.locator('.nav-menu .profile')
+  readonly profileForm = this.page.locator('.profile-form')
+
+  async navigateTo(section: string) {
+    await this.page.click(\`.nav-menu .\${section}\`)
+  }
+}`,
+  base: `// BasePage — classe abstraite partagee
+abstract class BasePage {
+  constructor(protected readonly page: Page) {}
+
+  async goto(path: string) {
+    await this.page.goto(path)
+    await this.waitForLoad()
+  }
+
+  async waitForLoad() {
+    await this.page.waitForLoadState('networkidle')
+  }
+}`
+};
+
+function highlightPom(testId) {
+  clearHighlights();
+  document.getElementById('pom-' + testId).classList.add('highlight');
+  (pomLinks[testId] || []).forEach(id => document.getElementById(id).classList.add('highlight'));
+  document.getElementById('code-pom').textContent = pomCode[testId] || '';
+}
+
+function highlightPage(pageId) {
+  clearHighlights();
+  if (pageId === 'base') {
+    document.getElementById('pom-base').classList.add('highlight');
+  } else {
+    document.getElementById('pom-' + pageId).classList.add('highlight');
+  }
+  document.getElementById('code-pom').textContent = pomCode[pageId] || '';
+}
+
+document.querySelector('.hidden') && (document.getElementById('view-with').style.display = 'none');
+function setView(view) {
+  currentView = view;
+  document.getElementById('btn-without').classList.toggle('active', view === 'without');
+  document.getElementById('btn-with').classList.toggle('active', view === 'with');
+  document.getElementById('view-without').style.display = view === 'without' ? '' : 'none';
+  document.getElementById('view-with').style.display = view === 'with' ? '' : 'none';
+  clearHighlights();
+}
+</script>
+</body>
+</html>

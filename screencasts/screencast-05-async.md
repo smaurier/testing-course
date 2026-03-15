@@ -4,11 +4,11 @@
 - **Duree estimee** : 15-18 min
 - **Module** : `modules/05-tests-asynchrones.md`
 - **Lab associe** : Lab 05
-- **Prerequis** : Screencast 04
+- **Prérequis** : Screencast 04
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Projet de demo avec Vitest installe
 - [ ] Fichier `modules/05-tests-asynchrones.md` ouvert
 
@@ -16,7 +16,7 @@
 
 ### [00:00-02:00] Introduction — Le defi de l'asynchrone dans les tests
 
-> L'asynchrone est partout : appels API, acces DB, timers, events. Tester du code asynchrone requiert des patterns specifiques, sinon les tests passent... sans rien verifier.
+> L'asynchrone est partout : appels API, acces DB, timers, events. Tester du code asynchrone requiert des patterns spécifiques, sinon les tests passent... sans rien vérifier.
 
 **Action** : Montrer le piege classique.
 
@@ -36,13 +36,13 @@ it('should fetch user', async () => {
 });
 ```
 
-> Sans `await`, le test se termine immediatement. La promesse resolve apres, mais personne ne verifie l'assertion. C'est le piege numero un des tests asynchrones.
+> Sans `await`, le test se termine immediatement. La promesse resolve après, mais personne ne vérifié l'assertion. C'est le piege numéro un des tests asynchrones.
 
 ### [02:00-05:00] async/await — La base
 
-> La methode la plus propre pour tester du code asynchrone est async/await.
+> La méthode la plus propre pour tester du code asynchrone est async/await.
 
-**Action** : Creer `src/async-demo.test.ts`.
+**Action** : Créer `src/async-demo.test.ts`.
 
 ```typescript
 import { describe, it, expect } from 'vitest';
@@ -64,7 +64,7 @@ describe('async/await', () => {
 });
 ```
 
-> `rejects.toThrow()` est l'equivalent de `expect(() => ...).toThrow()` pour les promesses. N'oubliez pas le `await` devant `expect` — sinon l'assertion ne sera pas verifiee.
+> `rejects.toThrow()` est l'équivalent de `expect(() => ...).toThrow()` pour les promesses. N'oubliez pas le `await` devant `expect` — sinon l'assertion ne sera pas verifiee.
 
 ### [05:00-08:00] resolves / rejects — Assertions sur promesses
 
@@ -98,9 +98,9 @@ describe('resolves / rejects', () => {
 
 ### [08:00-11:00] Fake timers et async — setTimeout, debounce, polling
 
-> Combiner fake timers et code asynchrone demande de l'attention.
+> Combiner fake timers et code asynchrone demandé de l'attention.
 
-**Action** : Creer un exemple de polling.
+**Action** : Créer un exemple de polling.
 
 ```typescript
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -154,13 +154,13 @@ describe('pollUntilReady', () => {
 });
 ```
 
-> La cle : `vi.advanceTimersByTimeAsync` au lieu de `vi.advanceTimersByTime` quand le code combine promesses et timers. La version async attend que les microtasks soient resolues.
+> La clé : `vi.advanceTimersByTimeAsync` au lieu de `vi.advanceTimersByTime` quand le code combine promesses et timers. La version async attend que les microtasks soient resolues.
 
 ### [11:00-13:30] Event emitters — Tester les callbacks
 
 > Les event emitters sont courants en Node.js. Voici comment les tester proprement.
 
-**Action** : Creer un exemple avec EventEmitter.
+**Action** : Créer un exemple avec EventEmitter.
 
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
@@ -194,7 +194,7 @@ describe('JobProcessor', () => {
 });
 ```
 
-### [13:30-15:30] Pieges courants — Les erreurs a eviter
+### [13:30-15:30] Pieges courants — Les erreurs a éviter
 
 **Action** : Afficher les pieges.
 
@@ -215,9 +215,9 @@ PIEGE 5 : Ne pas tester le chemin d'erreur
 → 90% des bugs sont dans le error handling
 ```
 
-### [15:30-17:00] Recapitulatif
+### [15:30-17:00] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -234,5 +234,5 @@ PROCHAINE ETAPE :
 ## Points d'attention pour l'enregistrement
 - Le piege du test qui passe sans await est crucial — le demontrer en live
 - Montrer qu'un test sans await passe alors qu'il ne devrait pas
-- Le polling avec fake timers est un cas reel frequent
+- Le polling avec fake timers est un cas réel frequent
 - Insister sur advanceTimersByTimeAsync vs advanceTimersByTime

@@ -6,11 +6,11 @@
 
 ## Objectifs
 
-- Appliquer l'ensemble des competences acquises dans les modules 01 a 17
-- Construire une suite de tests complete pour une application reelle
-- Rediger un document de strategie de test
+- Appliquer l'ensemble des compétences acquises dans les modules 01 a 17
+- Construire une suite de tests complete pour une application réelle
+- Rediger un document de stratégie de test
 - Livrer 10 deliverables couvrant tous les niveaux de la pyramide de tests
-- Demontrer la maitrise des outils (Vitest, Playwright, MSW, k6, Zod, GitHub Actions)
+- Demontrer la maîtrise des outils (Vitest, Playwright, MSW, k6, Zod, GitHub Actions)
 
 ---
 
@@ -86,19 +86,19 @@ task-manager/
 
 ### Endpoints API
 
-| Methode | Route | Description | Auth |
+| Méthode | Route | Description | Auth |
 |---------|-------|-------------|------|
-| POST | `/auth/register` | Creer un compte | Non |
+| POST | `/auth/register` | Créer un compte | Non |
 | POST | `/auth/login` | Se connecter (retourne JWT) | Non |
 | GET | `/api/users/me` | Profil utilisateur | Oui |
 | GET | `/api/tasks` | Lister les taches (avec filtres) | Oui |
 | GET | `/api/tasks/:id` | Detail d'une tache | Oui |
-| POST | `/api/tasks` | Creer une tache | Oui |
+| POST | `/api/tasks` | Créer une tache | Oui |
 | PUT | `/api/tasks/:id` | Modifier une tache | Oui |
 | DELETE | `/api/tasks/:id` | Supprimer une tache | Oui |
 | PATCH | `/api/tasks/:id/status` | Changer le statut | Oui |
 
-### Modele de donnees
+### Modèle de donnees
 
 ```typescript
 // src/server/schemas/task.schema.ts
@@ -153,7 +153,7 @@ export type TaskFilter = z.infer<typeof TaskFilterSchema>;
 
 ## Les 10 deliverables
 
-### Deliverable 1 : Document de strategie de test
+### Deliverable 1 : Document de stratégie de test
 
 Redigez un document (1-2 pages) decrivant :
 
@@ -451,7 +451,7 @@ describe('validators', () => {
 });
 ```
 
-### Deliverable 3 : Tests d'integration API
+### Deliverable 3 : Tests d'intégration API
 
 ```typescript
 // tests/integration/tasks.integration.test.ts
@@ -1261,10 +1261,10 @@ Le dernier deliverable est un README dans le dossier `tests/` qui explique :
 
 | Deliverable | Points | Criteres |
 |-------------|--------|----------|
-| 1. Strategie de test | 5 | Complete, realiste, justifiee |
+| 1. Stratégie de test | 5 | Complete, realiste, justifiee |
 | 2. Tests unitaires | 15 | 80%+ coverage, cas limites, isolation |
-| 3. Tests integration API | 15 | CRUD complet, auth, erreurs, DB rollback |
-| 4. Tests composants | 10 | Rendu, events, etats, isolation DOM |
+| 3. Tests intégration API | 15 | CRUD complet, auth, erreurs, DB rollback |
+| 4. Tests composants | 10 | Rendu, events, états, isolation DOM |
 | 5. MSW handlers | 5 | Realistes, coherents, resetables |
 | 6. Tests E2E | 15 | Page Objects, fixtures auth, parcours complets |
 | 7. Pipeline CI | 15 | Jobs paralleles, caching, artifacts, sharding |
@@ -1279,27 +1279,27 @@ Le dernier deliverable est un README dans le dossier `tests/` qui explique :
 |-------|--------|-------------|
 | Mutation testing | +5 | Stryker configure, 80%+ mutation score sur les services |
 | Visual regression | +5 | Playwright screenshots comparaison |
-| Accessibilite (a11y) | +5 | axe-core dans les tests E2E |
+| Accessibilité (a11y) | +5 | axe-core dans les tests E2E |
 | Flaky detection | +5 | Script de detection + quarantaine CI |
 
 ---
 
 ## Conseils
 
-1. **Commencez par la strategie** : definir ce que vous allez tester avant de coder
-2. **Tests unitaires d'abord** : ils sont les plus rapides a ecrire et a debugger
+1. **Commencez par la stratégie** : définir ce que vous allez tester avant de coder
+2. **Tests unitaires d'abord** : ils sont les plus rapides à écrire et a debugger
 3. **Testez les cas d'erreur** : les chemins d'erreur sont souvent les plus critiques
-4. **Isolez chaque test** : aucun test ne doit dependre d'un autre
+4. **Isolez chaque test** : aucun test ne doit dépendre d'un autre
 5. **Nommez clairement** : `it('should return 401 when token is expired')` pas `it('test auth')`
 6. **Ne visez pas 100%** : 80% de couverture avec des tests de qualite > 100% de couverture superficielle
-7. **CI d'abord** : configurez le pipeline tot, puis ajoutez les tests au fur et a mesure
+7. **CI d'abord** : configurez le pipeline tot, puis ajoutez les tests au fur et à mesure
 8. **Commitez souvent** : chaque deliverable = un commit minimum
 
 ---
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [17 - Performance testing](./17-performance-testing) | -- (fin de la formation) |
 
@@ -1315,3 +1315,24 @@ Le dernier deliverable est un README dans le dossier `tests/` qui explique :
 - [k6 Documentation](https://k6.io/docs/)
 - [Zod Documentation](https://zod.dev/)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 18 projet final](../screencasts/screencast-18-projet-final.md)
+2. **Lab** : [lab-18-projet-final](../labs/lab-18-projet-final/README)
+3. **Quiz** : [quiz 18 projet final](../quizzes/quiz-18-projet-final.html)
+:::
+
+---
+
+<!-- navigation-inter-cours -->
+
+::: info Cours suivant
+Bravo, tu as termine le cours **Testing** ! 
+Le prochain cours du curriculum est **NestJS**.
+
+[Commencer NestJS →](../../05-nestjs/modules/00-prerequis-et-monde-backend.md)
+:::

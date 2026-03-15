@@ -1,14 +1,14 @@
-# Screencast 09 — Tests d'integration
+# Screencast 09 — Tests d'intégration
 
 ## Informations
 - **Duree estimee** : 18-20 min
 - **Module** : `modules/09-tests-integration.md`
 - **Lab associe** : Lab 09
-- **Prerequis** : Screencast 08
+- **Prérequis** : Screencast 08
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Projet de demo avec Vitest + MSW + supertest
 - [ ] Fichier `modules/09-tests-integration.md` ouvert
 - [ ] Docker installe (pour la section Testcontainers)
@@ -17,7 +17,7 @@
 
 ### [00:00-02:00] Introduction — Definition et limites
 
-> Un test d'integration verifie que plusieurs modules fonctionnent ensemble. Contrairement au test unitaire qui isole, le test d'integration connecte : service + DB, composant + store + API, middleware + handler.
+> Un test d'intégration vérifié que plusieurs modules fonctionnent ensemble. Contrairement au test unitaire qui isole, le test d'intégration connecte : service + DB, composant + store + API, middleware + handler.
 
 **Action** : Afficher la comparaison.
 
@@ -35,9 +35,9 @@
 
 ### [02:00-06:00] Tester une API Express avec supertest
 
-> supertest permet de tester une API HTTP sans demarrer de serveur reel.
+> supertest permet de tester une API HTTP sans démarrer de serveur réel.
 
-**Action** : Creer un test d'API.
+**Action** : Créer un test d'API.
 
 ```typescript
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -84,11 +84,11 @@ describe('Tasks API', () => {
 });
 ```
 
-### [06:00-09:00] Integration DB — Setup et teardown propres
+### [06:00-09:00] Intégration DB — Setup et teardown propres
 
-> L'enjeu principal des tests d'integration DB est l'isolation : chaque test doit partir d'un etat propre.
+> L'enjeu principal des tests d'intégration DB est l'isolation : chaque test doit partir d'un état propre.
 
-**Action** : Montrer les strategies d'isolation.
+**Action** : Montrer les stratégies d'isolation.
 
 ```typescript
 import Database from 'better-sqlite3';
@@ -131,9 +131,9 @@ afterEach(() => {
 
 ### [09:00-12:30] Frontend — Composant + Store + Router + API
 
-> Cote frontend, un test d'integration combine un composant avec son store, son router et ses appels API (via MSW).
+> Cote frontend, un test d'intégration combine un composant avec son store, son router et ses appels API (via MSW).
 
-**Action** : Montrer un test d'integration frontend.
+**Action** : Montrer un test d'intégration frontend.
 
 ```typescript
 describe('TaskList integration', () => {
@@ -174,7 +174,7 @@ describe('TaskList integration', () => {
 
 > Les fixtures sont les donnees de test. Les factories les rendent flexibles et maintenables.
 
-**Action** : Creer une factory.
+**Action** : Créer une factory.
 
 ```typescript
 // test/factories/task.factory.ts
@@ -210,7 +210,7 @@ it('should show high priority tasks first', async () => {
 
 ### [15:00-17:00] Testcontainers — Environnements reproductibles
 
-> Pour les integrations complexes (PostgreSQL, Redis, Kafka), Testcontainers demarre des containers Docker a la volee.
+> Pour les integrations complexes (PostgreSQL, Redis, Kafka), Testcontainers demarre des containers Docker à la volee.
 
 **Action** : Montrer un exemple Testcontainers.
 
@@ -240,9 +240,9 @@ describe('with real PostgreSQL', () => {
 });
 ```
 
-### [17:00-18:30] Recapitulatif
+### [17:00-18:30] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -258,7 +258,7 @@ PROCHAINE ETAPE :
 ```
 
 ## Points d'attention pour l'enregistrement
-- La demo supertest est le moment cle — montrer le workflow complet POST + GET
-- L'isolation DB est cruciale — bien montrer les 3 strategies
-- Le test d'integration frontend combine tout ce qu'on a vu — prendre le temps
-- Les factories sont un pattern qu'on reutilisera — bien les presenter
+- La demo supertest est le moment clé — montrer le workflow complet POST + GET
+- L'isolation DB est cruciale — bien montrer les 3 stratégies
+- Le test d'intégration frontend combine tout ce qu'on a vu — prendre le temps
+- Les factories sont un pattern qu'on reutilisera — bien les présenter

@@ -6,17 +6,17 @@
 
 ## Objectifs
 
-- Maitriser le pattern AAA (Arrange, Act, Assert)
+- Maîtriser le pattern AAA (Arrange, Act, Assert)
 - Structurer ses tests avec describe/it
 - Utiliser les conventions de nommage
 - Comprendre setup/teardown et l'isolation des tests
-- Eviter les anti-patterns les plus courants
+- Éviter les anti-patterns les plus courants
 
 ---
 
 ## Le pattern AAA
 
-Tout test suit trois etapes :
+Tout test suit trois étapes :
 
 ```typescript
 import { describe, it, expect } from 'vitest';
@@ -40,7 +40,7 @@ describe('ShoppingCart', () => {
 
 ### Variante BDD : Given-When-Then
 
-Meme concept, vocabulaire different :
+Même concept, vocabulaire différent :
 
 ```typescript
 describe('ShoppingCart', () => {
@@ -105,7 +105,7 @@ describe('UserValidator', () => {
 ### Regles de structuration
 
 1. **Un describe par unite** (classe, module, composant)
-2. **Nested describes par methode/fonctionnalite**
+2. **Nested describes par méthode/fonctionnalite**
 3. **Un it par comportement** (pas par branche de code)
 4. **Pas plus de 3 niveaux de nesting**
 
@@ -263,7 +263,7 @@ describe('DatabaseService', () => {
 
 ### beforeAll / afterAll
 
-Pour les ressources couteuses a creer :
+Pour les ressources couteuses a créer :
 
 ```typescript
 describe('API Integration', () => {
@@ -284,7 +284,7 @@ describe('API Integration', () => {
 });
 ```
 
-### Ordre d'execution
+### Ordre d'exécution
 
 ```
 beforeAll (une fois)
@@ -301,7 +301,7 @@ afterAll (une fois)
 
 ## Isolation des tests
 
-### Regle d'or : chaque test doit pouvoir s'executer seul, dans n'importe quel ordre.
+### Regle d'or : chaque test doit pouvoir s'exécuter seul, dans n'importe quel ordre.
 
 ```typescript
 // ❌ MAUVAIS : tests interdependants
@@ -467,7 +467,7 @@ export class Calculator {
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [01 - Pourquoi tester](./01-pourquoi-tester) | [03 - Vitest fondamentaux](./03-vitest-fondamentaux) |
 
@@ -479,3 +479,13 @@ export class Calculator {
 - [Lab 02 : Anatomie d'un test](../labs/lab-02-anatomie-dun-test/)
 - Martin Fowler — [GivenWhenThen](https://martinfowler.com/bliki/GivenWhenThen.html)
 - Roy Osherove — [Naming standards for unit tests](https://osherove.com/blog/2005/4/3/naming-standards-for-unit-tests.html)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 02 anatomie](../screencasts/screencast-02-anatomie.md)
+2. **Lab** : [lab-02-anatomie-dun-test](../labs/lab-02-anatomie-dun-test/README)
+3. **Quiz** : [quiz 02 anatomie](../quizzes/quiz-02-anatomie.html)
+:::

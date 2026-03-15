@@ -2,7 +2,7 @@
 
 ## Objectifs
 
-Maitriser les techniques de test pour le code asynchrone : Promises, fake timers, EventEmitter, debounce, polling et race conditions.
+Maîtriser les techniques de test pour le code asynchrone : Promises, fake timers, EventEmitter, debounce, polling et race conditions.
 
 ## Exercices
 
@@ -13,10 +13,10 @@ Testez des fonctions qui retournent des Promises (resolve et reject).
 Testez une fonction de retry avec delai en utilisant des fake timers.
 
 ### Exercice 3 : PubSub (EventEmitter)
-Testez un systeme PubSub base sur un pattern EventEmitter.
+Testez un système PubSub base sur un pattern EventEmitter.
 
 ### Exercice 4 : Debounce
-Testez une fonction debounce avec un controle precis des timers.
+Testez une fonction debounce avec un controle précis des timers.
 
 ### Exercice 5 : Polling
 Testez une fonction qui poll toutes les N ms jusqu'a ce qu'une condition soit remplie.

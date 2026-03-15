@@ -4,11 +4,11 @@
 - **Duree estimee** : 18-20 min
 - **Module** : `modules/13-tests-en-ci-cd.md`
 - **Lab associe** : Lab 13
-- **Prerequis** : Screencast 12
+- **Prérequis** : Screencast 12
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Repository GitHub avec GitHub Actions configure
 - [ ] Fichier `modules/13-tests-en-ci-cd.md` ouvert
 
@@ -16,7 +16,7 @@
 
 ### [00:00-02:00] Introduction — Shift left et pyramide de feedback
 
-> "Shift left" signifie detecter les problemes le plus tot possible. Chaque couche de feedback est un filet de securite : analyse statique, tests unitaires, tests d'integration, tests E2E, monitoring.
+> "Shift left" signifie détecter les problèmes le plus tot possible. Chaque couche de feedback est un filet de sécurité : analyse statique, tests unitaires, tests d'intégration, tests E2E, monitoring.
 
 **Action** : Afficher la pyramide de feedback.
 
@@ -37,7 +37,7 @@
 
 ### [02:00-06:30] Pipeline GitHub Actions complet
 
-**Action** : Creer `.github/workflows/ci.yml`.
+**Action** : Créer `.github/workflows/ci.yml`.
 
 ```yaml
 name: CI
@@ -136,7 +136,7 @@ npx playwright merge-reports ./all-blob-reports
 
 ### [09:00-12:00] Pre-commit hooks — Husky + lint-staged
 
-> Les pre-commit hooks attrapent les problemes avant meme le push.
+> Les pre-commit hooks attrapent les problèmes avant même le push.
 
 **Action** : Configurer Husky + lint-staged.
 
@@ -163,7 +163,7 @@ npx husky init
 pnpm lint-staged
 ```
 
-> `vitest related --run` est la cle : Vitest ne re-execute que les tests impactes par les fichiers modifies. Un commit qui touche 2 fichiers ne relance que les tests concernes, pas toute la suite.
+> `vitest related --run` est la clé : Vitest ne re-exécuté que les tests impactes par les fichiers modifies. Un commit qui touche 2 fichiers ne relance que les tests concernes, pas toute la suite.
 
 ### [12:00-14:30] Rapports — JUnit, Codecov, Playwright report
 
@@ -195,7 +195,7 @@ export default defineConfig({
 
 ### [14:30-16:30] Optimiser la CI — Cache et vitesse
 
-**Action** : Afficher les strategies d'optimisation.
+**Action** : Afficher les stratégies d'optimisation.
 
 ```
 STRATEGIE                    | GAIN DE TEMPS
@@ -222,9 +222,9 @@ Skip E2E sur docs-only PR    | paths-filter action
   run: npx playwright test
 ```
 
-### [16:30-18:30] Gerer les flaky tests en CI
+### [16:30-18:30] Gérer les flaky tests en CI
 
-**Action** : Montrer les strategies.
+**Action** : Montrer les stratégies.
 
 ```typescript
 // playwright.config.ts
@@ -245,9 +245,9 @@ export default defineConfig({
 - run: npx playwright test --grep @flaky || true
 ```
 
-### [18:30-19:30] Recapitulatif
+### [18:30-19:30] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :

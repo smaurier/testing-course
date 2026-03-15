@@ -4,11 +4,11 @@
 - **Duree estimee** : 18-20 min
 - **Module** : `modules/18-projet-final.md`
 - **Lab associe** : Lab 18
-- **Prerequis** : Screencasts 00 a 17
+- **Prérequis** : Screencasts 00 a 17
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Application Task Manager demarree
 - [ ] Fichier `modules/18-projet-final.md` ouvert
 - [ ] Tous les outils installes (Vitest, Playwright, MSW, k6, Stryker)
@@ -43,11 +43,11 @@
                 └─────┘
 ```
 
-### [02:30-05:30] Deliverable 1 — Strategie de test
+### [02:30-05:30] Deliverable 1 — Stratégie de test
 
-> Avant d'ecrire une seule ligne de code, il faut une strategie. C'est le premier deliverable du projet.
+> Avant d'écrire une seule ligne de code, il faut une stratégie. C'est le premier deliverable du projet.
 
-**Action** : Montrer le template de strategie.
+**Action** : Montrer le template de stratégie.
 
 ```markdown
 # Strategie de test — Task Manager
@@ -74,7 +74,7 @@
 - Page Object Model pour les tests Playwright
 ```
 
-### [05:30-09:00] Deliverables 2-4 — Tests unitaires, composants, integration
+### [05:30-09:00] Deliverables 2-4 — Tests unitaires, composants, intégration
 
 **Action** : Montrer les tests unitaires du backend.
 
@@ -122,7 +122,7 @@ describe('TaskCard', () => {
 });
 ```
 
-**Action** : Montrer un test d'integration API.
+**Action** : Montrer un test d'intégration API.
 
 ```typescript
 // tests/integration/tasks-api.test.ts
@@ -240,7 +240,7 @@ DOCUMENT DE SYNTHESE :
 8. Lecons apprises et points d'amelioration
 ```
 
-### [16:30-18:00] Criteres d'evaluation
+### [16:30-18:00] Criteres d'évaluation
 
 **Action** : Afficher la grille.
 
@@ -257,9 +257,9 @@ CI/CD pipeline                  | 10     | Pipeline fonctionnel
 Document de strategie           | 5      | Structure complete
 ```
 
-### [18:00-19:30] Recapitulatif du cours
+### [18:00-19:30] Récapitulatif du cours
 
-**Action** : Afficher le recapitulatif final.
+**Action** : Afficher le récapitulatif final.
 
 ```
 CE QUE VOUS AVEZ APPRIS EN 18 MODULES :
@@ -282,6 +282,6 @@ robustes, maintenables et rapides. Bonne chance pour le projet !
 ## Points d'attention pour l'enregistrement
 - Ce screencast est un guide pour le projet — etre clair sur les attentes
 - Montrer des extraits de code concrets pour chaque deliverable
-- La grille d'evaluation doit etre affichee clairement
+- La grille d'évaluation doit etre affichee clairement
 - Terminer sur une note motivante — c'est le dernier screencast
-- Rappeler que le cours complet est dans les modules pour reference
+- Rappeler que le cours complet est dans les modules pour référence

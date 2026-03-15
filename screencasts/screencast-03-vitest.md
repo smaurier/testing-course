@@ -4,11 +4,11 @@
 - **Duree estimee** : 18-20 min
 - **Module** : `modules/03-vitest-fondamentaux.md`
 - **Lab associe** : Lab 03
-- **Prerequis** : Screencast 02
+- **Prérequis** : Screencast 02
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Projet de demo avec Vitest installe
 - [ ] Fichier `modules/03-vitest-fondamentaux.md` ouvert
 
@@ -16,7 +16,7 @@
 
 ### [00:00-02:00] Introduction — Pourquoi Vitest remplace Jest
 
-> Jest a ete le standard pendant des annees, mais il a ete concu pour CommonJS. Avec l'adoption massive d'ESM, TypeScript et Vite, Vitest offre une experience bien superieure : zero config avec Vite, support ESM natif, et une vitesse de demarrage beaucoup plus rapide.
+> Jest a ete le standard pendant des annees, mais il a ete concu pour CommonJS. Avec l'adoption massive d'ESM, TypeScript et Vite, Vitest offre une experience bien superieure : zero config avec Vite, support ESM natif, et une vitesse de démarrage beaucoup plus rapide.
 
 **Action** : Afficher la comparaison.
 
@@ -34,7 +34,7 @@ API                        | Reference         | Compatible Jest
 
 > Configurons Vitest correctement pour un projet TypeScript.
 
-**Action** : Creer `vitest.config.ts`.
+**Action** : Créer `vitest.config.ts`.
 
 ```typescript
 import { defineConfig } from 'vitest/config';
@@ -68,9 +68,9 @@ export default defineConfig({
 
 ### [05:30-09:00] Matchers — L'arsenal complet
 
-> Les matchers sont les assertions de Vitest. Vous en connaissez deja `toBe` et `toEqual`, mais il y en a beaucoup plus.
+> Les matchers sont les assertions de Vitest. Vous en connaissez déjà `toBe` et `toEqual`, mais il y en a beaucoup plus.
 
-**Action** : Creer `src/matchers-demo.test.ts`.
+**Action** : Créer `src/matchers-demo.test.ts`.
 
 ```typescript
 describe('Matchers essentiels', () => {
@@ -121,7 +121,7 @@ describe('Matchers essentiels', () => {
 });
 ```
 
-**Action** : Executer et montrer le rapport.
+**Action** : Exécuter et montrer le rapport.
 
 ```bash
 npx vitest run src/matchers-demo.test.ts
@@ -184,7 +184,7 @@ describe('Snapshots', () => {
 
 ### [14:00-16:30] Watch mode et UI mode
 
-> Le watch mode est l'outil de productivite numero un. Il re-execute automatiquement les tests impactes par vos modifications.
+> Le watch mode est l'outil de productivite numéro un. Il re-exécuté automatiquement les tests impactes par vos modifications.
 
 **Action** : Lancer le watch mode.
 
@@ -192,7 +192,7 @@ describe('Snapshots', () => {
 npx vitest
 ```
 
-> Vitest detecte les fichiers modifies et ne re-execute que les tests concernes grace au HMR de Vite. C'est beaucoup plus rapide que Jest qui doit recalculer le graphe de dependances.
+> Vitest détecté les fichiers modifies et ne re-exécuté que les tests concernes grace au HMR de Vite. C'est beaucoup plus rapide que Jest qui doit recalculer le graphe de dépendances.
 
 **Action** : Lancer le UI mode.
 
@@ -200,13 +200,13 @@ npx vitest
 npx vitest --ui
 ```
 
-> Le UI mode ouvre un navigateur avec une interface graphique. Vous voyez l'arbre des tests, les resultats, le code source et les erreurs. C'est ideal pour le debugging.
+> Le UI mode ouvre un navigateur avec une interface graphique. Vous voyez l'arbre des tests, les résultats, le code source et les erreurs. C'est ideal pour le debugging.
 
-### [16:30-18:30] Recapitulatif
+### [16:30-18:30] Récapitulatif
 
-> Recapitulons. Vitest offre une config zero-effort avec Vite. Les matchers couvrent tous les cas : egalite, nombres, strings, exceptions. Les modificateurs `.only`, `.skip`, `.todo`, `.each` controlent l'execution. Les snapshots capturent la sortie pour detecter les regressions. Et le watch mode accelere le workflow.
+> Recapitulons. Vitest offre une config zero-effort avec Vite. Les matchers couvrent tous les cas : egalite, nombres, strings, exceptions. Les modificateurs `.only`, `.skip`, `.todo`, `.each` controlent l'exécution. Les snapshots capturent la sortie pour détecter les regressions. Et le watch mode accelere le workflow.
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -221,8 +221,8 @@ PROCHAINE ETAPE :
 ```
 
 ## Points d'attention pour l'enregistrement
-- La comparaison Jest/Vitest est importante pour les developpeurs venant de Jest
+- La comparaison Jest/Vitest est importante pour les développeurs venant de Jest
 - Montrer toBeCloseTo avec 0.1 + 0.2 — c'est un piege classique
 - Le `.each` est sous-utilise — insister sur son utilite
-- Le watch mode doit etre montre en live avec des modifications en temps reel
+- Le watch mode doit etre montre en live avec des modifications en temps réel
 - Le UI mode est visuellement impressionnant — lui donner du temps d'ecran

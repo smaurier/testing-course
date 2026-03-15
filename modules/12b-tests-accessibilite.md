@@ -1,4 +1,4 @@
-# Module 12b — Tests d'accessibilite
+# Module 12b — Tests d'accessibilité
 
 | Difficulte | Duree estimee | Lab | Quiz |
 |------------|---------------|-----|------|
@@ -6,20 +6,20 @@
 
 ## Objectifs
 
-- Comprendre pourquoi l'accessibilite doit etre testee automatiquement
-- Connaitre les obligations legales (EAA 2025, RGAA) et le referentiel WCAG 2.1 AA
+- Comprendre pourquoi l'accessibilité doit etre testee automatiquement
+- Connaître les obligations legales (EAA 2025, RGAA) et le référentiel WCAG 2.1 AA
 - Detecter les violations a11y des le linting avec ESLint
-- Ecrire des tests unitaires avec jest-axe / vitest-axe
-- Automatiser les tests E2E d'accessibilite avec Playwright et axe-core
-- Integrer les verifications a11y dans une pipeline CI/CD
+- Écrire des tests unitaires avec jest-axe / vitest-axe
+- Automatiser les tests E2E d'accessibilité avec Playwright et axe-core
+- Intégrer les verifications a11y dans une pipeline CI/CD
 
 ---
 
-## 1. Pourquoi tester l'accessibilite
+## 1. Pourquoi tester l'accessibilité
 
 ### Le contexte legal
 
-Depuis juin 2025, l'**European Accessibility Act (EAA)** impose aux services numeriques commercialises dans l'UE de respecter le niveau **WCAG 2.1 AA**. En France, le **RGAA** (Referentiel General d'Amelioration de l'Accessibilite) traduit ces exigences en criteres concrets.
+Depuis juin 2025, l'**European Accessibility Act (EAA)** impose aux services numériques commercialises dans l'UE de respecter le niveau **WCAG 2.1 AA**. En France, le **RGAA** (Referentiel General d'Amelioration de l'Accessibilité) traduit ces exigences en criteres concrets.
 
 Ne pas respecter ces obligations expose a :
 
@@ -32,8 +32,8 @@ Ne pas respecter ces obligations expose a :
 L'audit manuel (navigation clavier, lecteur d'ecran) est indispensable mais :
 
 - Il est **lent** : un audit complet prend plusieurs jours
-- Il est **non reproductible** : les resultats varient selon l'auditeur
-- Il ne **previent pas les regressions** : une PR peut casser l'accessibilite sans que personne ne s'en apercoive
+- Il est **non reproductible** : les résultats varient selon l'auditeur
+- Il ne **previent pas les regressions** : une PR peut casser l'accessibilité sans que personne ne s'en apercoive
 
 La solution : **automatiser tout ce qui peut l'etre** et reserver l'audit manuel aux aspects subjectifs (comprehension, parcours utilisateur).
 
@@ -48,7 +48,7 @@ La solution : **automatiser tout ce qui peut l'etre** et reserver l'audit manuel
        ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 ```
 
-Chaque niveau attrape des categories de bugs differentes :
+Chaque niveau attrape des categories de bugs différentes :
 
 | Niveau | Exemples de bugs detectes |
 |--------|--------------------------|
@@ -61,7 +61,7 @@ Chaque niveau attrape des categories de bugs differentes :
 
 ## 2. ESLint : detection statique
 
-L'analyse statique est le premier filet de securite. Elle s'execute dans l'editeur et bloque les PRs avant meme que les tests tournent.
+L'analyse statique est le premier filet de sécurité. Elle s'exécuté dans l'editeur et bloque les PRs avant même que les tests tournent.
 
 ### Pour React : `eslint-plugin-jsx-a11y`
 
@@ -120,23 +120,23 @@ pnpm add -D @angular-eslint/eslint-plugin-template
 }
 ```
 
-### Regles cles a activer en priorite
+### Regles clés a activer en priorite
 
 | Regle | Raison |
 |-------|--------|
 | `alt-text` | Les images sans texte alternatif sont invisibles pour les lecteurs d'ecran |
 | `click-events-have-key-events` | Les utilisateurs clavier ne peuvent pas interagir avec un `onClick` seul |
-| `no-autofocus` | L'autofocus deplace le curseur de maniere inattendue |
+| `no-autofocus` | L'autofocus deplace le curseur de manière inattendue |
 | `label-has-associated-control` | Un champ sans label est inutilisable avec un lecteur d'ecran |
 | `no-static-element-interactions` | Un `<div>` avec un handler n'est pas un bouton |
 
-> **Astuce** : ces plugins ne detectent qu'environ **30% des violations WCAG**. Le linting est necessaire mais jamais suffisant.
+> **Astuce** : ces plugins ne detectent qu'environ **30% des violations WCAG**. Le linting est nécessaire mais jamais suffisant.
 
 ---
 
 ## 3. jest-axe / vitest-axe : tests unitaires
 
-[axe-core](https://github.com/dequelabs/axe-core) est le moteur de regles d'accessibilite le plus utilise. La librairie `jest-axe` l'integre dans les tests unitaires via un matcher custom.
+[axe-core](https://github.com/dequelabs/axe-core) est le moteur de regles d'accessibilité le plus utilise. La librairie `jest-axe` l'intégré dans les tests unitaires via un matcher custom.
 
 ### Installation
 
@@ -148,7 +148,7 @@ pnpm add -D jest-axe @types/jest-axe
 
 ### Setup global (Vitest)
 
-Creer un fichier `tests/setup-a11y.ts` :
+Créer un fichier `tests/setup-a11y.ts` :
 
 ```typescript
 import { expect } from 'vitest';
@@ -232,9 +232,9 @@ it('est accessible (hors contrastes)', async () => {
 });
 ```
 
-### Helper reutilisable
+### Helper réutilisable
 
-Pour eviter de repeter la configuration de filtrage dans chaque test :
+Pour éviter de repeter la configuration de filtrage dans chaque test :
 
 ```typescript
 // tests/helpers/a11y.ts
@@ -270,9 +270,9 @@ it('est accessible', async () => {
 
 ---
 
-## 4. Playwright : tests E2E d'accessibilite
+## 4. Playwright : tests E2E d'accessibilité
 
-Les tests E2E operent sur un vrai navigateur avec le CSS reel. Ils detectent des violations impossibles a trouver en JSDOM : contrastes, ordre de focus, comportement des roles ARIA.
+Les tests E2E operent sur un vrai navigateur avec le CSS réel. Ils detectent des violations impossibles a trouver en JSDOM : contrastes, ordre de focus, comportement des roles ARIA.
 
 ### Installation
 
@@ -280,7 +280,7 @@ Les tests E2E operent sur un vrai navigateur avec le CSS reel. Ils detectent des
 pnpm add -D @axe-core/playwright
 ```
 
-### Scanner une page entiere
+### Scanner une page entière
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -309,7 +309,7 @@ test.describe('Accessibilite', () => {
 });
 ```
 
-### Scanner une section specifique
+### Scanner une section spécifique
 
 ```typescript
 test('le formulaire de recherche est accessible', async ({ page }) => {
@@ -324,7 +324,7 @@ test('le formulaire de recherche est accessible', async ({ page }) => {
 });
 ```
 
-### Exclure des elements connus (dette technique)
+### Exclure des éléments connus (dette technique)
 
 ```typescript
 test('page accessible sauf banniere tierce', async ({ page }) => {
@@ -365,7 +365,7 @@ test('le menu principal est navigable au clavier', async ({ page }) => {
 
 ### Tester les roles ARIA
 
-Playwright propose des selecteurs semantiques qui refletent la facon dont les technologies d'assistance voient la page :
+Playwright propose des selecteurs semantiques qui refletent la façon dont les technologies d'assistance voient la page :
 
 ```typescript
 test('les elements interactifs ont les bons roles', async ({ page }) => {
@@ -410,7 +410,7 @@ test('le focus est visible sur les elements interactifs', async ({ page }) => {
 });
 ```
 
-### Helper Playwright reutilisable
+### Helper Playwright réutilisable
 
 ```typescript
 // tests/helpers/a11y-e2e.ts
@@ -462,7 +462,7 @@ test('page produits accessible', async ({ page }) => {
 
 ### Lighthouse CI avec assertions a11y
 
-Lighthouse CI permet de definir des seuils d'accessibilite dans la pipeline :
+Lighthouse CI permet de définir des seuils d'accessibilité dans la pipeline :
 
 ```bash
 pnpm add -D @lhci/cli
@@ -553,7 +553,7 @@ jobs:
 
 ### Rapport HTML des violations
 
-axe-core genere des resultats JSON structurees. Un script simple peut les convertir en HTML :
+axe-core généré des résultats JSON structurees. Un script simple peut les convertir en HTML :
 
 ```typescript
 // scripts/a11y-report.ts
@@ -593,7 +593,7 @@ export function generateA11yReport(
 }
 ```
 
-### Strategie de severite
+### Stratégie de severite
 
 Ne bloquez pas la pipeline pour toutes les violations. Adoptez une approche progressive :
 
@@ -623,7 +623,7 @@ expect(blocking).toEqual([]);
 
 ### Exercice 1 — Auditer un formulaire avec jest-axe
 
-**Consigne** : le composant `RegistrationForm` ci-dessous contient 3 violations d'accessibilite. Ecrivez un test qui les detecte, puis corrigez le composant.
+**Consigne** : le composant `RegistrationForm` ci-dessous contient 3 violations d'accessibilité. Ecrivez un test qui les détecté, puis corrigez le composant.
 
 ```typescript
 // RegistrationForm.tsx (avec violations)
@@ -684,12 +684,12 @@ export function RegistrationForm() {
 
 ### Exercice 2 — Test E2E de navigation clavier avec Playwright
 
-**Consigne** : ecrivez un test Playwright qui verifie que la modale de confirmation de votre application :
+**Consigne** : ecrivez un test Playwright qui vérifié que la modale de confirmation de votre application :
 
 1. Recoit le focus automatiquement a l'ouverture
 2. Piege le focus (Tab ne sort pas de la modale)
 3. Se ferme avec Echap
-4. Restore le focus sur l'element declencheur apres fermeture
+4. Restore le focus sur l'élément declencheur après fermeture
 
 **Solution** :
 
@@ -749,6 +749,6 @@ test.describe('Modale de confirmation', () => {
 ## Ressources
 
 - [axe-core rules](https://github.com/dequelabs/axe-core/blob/develop/doc/rule-descriptions.md) — liste complete des regles
-- [WCAG 2.1 Quick Reference](https://www.w3.org/WAI/WCAG21/quickref/) — criteres filtrable par niveau
+- [WCAG 2.1 Quick Référence](https://www.w3.org/WAI/WCAG21/quickref/) — criteres filtrable par niveau
 - [Playwright accessibility](https://playwright.dev/docs/accessibility-testing) — documentation officielle
-- [RGAA 4.1](https://accessibilite.numerique.gouv.fr/methode/criteres-et-tests/) — referentiel francais
+- [RGAA 4.1](https://accessibilite.numerique.gouv.fr/methode/criteres-et-tests/) — référentiel français

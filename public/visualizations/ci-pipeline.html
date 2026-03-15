@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline CI/CD — Visualisation interactive</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', Tahoma, sans-serif; min-height: 100vh; }
+  h1 { text-align: center; padding: 18px 0 6px; font-size: 1.5rem; color: #c9d1d9; letter-spacing: 1px; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 10px 18px; }
+  .card { background: #16213e; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  .card h3 { font-size: .95rem; margin-bottom: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; }
+
+  .pipeline { display: flex; align-items: stretch; gap: 0; margin: 20px 0; position: relative; }
+  .stage-group { display: flex; flex-direction: column; gap: 6px; align-items: center; flex: 1; }
+  .stage-group.parallel { display: flex; flex-direction: column; gap: 6px; }
+  .stage { background: #21262d; border: 2px solid #30363d; border-radius: 10px; padding: 14px 10px; text-align: center; cursor: pointer; transition: all .3s; position: relative; min-height: 80px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+  .stage:hover { border-color: #58a6ff; }
+  .stage .name { font-weight: 700; font-size: .85rem; margin-bottom: 4px; }
+  .stage .duration { font-size: .72rem; color: #8b949e; }
+  .stage .progress-bar { position: absolute; bottom: 0; left: 0; height: 4px; border-radius: 0 0 8px 8px; transition: width .3s linear; width: 0; }
+  .stage .status-icon { font-size: 1.2rem; margin-top: 4px; min-height: 22px; }
+
+  .stage.running { border-color: #e8a838; box-shadow: 0 0 12px #e8a83844; }
+  .stage.running .progress-bar { background: #e8a838; }
+  .stage.success { border-color: #238636; box-shadow: 0 0 10px #23863644; }
+  .stage.success .progress-bar { background: #238636; width: 100% !important; }
+  .stage.failed { border-color: #dc3545; box-shadow: 0 0 12px #dc354544; }
+  .stage.failed .progress-bar { background: #dc3545; }
+  .stage.will-fail { border-color: #dc3545; border-style: dashed; }
+  .stage.skipped { opacity: .4; }
+
+  .connector { display: flex; align-items: center; justify-content: center; width: 30px; flex-shrink: 0; }
+  .connector svg { overflow: visible; }
+
+  .controls-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  button { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 8px 18px; cursor: pointer; font-size: .85rem; font-weight: 600; transition: background .2s; }
+  button:hover { filter: brightness(1.15); }
+  button.secondary { background: #21262d; color: #8b949e; border: 2px solid #30363d; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .hint { font-size: .78rem; color: #8b949e; margin-left: auto; }
+
+  .log-panel { max-height: 180px; overflow-y: auto; }
+  .log-entry { font-size: .78rem; padding: 3px 6px; border-bottom: 1px solid #21262d; display: flex; gap: 8px; }
+  .log-entry .time { color: #8b949e; min-width: 55px; }
+  .log-entry.ok { color: #238636; }
+  .log-entry.fail { color: #dc3545; }
+  .log-entry.info { color: #e8a838; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+  .stat { background: #0d1117; border-radius: 6px; padding: 8px; text-align: center; }
+  .stat .val { font-size: 1.1rem; font-weight: 700; color: #58a6ff; }
+  .stat .lbl { font-size: .7rem; color: #8b949e; }
+</style>
+</head>
+<body>
+<h1>Pipeline CI/CD &mdash; Visualisation interactive</h1>
+<div class="container">
+  <div class="card">
+    <h3>Pipeline</h3>
+    <div class="controls-row">
+      <button id="btn-run" onclick="runPipeline()">Lancer le pipeline</button>
+      <button class="secondary" onclick="resetPipeline()">Reinitialiser</button>
+      <span class="hint">Cliquez sur une etape pour simuler un echec</span>
+    </div>
+    <div class="pipeline" id="pipeline">
+      <!-- Built by JS -->
+    </div>
+    <div class="stats-grid">
+      <div class="stat"><div class="val" id="s-total">0</div><div class="lbl">Executions</div></div>
+      <div class="stat"><div class="val" id="s-success" style="color:#238636">0</div><div class="lbl">Succes</div></div>
+      <div class="stat"><div class="val" id="s-failed" style="color:#dc3545">0</div><div class="lbl">Echecs</div></div>
+      <div class="stat"><div class="val" id="s-time">0s</div><div class="lbl">Derniere duree</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Journal</h3>
+    <div class="log-panel" id="log"></div>
+  </div>
+</div>
+
+<script>
+const stages = [
+  { id: 'lint', name: 'Lint', duration: 1500, group: 'A' },
+  { id: 'unit', name: 'Tests Unitaires', duration: 2000, group: 'A' },
+  { id: 'integration', name: 'Tests Integration', duration: 3000, group: 'B' },
+  { id: 'e2e', name: 'Tests E2E', duration: 4000, group: 'C' },
+  { id: 'deploy', name: 'Deploiement', duration: 2000, group: 'D' }
+];
+
+let failSet = new Set();
+let running = false;
+let totalRuns = 0, successRuns = 0, failedRuns = 0;
+
+function buildPipeline() {
+  const container = document.getElementById('pipeline');
+  container.innerHTML = '';
+  const groups = {};
+  stages.forEach(s => { (groups[s.group] = groups[s.group] || []).push(s); });
+  const groupKeys = Object.keys(groups);
+
+  groupKeys.forEach((gk, gi) => {
+    const gDiv = document.createElement('div');
+    gDiv.className = 'stage-group' + (groups[gk].length > 1 ? ' parallel' : '');
+    gDiv.style.flex = '1';
+    groups[gk].forEach(s => {
+      const div = document.createElement('div');
+      div.className = 'stage' + (failSet.has(s.id) ? ' will-fail' : '');
+      div.id = 'stage-' + s.id;
+      div.onclick = () => toggleFail(s.id);
+      div.innerHTML = `
+        <div class="name">${s.name}</div>
+        <div class="duration">${(s.duration/1000).toFixed(1)}s</div>
+        <div class="status-icon" id="icon-${s.id}"></div>
+        <div class="progress-bar" id="bar-${s.id}"></div>
+      `;
+      gDiv.appendChild(div);
+    });
+    container.appendChild(gDiv);
+    if (gi < groupKeys.length - 1) {
+      const conn = document.createElement('div');
+      conn.className = 'connector';
+      conn.innerHTML = '<svg width="30" height="20"><line x1="0" y1="10" x2="28" y2="10" stroke="#30363d" stroke-width="2"/><polygon points="24,6 30,10 24,14" fill="#30363d"/></svg>';
+      container.appendChild(conn);
+    }
+  });
+}
+
+function toggleFail(id) {
+  if (running) return;
+  if (failSet.has(id)) failSet.delete(id);
+  else failSet.add(id);
+  buildPipeline();
+}
+
+function addLog(msg, type) {
+  const ts = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const el = document.createElement('div');
+  el.className = 'log-entry ' + (type || '');
+  el.innerHTML = `<span class="time">${ts}</span><span>${msg}</span>`;
+  document.getElementById('log').prepend(el);
+}
+
+function animateStage(stage) {
+  return new Promise(resolve => {
+    const el = document.getElementById('stage-' + stage.id);
+    const bar = document.getElementById('bar-' + stage.id);
+    const icon = document.getElementById('icon-' + stage.id);
+    const willFail = failSet.has(stage.id);
+    const failAt = willFail ? 0.3 + Math.random() * 0.4 : 1;
+    const actualDuration = stage.duration * failAt;
+
+    el.className = 'stage running';
+    addLog(`${stage.name} — en cours...`, 'info');
+
+    let start = performance.now();
+    function tick(now) {
+      const progress = Math.min((now - start) / actualDuration, 1);
+      bar.style.width = (progress * 100) + '%';
+      if (progress < 1) {
+        requestAnimationFrame(tick);
+      } else {
+        if (willFail) {
+          el.className = 'stage failed';
+          icon.textContent = '\u2716';
+          addLog(`${stage.name} — ECHEC!`, 'fail');
+          resolve(false);
+        } else {
+          el.className = 'stage success';
+          icon.textContent = '\u2714';
+          addLog(`${stage.name} — succes`, 'ok');
+          resolve(true);
+        }
+      }
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+async function runPipeline() {
+  if (running) return;
+  running = true;
+  document.getElementById('btn-run').disabled = true;
+  totalRuns++;
+  document.getElementById('s-total').textContent = totalRuns;
+
+  buildPipeline();
+  addLog('Pipeline demarre', 'info');
+  const startTime = Date.now();
+
+  const groups = {};
+  stages.forEach(s => { (groups[s.group] = groups[s.group] || []).push(s); });
+
+  let pipelineOk = true;
+  for (const gk of Object.keys(groups)) {
+    const results = await Promise.all(groups[gk].map(s => animateStage(s)));
+    if (results.some(r => !r)) {
+      pipelineOk = false;
+      // Skip remaining stages
+      const remainingGroups = Object.keys(groups).filter(k => k > gk);
+      remainingGroups.forEach(rk => {
+        groups[rk].forEach(s => {
+          document.getElementById('stage-' + s.id).classList.add('skipped');
+          document.getElementById('icon-' + s.id).textContent = '\u23F8';
+        });
+      });
+      break;
+    }
+  }
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  document.getElementById('s-time').textContent = elapsed + 's';
+
+  if (pipelineOk) {
+    successRuns++;
+    document.getElementById('s-success').textContent = successRuns;
+    addLog(`Pipeline SUCCES en ${elapsed}s`, 'ok');
+  } else {
+    failedRuns++;
+    document.getElementById('s-failed').textContent = failedRuns;
+    addLog(`Pipeline ECHEC apres ${elapsed}s`, 'fail');
+  }
+
+  running = false;
+  document.getElementById('btn-run').disabled = false;
+}
+
+function resetPipeline() {
+  if (running) return;
+  failSet.clear();
+  document.getElementById('log').innerHTML = '';
+  buildPipeline();
+}
+
+buildPipeline();
+</script>
+</body>
+</html>

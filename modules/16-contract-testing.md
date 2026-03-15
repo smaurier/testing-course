@@ -7,7 +7,7 @@
 ## Objectifs
 
 - Comprendre pourquoi les changements d'API cassent les consommateurs
-- Maitriser le concept de consumer-driven contracts
+- Maîtriser le concept de consumer-driven contracts
 - Configurer Pact avec TypeScript (consumer et provider)
 - Utiliser Zod pour la validation de schemas partages
 - Distinguer les changements cassants des non-cassants
@@ -15,7 +15,7 @@
 
 ---
 
-## Le probleme : les changements d'API cassants
+## Le problème : les changements d'API cassants
 
 ### Scenario classique
 
@@ -32,16 +32,16 @@
   └─────────────────┘           └─────────────────┘
 ```
 
-Team B renomme des champs. Ses propres tests passent. Team A decouvre la casse en staging (ou pire, en production).
+Team B renomme des champs. Ses propres tests passent. Team A découvre la casse en staging (où pire, en production).
 
 ### Pourquoi les tests classiques ne suffisent pas
 
-| Type de test | Detecte le probleme ? | Pourquoi |
+| Type de test | Detecte le problème ? | Pourquoi |
 |-------------|----------------------|----------|
 | Tests unitaires (Team B) | Non | Ne connaissent pas les attentes de Team A |
 | Tests unitaires (Team A) | Non | Mockent l'API, pas le vrai contrat |
 | Tests E2E | Oui, mais tard | Lents, fragiles, en fin de pipeline |
-| Tests d'integration | Parfois | Necessitent les deux services deployes |
+| Tests d'intégration | Parfois | Necessitent les deux services déployés |
 | **Contract tests** | **Oui, tot** | **Verifient le contrat explicitement** |
 
 ---
@@ -50,7 +50,7 @@ Team B renomme des champs. Ses propres tests passent. Team A decouvre la casse e
 
 ### Le principe
 
-Le **consommateur** (frontend, autre service) definit ce qu'il attend de l'API. Le **fournisseur** (API) s'engage a respecter ces attentes.
+Le **consommateur** (frontend, autre service) définit ce qu'il attend de l'API. Le **fournisseur** (API) s'engage a respecter ces attentes.
 
 ```
   Consumer                      Pact Broker                    Provider
@@ -64,11 +64,11 @@ Le **consommateur** (frontend, autre service) definit ce qu'il attend de l'API. 
        │   un champ name"                     le contrat"         │
 ```
 
-### Les 3 etapes
+### Les 3 étapes
 
-1. **Consumer** : ecrit un test qui genere un fichier Pact (contrat JSON)
+1. **Consumer** : écrit un test qui généré un fichier Pact (contrat JSON)
 2. **Broker** : stocke et versionne les contrats (optionnel mais recommande)
-3. **Provider** : rejoue les requetes du contrat contre sa vraie API et verifie les reponses
+3. **Provider** : rejoue les requêtes du contrat contre sa vraie API et vérifié les réponses
 
 ---
 
@@ -153,7 +153,7 @@ export class UserApi {
 }
 ```
 
-### Test consumer (genere le contrat)
+### Test consumer (généré le contrat)
 
 ```typescript
 // consumer/tests/pact/user-api.pact.test.ts
@@ -287,7 +287,7 @@ describe('UserApi Pact', () => {
 });
 ```
 
-### Contrat genere (Pact JSON)
+### Contrat généré (Pact JSON)
 
 ```bash
 # Apres execution du test consumer :
@@ -330,7 +330,7 @@ ls pacts/
 }
 ```
 
-### Verification provider
+### Vérification provider
 
 ```typescript
 // provider/tests/pact/provider.pact.test.ts
@@ -395,7 +395,7 @@ describe('Pact Provider Verification', () => {
 
 ## Pact Broker
 
-Le Pact Broker centralise les contrats et permet la verification croisee.
+Le Pact Broker centralise les contrats et permet la vérification croisee.
 
 ### Avec Docker
 
@@ -421,7 +421,7 @@ pnpm pact-broker publish ./pacts \
   --tag=$(git branch --show-current)
 ```
 
-### Verifier depuis le broker
+### Vérifier depuis le broker
 
 ```typescript
 const verifier = new Verifier({
@@ -458,9 +458,9 @@ pnpm pact-broker can-i-deploy \
 
 ## Validation de schemas avec Zod
 
-### Le probleme avec les types TypeScript
+### Le problème avec les types TypeScript
 
-Les types TypeScript disparaissent a l'execution. Un `interface User` ne valide rien au runtime.
+Les types TypeScript disparaissent a l'exécution. Un `interface User` ne valide rien au runtime.
 
 ```typescript
 // Les types ne protegent pas au runtime
@@ -536,7 +536,7 @@ export class UserApi {
 }
 ```
 
-### Cote provider : validation des requetes
+### Cote provider : validation des requêtes
 
 ```typescript
 // provider/src/routes/users.ts
@@ -675,11 +675,11 @@ describe('CreateUserSchema', () => {
 
 ### Cassants (breaking changes)
 
-| Changement | Exemple | Pourquoi ca casse |
+| Changement | Exemple | Pourquoi ça casse |
 |-----------|---------|-------------------|
 | Renommer un champ | `name` -> `fullName` | Le consumer cherche `name` |
 | Supprimer un champ | `- email` | Le consumer l'utilise |
-| Changer un type | `id: number` -> `id: string` | Parsing different |
+| Changer un type | `id: number` -> `id: string` | Parsing différent |
 | Rendre obligatoire | `bio?` -> `bio` (required) | Les requests sans `bio` echouent |
 | Restreindre une validation | `min(1)` -> `min(5)` | Des inputs valides deviennent invalides |
 | Changer un status code | `201` -> `200` | Le consumer check le status |
@@ -735,9 +735,9 @@ checkBackwardCompatibility(UserV1, {
 
 ## API versioning
 
-### Strategies
+### Stratégies
 
-| Strategie | Exemple | Avantage | Inconvenient |
+| Stratégie | Exemple | Avantage | Inconvenient |
 |-----------|---------|----------|-------------|
 | URL path | `/api/v1/users` | Simple, explicite | Duplication de routes |
 | Header | `Accept: application/vnd.api+json;version=2` | URL propre | Cache complique |
@@ -803,9 +803,9 @@ describe('User API v2 contract', () => {
 
 ## GraphQL contract testing
 
-### Le probleme specifique a GraphQL
+### Le problème spécifique a GraphQL
 
-GraphQL n'a pas de routes/endpoints distincts. Le contrat est defini par le **schema** et les **queries/mutations** utilisees par chaque consumer.
+GraphQL n'a pas de routes/endpoints distincts. Le contrat est défini par le **schema** et les **queries/mutations** utilisees par chaque consumer.
 
 ### Approche : schema-first + operation testing
 
@@ -966,9 +966,9 @@ message User {
 |--------|-------------|-------------|
 | Ajouter un champ | Oui | Les anciens clients l'ignorent |
 | Supprimer un champ | Oui* | Avec `reserved`, les anciens clients ignorent sa valeur |
-| Renommer un champ | Oui | Le numero de champ est ce qui compte, pas le nom |
+| Renommer un champ | Oui | Le numéro de champ est ce qui compte, pas le nom |
 | Changer le type | Non | `int32` != `string` |
-| Changer le numero | Non | Le numero identifie le champ dans le wire format |
+| Changer le numéro | Non | Le numéro identifie le champ dans le wire format |
 
 ### Test de compatibilite
 
@@ -1092,7 +1092,7 @@ jobs:
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [15 - TDD et BDD](./15-tdd-et-bdd) | [17 - Performance testing](./17-performance-testing) |
 
@@ -1107,3 +1107,13 @@ jobs:
 - [Martin Fowler — Consumer-Driven Contracts](https://martinfowler.com/articles/consumerDrivenContracts.html)
 - [GraphQL — findBreakingChanges](https://graphql.org/graphql-js/utilities/#findbreakingchanges)
 - [Buf — Protobuf Linting](https://buf.build/)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 16 contract](../screencasts/screencast-16-contract.md)
+2. **Lab** : [lab-16-contract-testing](../labs/lab-16-contract-testing/README)
+3. **Quiz** : [quiz 16 contract](../quizzes/quiz-16-contract.html)
+:::

@@ -4,11 +4,11 @@
 - **Duree estimee** : 18-20 min
 - **Module** : `modules/04-mocking-et-test-doubles.md`
 - **Lab associe** : Lab 04
-- **Prerequis** : Screencast 03
+- **Prérequis** : Screencast 03
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Projet de demo avec Vitest installe
 - [ ] Fichier `modules/04-mocking-et-test-doubles.md` ouvert
 
@@ -16,7 +16,7 @@
 
 ### [00:00-02:30] Introduction — La taxonomie des test doubles
 
-> Quand on dit "mock", on utilise souvent le terme de maniere generique. Mais il existe 5 types de doublures de test, chacune avec un role precis.
+> Quand on dit "mock", on utilise souvent le terme de manière générique. Mais il existe 5 types de doublures de test, chacune avec un role précis.
 
 **Action** : Afficher la taxonomie.
 
@@ -34,9 +34,9 @@ Fake    | Implementation simplifiee          | InMemoryDatabase au lieu de Postg
 
 ### [02:30-06:00] vi.fn() — La base du mocking
 
-> `vi.fn()` cree une fonction mock qui enregistre ses appels et peut retourner des valeurs predefinies.
+> `vi.fn()` créé une fonction mock qui enregistre ses appels et peut retourner des valeurs predefinies.
 
-**Action** : Creer `src/notification.test.ts`.
+**Action** : Créer `src/notification.test.ts`.
 
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
@@ -69,7 +69,7 @@ describe('notifyUser', () => {
 });
 ```
 
-**Action** : Executer le test.
+**Action** : Exécuter le test.
 
 ```bash
 npx vitest run src/notification.test.ts
@@ -77,7 +77,7 @@ npx vitest run src/notification.test.ts
 
 ### [06:00-09:00] vi.spyOn() — Espionner sans remplacer
 
-> `vi.spyOn()` observe une methode existante sans changer son comportement (sauf si on le demande).
+> `vi.spyOn()` observe une méthode existante sans changer son comportement (sauf si on le demandé).
 
 **Action** : Demontrer vi.spyOn.
 
@@ -111,13 +111,13 @@ describe('vi.spyOn', () => {
 });
 ```
 
-> La difference cle : `vi.fn()` cree une fonction vide, `vi.spyOn()` observe une fonction existante. Toujours appeler `vi.restoreAllMocks()` en `afterEach` pour eviter les fuites entre tests.
+> La différence clé : `vi.fn()` créé une fonction vide, `vi.spyOn()` observe une fonction existante. Toujours appeler `vi.restoreAllMocks()` en `afterEach` pour éviter les fuites entre tests.
 
 ### [09:00-12:30] vi.mock() — Mocker des modules entiers
 
 > `vi.mock()` remplace un module complet par un mock. C'est utile quand on ne controle pas l'import.
 
-**Action** : Creer un exemple avec module mock.
+**Action** : Créer un exemple avec module mock.
 
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
@@ -138,13 +138,13 @@ describe('vi.mock()', () => {
 });
 ```
 
-> Attention : `vi.mock()` est automatiquement "hoiste" en haut du fichier par Vitest. C'est pourquoi il fonctionne meme s'il est ecrit apres l'import dans le code source.
+> Attention : `vi.mock()` est automatiquement "hoiste" en haut du fichier par Vitest. C'est pourquoi il fonctionne même s'il est écrit après l'import dans le code source.
 
 ### [12:30-15:00] Fake timers — Controler le temps
 
 > Les timers (`setTimeout`, `setInterval`, `Date.now`) sont une source classique de flaky tests. Les fake timers les controlent.
 
-**Action** : Creer un exemple avec fake timers.
+**Action** : Créer un exemple avec fake timers.
 
 ```typescript
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -190,7 +190,7 @@ describe('debounce', () => {
 
 ### [15:00-17:30] Anti-pattern — Le sur-mocking
 
-> Le sur-mocking est l'erreur la plus courante. Si vous mockez tout, votre test ne teste plus rien — il verifie juste que vos mocks fonctionnent.
+> Le sur-mocking est l'erreur la plus courante. Si vous mockez tout, votre test ne teste plus rien — il vérifié juste que vos mocks fonctionnent.
 
 **Action** : Afficher la regle.
 
@@ -206,9 +206,9 @@ ALTERNATIVE AU MOCKING :
 → Les fakes (InMemoryDatabase, MSW)
 ```
 
-### [17:30-19:00] Recapitulatif
+### [17:30-19:00] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -226,5 +226,5 @@ PROCHAINE ETAPE :
 ## Points d'attention pour l'enregistrement
 - La taxonomie des test doubles est souvent meconnue — bien l'expliquer
 - Le hoisting de vi.mock() est un piege classique — montrer que l'ordre dans le code n'importe pas
-- La demo de fake timers avec debounce est tres visuelle
+- La demo de fake timers avec debounce est très visuelle
 - Insister sur le danger du sur-mocking avec un exemple concret

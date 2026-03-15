@@ -4,11 +4,11 @@
 - **Duree estimee** : 18-20 min
 - **Module** : `modules/10-playwright-fondamentaux.md`
 - **Lab associe** : Lab 10
-- **Prerequis** : Screencast 09
+- **Prérequis** : Screencast 09
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Playwright installe avec navigateurs
 - [ ] Application de demo demarree sur localhost:3000
 - [ ] Fichier `modules/10-playwright-fondamentaux.md` ouvert
@@ -17,7 +17,7 @@
 
 ### [00:00-02:30] Introduction — Pourquoi Playwright ?
 
-> Playwright est l'outil E2E le plus complet aujourd'hui. Cross-browser, auto-wait natif, codegen, trace viewer, support multi-onglets et iframes. Il couvre des cas que Cypress ne peut pas gerer.
+> Playwright est l'outil E2E le plus complet aujourd'hui. Cross-browser, auto-wait natif, codegen, trace viewer, support multi-onglets et iframes. Il couvre des cas que Cypress ne peut pas gérer.
 
 **Action** : Afficher la comparaison.
 
@@ -72,11 +72,11 @@ export default defineConfig({
 });
 ```
 
-> `webServer` demarre automatiquement l'application avant les tests. En CI, un nouveau serveur est lance. En local, on reutilise celui deja demarre.
+> `webServer` demarre automatiquement l'application avant les tests. En CI, un nouveau serveur est lance. En local, on reutilise celui déjà demarre.
 
 ### [05:00-09:00] Premier test E2E — Navigation et assertions
 
-**Action** : Creer `e2e/home.spec.ts`.
+**Action** : Créer `e2e/home.spec.ts`.
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -101,7 +101,7 @@ test.describe('Home page', () => {
 });
 ```
 
-**Action** : Executer les tests.
+**Action** : Exécuter les tests.
 
 ```bash
 npx playwright test
@@ -110,9 +110,9 @@ npx playwright test --headed  # voir le navigateur
 
 ### [09:00-12:00] Auto-wait — Plus de flaky tests
 
-> L'auto-wait est la fonctionnalite qui distingue Playwright. Chaque action attend automatiquement que l'element soit pret.
+> L'auto-wait est la fonctionnalite qui distingue Playwright. Chaque action attend automatiquement que l'élément soit pret.
 
-**Action** : Expliquer le mecanisme.
+**Action** : Expliquer le mécanisme.
 
 ```typescript
 // Playwright attend automatiquement que le bouton soit :
@@ -128,11 +128,11 @@ await expect(page.getByText('Tache creee')).toBeVisible();
 // ↑ Retry pendant 5 secondes par defaut
 ```
 
-> Avec Selenium, il faut ecrire des `waitForElement`, `sleep`, `waitForClickable`. Avec Playwright, c'est automatique. C'est la raison principale de la reduction des flaky tests.
+> Avec Selenium, il faut écrire des `waitForElement`, `sleep`, `waitForClickable`. Avec Playwright, c'est automatique. C'est la raison principale de la reduction des flaky tests.
 
 ### [12:00-14:30] Selecteurs Playwright — Locators
 
-**Action** : Montrer les differents locators.
+**Action** : Montrer les différents locators.
 
 ```typescript
 // Par role (recommande)
@@ -166,7 +166,7 @@ page.getByRole('listitem').nth(0);
 npx playwright codegen http://localhost:3000
 ```
 
-> Codegen ouvre un navigateur et enregistre vos actions en code Playwright. C'est ideal pour demarrer un test : vous naviguez, cliquez, remplissez des formulaires, et le code est genere automatiquement.
+> Codegen ouvre un navigateur et enregistre vos actions en code Playwright. C'est ideal pour démarrer un test : vous naviguez, cliquez, remplissez des formulaires, et le code est généré automatiquement.
 
 **Action** : Montrer le trace viewer.
 
@@ -175,7 +175,7 @@ npx playwright test --trace on
 npx playwright show-trace test-results/trace.zip
 ```
 
-> Le trace viewer montre chaque action avec un screenshot avant/apres, le reseau, la console, et le DOM. C'est l'outil de debugging ultime pour les tests E2E.
+> Le trace viewer montre chaque action avec un screenshot avant/après, le réseau, la console, et le DOM. C'est l'outil de debugging ultime pour les tests E2E.
 
 ### [16:30-18:30] Hooks — beforeEach, afterEach
 
@@ -201,9 +201,9 @@ test.describe('Tasks CRUD', () => {
 });
 ```
 
-### [18:30-19:30] Recapitulatif
+### [18:30-19:30] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -221,4 +221,4 @@ PROCHAINE ETAPE :
 - La demo codegen est visuellement impressionnante — lui donner du temps
 - Montrer le trace viewer avec un test qui echoue pour voir la valeur
 - L'auto-wait est le point de vente principal — montrer qu'il n'y a pas de sleep
-- Executer en mode --headed pour que le spectateur voie le navigateur
+- Exécuter en mode --headed pour que le spectateur voie le navigateur

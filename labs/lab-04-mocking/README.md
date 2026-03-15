@@ -2,7 +2,7 @@
 
 ## Objectifs
 
-Maitriser les differents types de test doubles (stub, spy, mock, fake) et les techniques d'injection de dependances pour le testing.
+Maîtriser les différents types de test doubles (stub, spy, mock, fake) et les techniques d'injection de dépendances pour le testing.
 
 ## Exercices
 

@@ -11,19 +11,19 @@
 - Utiliser les outils de debugging (Vitest UI, Playwright trace viewer)
 - Appliquer les patterns de correction eprouves
 - Mettre en place une prevention systematique
-- Diagnostiquer 5 cas reels de tests flaky
+- Diagnostiquer 5 cas réels de tests flaky
 
 ---
 
 ## Qu'est-ce qu'un test flaky ?
 
-Un test **flaky** (instable) est un test qui produit des resultats differents **sans changement de code** : il passe parfois et echoue parfois.
+Un test **flaky** (instable) est un test qui produit des résultats différents **sans changement de code** : il passe parfois et echoue parfois.
 
-### Impact sur l'equipe
+### Impact sur l'équipe
 
 | Impact | Consequence |
 |--------|-------------|
-| **Confiance** | L'equipe ignore les echecs CI ("c'est juste un flaky") |
+| **Confiance** | L'équipe ignore les echecs CI ("c'est juste un flaky") |
 | **Vitesse** | Re-runs inutiles, temps perdu a investiguer |
 | **Qualite** | De vrais bugs masques par le bruit des flaky |
 | **Moral** | Frustration, perte de confiance dans la suite de tests |
@@ -40,7 +40,7 @@ Un test **flaky** (instable) est un test qui produit des resultats differents **
 
 ### 1. Race conditions (timing)
 
-Le test depend d'un delai ou d'un ordre d'execution non garanti.
+Le test depend d'un delai ou d'un ordre d'exécution non garanti.
 
 ```typescript
 // FLAKY — race condition
@@ -64,7 +64,7 @@ it('should show notification after save', async () => {
 
 ### 2. Dependance au temps (time-dependent)
 
-Le test depend de `Date.now()`, `setTimeout`, ou de l'heure systeme.
+Le test depend de `Date.now()`, `setTimeout`, ou de l'heure système.
 
 ```typescript
 // FLAKY — depend de l'heure reelle
@@ -100,9 +100,9 @@ describe('getGreeting', () => {
 });
 ```
 
-### 3. Etat partage (shared state)
+### 3. État partage (shared state)
 
-Les tests dependent d'un etat global qui n'est pas reinitialise entre chaque test.
+Les tests dependent d'un état global qui n'est pas reinitialise entre chaque test.
 
 ```typescript
 // FLAKY — etat global partage
@@ -144,9 +144,9 @@ describe('ShoppingCart', () => {
 });
 ```
 
-### 4. Dependance reseau (network)
+### 4. Dependance réseau (network)
 
-Le test fait de vrais appels HTTP qui peuvent echouer, etre lents, ou retourner des donnees differentes.
+Le test fait de vrais appels HTTP qui peuvent echouer, etre lents, ou retourner des donnees différentes.
 
 ```typescript
 // FLAKY — vrai appel API
@@ -182,7 +182,7 @@ it('should fetch user profile', async () => {
 
 ### 5. Selecteurs UI fragiles
 
-Le test cible des elements par des attributs instables (classes CSS, structure DOM).
+Le test cible des éléments par des attributs instables (classes CSS, structure DOM).
 
 ```typescript
 // FLAKY — selecteur fragile
@@ -205,7 +205,7 @@ it('should click the submit button', async () => {
 
 ## Detection des tests flaky
 
-### Methode 1 : executions repetees
+### Méthode 1 : executions repetees
 
 ```bash
 # Vitest : lancer N fois
@@ -251,7 +251,7 @@ for (const [name, outcomes] of testOutcomes) {
 }
 ```
 
-### Methode 2 : quarantaine CI
+### Méthode 2 : quarantaine CI
 
 ```typescript
 // vitest.config.ts
@@ -275,7 +275,7 @@ export default defineConfig({
 }
 ```
 
-### Methode 3 : Playwright retries avec analyse
+### Méthode 3 : Playwright retries avec analyse
 
 ```typescript
 // playwright.config.ts
@@ -406,11 +406,11 @@ pnpm playwright show-trace test-results/my-test/trace.zip
 ```
 
 Le trace viewer montre :
-- Chaque action (click, fill, navigate) avec un screenshot avant/apres
-- Les appels reseau (requetes/reponses)
+- Chaque action (click, fill, navigate) avec un screenshot avant/après
+- Les appels réseau (requêtes/réponses)
 - Les logs console
 - La timeline complete
-- L'etat du DOM a chaque etape
+- L'état du DOM à chaque étape
 
 ### Playwright : mode debug interactif
 
@@ -506,7 +506,7 @@ it('should load data', async ({ page }) => {
 });
 ```
 
-### Pattern 3 : Isolation d'etat (shared state)
+### Pattern 3 : Isolation d'état (shared state)
 
 ```typescript
 // Pattern factory pour l'isolation
@@ -540,7 +540,7 @@ describe('OrderService', () => {
 });
 ```
 
-### Pattern 4 : MSW pour le reseau
+### Pattern 4 : MSW pour le réseau
 
 ```typescript
 import { http, HttpResponse, delay } from 'msw';
@@ -595,7 +595,7 @@ describe('Product API client', () => {
 });
 ```
 
-### Pattern 5 : Selecteurs deterministes
+### Pattern 5 : Selecteurs déterministes
 
 ```typescript
 // Hierarchie de selecteurs (du meilleur au pire)
@@ -626,7 +626,7 @@ await page.locator('#main-content > .product-list');
 
 ---
 
-## 5 diagnostics de tests flaky reels
+## 5 diagnostics de tests flaky réels
 
 ### Cas 1 : Le test qui echoue a minuit
 
@@ -685,7 +685,7 @@ it('should submit the form', async ({ page }) => {
 });
 ```
 
-### Cas 3 : L'ordre des resultats non garanti
+### Cas 3 : L'ordre des résultats non garanti
 
 ```typescript
 // PROBLEME : le test echoue quand l'API retourne les items dans un ordre different
@@ -718,7 +718,7 @@ it('should display user list', async () => {
 });
 ```
 
-### Cas 4 : Le port deja utilise
+### Cas 4 : Le port déjà utilise
 
 ```typescript
 // PROBLEME : le test echoue sporadiquement avec "EADDRINUSE: port 3000"
@@ -803,9 +803,9 @@ export default defineConfig({
 
 ## Docker pour la reproductibilite
 
-### Le probleme "works on my machine"
+### Le problème "works on my machine"
 
-| Local | CI | Difference |
+| Local | CI | Différence |
 |-------|----|------------|
 | macOS M2 | Ubuntu 22.04 | OS, CPU architecture |
 | 32 GB RAM | 7 GB RAM | Ressources |
@@ -852,17 +852,17 @@ docker run --rm my-app-test pnpm vitest run src/services/pricing.test.ts
 
 ## Prevention checklist
 
-### Avant d'ecrire un test
+### Avant d'écrire un test
 
-- [ ] Le test est-il **deterministe** ? (meme input -> meme output, toujours)
-- [ ] Le test est-il **isole** ? (pas de dependance a un autre test)
-- [ ] Les dependances externes sont-elles **mockees** ? (API, DB, filesystem)
+- [ ] Le test est-il **déterministe** ? (même input -> même output, toujours)
+- [ ] Le test est-il **isole** ? (pas de dépendance à un autre test)
+- [ ] Les dépendances externes sont-elles **mockees** ? (API, DB, filesystem)
 - [ ] Les dates/heures sont-elles **figees** ? (fake timers)
 - [ ] Les selecteurs UI sont-ils **stables** ? (data-testid, roles ARIA)
 
 ### Structure du test
 
-- [ ] `beforeEach` reinitialise tout l'etat
+- [ ] `beforeEach` reinitialise tout l'état
 - [ ] Pas de variable globale partagee entre tests
 - [ ] Pas de `sleep()` ou `waitForTimeout()` avec duree fixe
 - [ ] Les assertions utilisent des attentes explicites (auto-retrying)
@@ -870,10 +870,10 @@ docker run --rm my-app-test pnpm vitest run src/services/pricing.test.ts
 
 ### En CI
 
-- [ ] Les tests passent avec `--no-file-parallelism` (elimine les problemes d'ordre)
+- [ ] Les tests passent avec `--no-file-parallelism` (elimine les problèmes d'ordre)
 - [ ] Les tests passent 10 fois de suite sans echec
 - [ ] Les timeouts sont raisonnables (ni trop courts, ni trop longs)
-- [ ] Les retries sont actives **uniquement** pour detecter les flaky, pas pour les masquer
+- [ ] Les retries sont actives **uniquement** pour détecter les flaky, pas pour les masquer
 - [ ] Un test qui retry avec succes est signale comme flaky (pas silencieusement OK)
 
 ### Hygiene de la suite de tests
@@ -891,15 +891,15 @@ docker run --rm my-app-test pnpm vitest run src/services/pricing.test.ts
 
 ---
 
-## Recapitulatif : patterns par categorie
+## Récapitulatif : patterns par categorie
 
 | Categorie | Symptome | Pattern de correction |
 |-----------|----------|----------------------|
-| **Timing** | "Element not visible", timeout | Attentes explicites, auto-retrying assertions |
+| **Timing** | "Élément not visible", timeout | Attentes explicites, auto-retrying assertions |
 | **Temps** | Echoue a certaines heures | `vi.useFakeTimers()`, `vi.setSystemTime()` |
-| **Etat partage** | Echoue selon l'ordre d'execution | `beforeEach` reset, factory pattern |
-| **Reseau** | Timeout, donnees differentes | MSW, `server.use()` par test |
-| **UI** | "Element not stable", mauvais element | `data-testid`, roles ARIA, `reducedMotion` |
+| **État partage** | Echoue selon l'ordre d'exécution | `beforeEach` reset, factory pattern |
+| **Réseau** | Timeout, donnees différentes | MSW, `server.use()` par test |
+| **UI** | "Élément not stable", mauvais élément | `data-testid`, roles ARIA, `reducedMotion` |
 | **Ordre** | Assertions d'index echouent | `.sort()`, `arrayContaining`, `toContainEqual` |
 | **Port** | EADDRINUSE | Port 0, allocation dynamique |
 | **Env** | "Works on my machine" | Docker, TZ=UTC, fake timers |
@@ -908,20 +908,20 @@ docker run --rm my-app-test pnpm vitest run src/services/pricing.test.ts
 
 ## Checklist du module
 
-- [ ] Je sais categoriser un test flaky (timing, temps, etat, reseau, UI)
+- [ ] Je sais categoriser un test flaky (timing, temps, état, réseau, UI)
 - [ ] J'utilise les fake timers pour les tests dependants du temps
-- [ ] J'isole l'etat avec beforeEach et des factory functions
-- [ ] J'utilise MSW pour mocker les appels reseau
+- [ ] J'isole l'état avec beforeEach et des factory functions
+- [ ] J'utilise MSW pour mocker les appels réseau
 - [ ] Je connais le Playwright Trace Viewer
 - [ ] Je sais debugger avec Vitest UI et Node inspector
 - [ ] J'ai une checklist de prevention des flaky tests
-- [ ] Je sais diagnostiquer les 5 cas reels presentes
+- [ ] Je sais diagnostiquer les 5 cas réels presentes
 
 ---
 
 ## Exercice pratique
 
-Vous avez acces a un projet avec 5 tests flaky. Pour chacun :
+Vous avez acces à un projet avec 5 tests flaky. Pour chacun :
 
 1. Identifiez la categorie du flaky
 2. Reproduisez l'echec (indices dans les commentaires)
@@ -934,7 +934,7 @@ Vous avez acces a un projet avec 5 tests flaky. Pour chacun :
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [13 - Tests en CI/CD](./13-tests-en-ci-cd) | [15 - TDD et BDD](./15-tdd-et-bdd) |
 
@@ -948,3 +948,13 @@ Vous avez acces a un projet avec 5 tests flaky. Pour chacun :
 - [Playwright Trace Viewer](https://playwright.dev/docs/trace-viewer)
 - [Vitest Debugging](https://vitest.dev/guide/debugging)
 - [MSW — Mock Service Worker](https://mswjs.io/)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 14 flaky](../screencasts/screencast-14-flaky.md)
+2. **Lab** : [lab-14-flaky-tests](../labs/lab-14-flaky-tests/README)
+3. **Quiz** : [quiz 14 flaky](../quizzes/quiz-14-flaky.html)
+:::

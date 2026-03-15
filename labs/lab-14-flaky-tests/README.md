@@ -6,26 +6,26 @@
 
 ## Objectifs
 
-- Detecter les tests flaky en les executant plusieurs fois
+- Detecter les tests flaky en les exécutant plusieurs fois
 - Corriger un test dependant du temps (Date.now)
-- Corriger un test avec etat partage (variable globale)
+- Corriger un test avec état partage (variable globale)
 - Corriger un test avec condition de course (async non-await)
-- Implementer un systeme de quarantaine pour tests flaky
+- Implementer un système de quarantaine pour tests flaky
 - Identifier et corriger 3 tests flaky dans une suite
 
 ## Exercices
 
 ### Exercice 1 — `detectFlaky(testFn, runs)`
-Executez une fonction de test N fois et rapportez le ratio succes/echec. Un test est flaky s'il produit des resultats differents entre les runs.
+Executez une fonction de test N fois et rapportez le ratio succes/echec. Un test est flaky s'il produit des résultats différents entre les runs.
 
 ### Exercice 2 — Fix time-dependent test
-Un test utilise `Date.now()` directement, ce qui le rend non-deterministe. Rendez-le deterministe en injectant une horloge.
+Un test utilise `Date.now()` directement, ce qui le rend non-déterministe. Rendez-le déterministe en injectant une horloge.
 
 ### Exercice 3 — Fix shared-state test
-Un test mute une variable globale, causant des interferences entre tests. Isolez l'etat par test.
+Un test mute une variable globale, causant des interferences entre tests. Isolez l'état par test.
 
 ### Exercice 4 — Fix race condition test
-Un test lance des operations async sans les attendre correctement. Corrigez l'ordre d'execution.
+Un test lance des operations async sans les attendre correctement. Corrigez l'ordre d'exécution.
 
 ### Exercice 5 — `quarantineManager`
 Gerez une liste de tests en quarantaine : ajout, retrait, auto-skip, et rapport de sante.

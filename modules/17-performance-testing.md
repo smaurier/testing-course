@@ -7,11 +7,11 @@
 ## Objectifs
 
 - Distinguer les types de tests de performance (load, stress, spike, soak)
-- Maitriser k6 (scripts, VUs, scenarios, thresholds, checks)
+- Maîtriser k6 (scripts, VUs, scenarios, thresholds, checks)
 - Utiliser vitest bench pour le benchmarking de fonctions
 - Mesurer les performances frontend (Lighthouse CI, Web Vitals)
-- Detecter les fuites memoire
-- Mettre en place une baseline et detecter les regressions
+- Detecter les fuites mémoire
+- Mettre en place une baseline et détecter les regressions
 
 ---
 
@@ -37,10 +37,10 @@
 
 | Type | Objectif | Duree | Charge |
 |------|----------|-------|--------|
-| **Load** | Verifier le comportement sous charge normale | 5-15 min | Attendue (ex: 100 VUs) |
-| **Stress** | Trouver les limites du systeme | 10-30 min | Croissante jusqu'a la rupture |
+| **Load** | Vérifier le comportement sous charge normale | 5-15 min | Attendue (ex: 100 VUs) |
+| **Stress** | Trouver les limites du système | 10-30 min | Croissante jusqu'à la rupture |
 | **Spike** | Tester un pic soudain de trafic | 2-5 min | Pic brutal puis retour |
-| **Soak** | Detecter les fuites (memoire, connexions) | 1-4 heures | Constante et moderee |
+| **Soak** | Detecter les fuites (mémoire, connexions) | 1-4 heures | Constante et moderee |
 
 ---
 
@@ -616,7 +616,7 @@ test('should not have too many network requests', async ({ page }) => {
 
 ---
 
-## Detection des fuites memoire
+## Detection des fuites mémoire
 
 ### Avec Node.js (backend)
 
@@ -926,7 +926,7 @@ function compareSummaries(baselinePath: string, currentPath: string): void {
 compareSummaries('baseline.json', 'current.json');
 ```
 
-### Integration CI
+### Intégration CI
 
 ```yaml
 # .github/workflows/perf.yml
@@ -981,11 +981,11 @@ jobs:
 ## Checklist du module
 
 - [ ] Je distingue les 4 types de tests de performance
-- [ ] Je sais ecrire un script k6 avec stages, thresholds et checks
+- [ ] Je sais écrire un script k6 avec stages, thresholds et checks
 - [ ] J'utilise vitest bench pour comparer des implementations
 - [ ] Je mesure les Web Vitals avec Playwright
 - [ ] Je sais configurer Lighthouse CI
-- [ ] Je detecte les fuites memoire (Node, frontend)
+- [ ] Je détecté les fuites mémoire (Node, frontend)
 - [ ] J'ai une baseline de performance et un script de comparaison
 - [ ] Mon pipeline CI inclut des tests de performance
 
@@ -1005,7 +1005,7 @@ jobs:
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [16 - Contract testing](./16-contract-testing) | [18 - Projet final](./18-projet-final) |
 
@@ -1019,3 +1019,13 @@ jobs:
 - [Vitest Benchmarking](https://vitest.dev/guide/features.html#benchmarking)
 - [Lighthouse CI](https://github.com/GoogleChrome/lighthouse-ci)
 - [Web Vitals](https://web.dev/vitals/)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 17 performance](../screencasts/screencast-17-performance.md)
+2. **Lab** : [lab-17-performance](../labs/lab-17-performance/README)
+3. **Quiz** : [quiz 17 performance](../quizzes/quiz-17-performance.html)
+:::

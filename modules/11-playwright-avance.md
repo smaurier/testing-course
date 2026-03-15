@@ -7,11 +7,11 @@
 ## Objectifs
 
 - Implementer le pattern Page Object Model (POM) avec TypeScript
-- Creer des fixtures personnalisees (auth, database, API)
-- Reutiliser l'etat d'authentification avec `storageState`
-- Intercepter le reseau avec `page.route()`
+- Créer des fixtures personnalisees (auth, database, API)
+- Reutiliser l'état d'authentification avec `storageState`
+- Intercepter le réseau avec `page.route()`
 - Mettre en place la regression visuelle avec `toHaveScreenshot()`
-- Tester l'accessibilite avec axe-core
+- Tester l'accessibilité avec axe-core
 - Tester les API REST directement avec la fixture `request`
 - Configurer le parallelisme, le sharding et la CI
 - Organiser les tests avec des tags et des reporters
@@ -20,7 +20,7 @@
 
 ## Page Object Model (POM)
 
-Le Page Object Model est un pattern de design qui encapsule l'interaction avec une page dans une classe dediee. Chaque page (ou composant significatif) de l'application a sa propre classe.
+Le Page Object Model est un pattern de design qui encapsule l'interaction avec une page dans une classe dediee. Chaque page (où composant significatif) de l'application a sa propre classe.
 
 ### Pourquoi le POM ?
 
@@ -29,7 +29,7 @@ Le Page Object Model est un pattern de design qui encapsule l'interaction avec u
 | Selecteurs dupliques dans chaque test | Selecteurs centralises dans un seul fichier |
 | Si un selecteur change → modifier N tests | Si un selecteur change → modifier 1 fichier |
 | Tests verbeux et difficiles a lire | Tests lisibles, orientes metier |
-| Pas de reutilisation | Methodes reutilisables |
+| Pas de reutilisation | Méthodes réutilisables |
 
 ### BasePage : classe de base
 
@@ -407,7 +407,7 @@ test.describe('Product management', () => {
 
 ## Fixtures personnalisees
 
-Les fixtures Playwright permettent d'injecter des dependances dans les tests.
+Les fixtures Playwright permettent d'injecter des dépendances dans les tests.
 
 ### Fixture d'authentification
 
@@ -582,11 +582,11 @@ export { expect } from '@playwright/test';
 
 ---
 
-## Storage state : reutiliser l'authentification
+## Storage state : réutiliser l'authentification
 
-Au lieu de se connecter avant chaque test, on peut sauvegarder l'etat de la session et le reutiliser.
+Au lieu de se connecter avant chaque test, on peut sauvegarder l'état de la session et le réutiliser.
 
-### Global setup : creer le storage state
+### Global setup : créer le storage state
 
 ```typescript
 // e2e/global-setup.ts
@@ -676,9 +676,9 @@ e2e/.auth/
 
 ---
 
-## Interception reseau : `page.route()`
+## Interception réseau : `page.route()`
 
-### Intercepter et modifier des reponses
+### Intercepter et modifier des réponses
 
 ```typescript
 test('should display mock data from intercepted API', async ({ page }) => {
@@ -718,7 +718,7 @@ test('should display error page on API failure', async ({ page }) => {
 });
 ```
 
-### Modifier une reponse existante
+### Modifier une réponse existante
 
 ```typescript
 test('should handle slow API response', async ({ page }) => {
@@ -768,7 +768,7 @@ test('should load page without third-party scripts', async ({ page }) => {
 });
 ```
 
-### Attendre une requete specifique
+### Attendre une requête spécifique
 
 ```typescript
 test('should save form and wait for API response', async ({ page }) => {
@@ -877,7 +877,7 @@ test('dashboard layout should be stable', async ({ page }) => {
 
 ---
 
-## Accessibilite avec axe-core
+## Accessibilité avec axe-core
 
 ### Installation
 
@@ -885,7 +885,7 @@ test('dashboard layout should be stable', async ({ page }) => {
 pnpm add -D @axe-core/playwright
 ```
 
-### Test d'accessibilite de base
+### Test d'accessibilité de base
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -936,7 +936,7 @@ test.describe('Accessibility', () => {
 });
 ```
 
-### Fixture d'accessibilite reutilisable
+### Fixture d'accessibilité réutilisable
 
 ```typescript
 // e2e/fixtures/a11y.ts
@@ -1226,7 +1226,7 @@ test('should handle edge case @slow', async ({ page }) => {
 });
 ```
 
-### Executer par tag
+### Exécuter par tag
 
 ```bash
 # Uniquement les tests @smoke
@@ -1372,11 +1372,11 @@ playwright.config.ts
 Implementez une suite de tests Playwright avancee pour un e-commerce :
 
 1. **Page Objects** : LoginPage, ProductListPage, CartPage, CheckoutPage
-2. **Fixtures** : authentification (user + admin), creation de produit via API
-3. **Storage state** : login une seule fois, reutiliser la session
-4. **Interception reseau** : simuler une erreur de paiement
+2. **Fixtures** : authentification (user + admin), création de produit via API
+3. **Storage state** : login une seule fois, réutiliser la session
+4. **Interception réseau** : simuler une erreur de paiement
 5. **Regression visuelle** : page produit, panier vide, page de confirmation
-6. **Accessibilite** : scanner toutes les pages principales
+6. **Accessibilité** : scanner toutes les pages principales
 7. **Tags** : @smoke pour les tests critiques, @regression pour le reste
 8. **CI** : GitHub Actions avec sharding sur 3 runners
 
@@ -1386,7 +1386,7 @@ Implementez une suite de tests Playwright avancee pour un e-commerce :
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [10 - Playwright fondamentaux](./10-playwright-fondamentaux) | [12 - Couverture et mutation testing](./12-couverture-et-mutation-testing) |
 
@@ -1401,5 +1401,16 @@ Implementez une suite de tests Playwright avancee pour un e-commerce :
 - Playwright — [Authentication](https://playwright.dev/docs/auth)
 - Playwright — [Visual comparisons](https://playwright.dev/docs/test-snapshots)
 - Playwright — [API testing](https://playwright.dev/docs/api-testing)
-- axe-core — [Playwright integration](https://github.com/dequelabs/axe-core-npm/tree/develop/packages/playwright)
+- axe-core — [Playwright intégration](https://github.com/dequelabs/axe-core-npm/tree/develop/packages/playwright)
 - Playwright — [CI GitHub Actions](https://playwright.dev/docs/ci-intro)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 11 playwright avance](../screencasts/screencast-11-playwright-avance.md)
+2. **Lab** : [lab-11-playwright-avance](../labs/lab-11-playwright-avance/README)
+3. **Visualisation** : [Page Object Pattern](../visualizations/page-object.html)
+4. **Quiz** : [quiz 11 playwright avance](../quizzes/quiz-11-playwright-avance.html)
+:::

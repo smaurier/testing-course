@@ -4,11 +4,11 @@
 - **Duree estimee** : 18-20 min
 - **Module** : `modules/15-tdd-et-bdd.md`
 - **Lab associe** : Lab 15
-- **Prerequis** : Screencast 14
+- **Prérequis** : Screencast 14
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert en watch mode (`npx vitest`)
+- [ ] Terminal intégré ouvert en watch mode (`npx vitest`)
 - [ ] Fichier `modules/15-tdd-et-bdd.md` ouvert
 - [ ] Aucun fichier pre-existant pour le kata
 
@@ -16,7 +16,7 @@
 
 ### [00:00-02:00] Introduction — TDD, le cycle Red-Green-Refactor
 
-> TDD inverse le workflow habituel : au lieu d'ecrire le code puis le test, on ecrit le test PUIS le code. Le cycle se repete en 3 etapes : Red (test qui echoue), Green (code minimal pour passer), Refactor (ameliorer sans changer le comportement).
+> TDD inverse le workflow habituel : au lieu d'écrire le code puis le test, on écrit le test PUIS le code. Le cycle se repete en 3 étapes : Red (test qui echoue), Green (code minimal pour passer), Refactor (ameliorer sans changer le comportement).
 
 **Action** : Afficher le cycle.
 
@@ -43,7 +43,7 @@
 
 > Faisons un kata TDD complet. On va implementer un StringCalculator pas a pas, en suivant strictement Red-Green-Refactor.
 
-**Action** : Creer `src/string-calculator.test.ts` et `src/string-calculator.ts`.
+**Action** : Créer `src/string-calculator.test.ts` et `src/string-calculator.ts`.
 
 ```typescript
 // ITERATION 1 — RED : chaine vide retourne 0
@@ -116,13 +116,13 @@ export function add(input: string): number {
 }
 ```
 
-> A chaque iteration, on ajoute UN test, on ecrit le MINIMUM de code pour le faire passer, puis on refactore si necessaire. Le watch mode de Vitest donne un feedback instantane.
+> A chaque iteration, on ajoute UN test, on écrit le MINIMUM de code pour le faire passer, puis on refactore si nécessaire. Le watch mode de Vitest donne un feedback instantane.
 
 ### [10:00-13:00] BDD — Given-When-Then et Cucumber
 
-> BDD exprime les specifications en langage naturel. Le format Given-When-Then est lisible par les non-developpeurs.
+> BDD exprime les spécifications en langage naturel. Le format Given-When-Then est lisible par les non-développeurs.
 
-**Action** : Ecrire un fichier Gherkin.
+**Action** : Écrire un fichier Gherkin.
 
 ```gherkin
 # features/login.feature
@@ -210,9 +210,9 @@ Ideal pour : algorithmes,             Ideal pour : features UI,
 logique metier complexe               flux utilisateur, APIs
 ```
 
-### [17:30-19:00] Recapitulatif
+### [17:30-19:00] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -230,5 +230,5 @@ PROCHAINE ETAPE :
 ## Points d'attention pour l'enregistrement
 - Le kata TDD DOIT etre fait en live, iteration par iteration
 - Le watch mode de Vitest en split screen est ideal pour montrer Red → Green
-- Chaque iteration doit etre petite — resister a la tentation d'ecrire trop de code
+- Chaque iteration doit etre petite — resister à la tentation d'écrire trop de code
 - Le Gherkin est nouveau pour beaucoup — bien montrer la lisibilite

@@ -4,11 +4,11 @@
 - **Duree estimee** : 18-20 min
 - **Module** : `modules/17-performance-testing.md`
 - **Lab associe** : Lab 17
-- **Prerequis** : Screencast 16
+- **Prérequis** : Screencast 16
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] k6 installe (`brew install k6` ou binaire)
 - [ ] Application de demo demarree sur localhost:3000
 - [ ] Fichier `modules/17-performance-testing.md` ouvert
@@ -17,7 +17,7 @@
 
 ### [00:00-02:30] Introduction — Les types de tests de performance
 
-> "Ca marche" et "ca tient la charge" sont deux choses differentes. Il existe 4 types de tests de performance, chacun avec un objectif different.
+> "Ça marche" et "ça tient la charge" sont deux choses différentes. Il existe 4 types de tests de performance, chacun avec un objectif différent.
 
 **Action** : Afficher les 4 types.
 
@@ -43,9 +43,9 @@ SOAK    : Charge constante longue → y a-t-il des fuites memoire ?
 
 ### [02:30-06:30] k6 — Premiers scripts
 
-> k6 est l'outil de reference pour les tests de charge. Scripts en JavaScript, metriques en temps reel, scenarios complexes, seuils configurables.
+> k6 est l'outil de référence pour les tests de charge. Scripts en JavaScript, metriques en temps réel, scenarios complexes, seuils configurables.
 
-**Action** : Creer un premier script k6.
+**Action** : Créer un premier script k6.
 
 ```javascript
 // k6/load-test.js
@@ -77,17 +77,17 @@ export default function () {
 }
 ```
 
-**Action** : Executer le test.
+**Action** : Exécuter le test.
 
 ```bash
 k6 run k6/load-test.js
 ```
 
-> k6 affiche en temps reel : le nombre de VUs, les requetes/seconde, le p95 de latence, le taux d'echec. Les thresholds determinent si le test passe ou echoue.
+> k6 affiche en temps réel : le nombre de VUs, les requêtes/seconde, le p95 de latence, le taux d'echec. Les thresholds determinent si le test passe ou echoue.
 
 ### [06:30-09:30] Scenarios avances — Stress et spike
 
-**Action** : Creer un test de stress.
+**Action** : Créer un test de stress.
 
 ```javascript
 // k6/stress-test.js
@@ -113,7 +113,7 @@ export default function () {
 }
 ```
 
-**Action** : Creer un test de spike.
+**Action** : Créer un test de spike.
 
 ```javascript
 // k6/spike-test.js
@@ -130,9 +130,9 @@ export const options = {
 
 ### [09:30-12:00] Vitest bench — Benchmarking de fonctions
 
-> Pour les micro-benchmarks (comparer deux implementations), Vitest a un mode bench integre.
+> Pour les micro-benchmarks (comparer deux implementations), Vitest à un mode bench intégré.
 
-**Action** : Creer un benchmark.
+**Action** : Créer un benchmark.
 
 ```typescript
 // src/sort.bench.ts
@@ -163,7 +163,7 @@ describe('sorting algorithms', () => {
 });
 ```
 
-**Action** : Executer le benchmark.
+**Action** : Exécuter le benchmark.
 
 ```bash
 npx vitest bench
@@ -202,11 +202,11 @@ module.exports = {
 npx lhci autorun
 ```
 
-> Lighthouse CI tourne dans le pipeline et echoue si les performances degradent en dessous des seuils. C'est le filet de securite pour les regressions de performance frontend.
+> Lighthouse CI tourne dans le pipeline et echoue si les performances degradent en dessous des seuils. C'est le filet de sécurité pour les regressions de performance frontend.
 
-### [14:30-16:30] Detecter les fuites memoire
+### [14:30-16:30] Detecter les fuites mémoire
 
-**Action** : Montrer un test de fuite memoire.
+**Action** : Montrer un test de fuite mémoire.
 
 ```typescript
 // Avec Vitest — detecter une fuite simple
@@ -232,9 +232,9 @@ k6 run --duration 30m --vus 10 k6/soak-test.js
 # Surveiller la memoire du processus serveur en parallele
 ```
 
-### [16:30-18:30] Recapitulatif
+### [16:30-18:30] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -251,6 +251,6 @@ PROCHAINE ETAPE :
 
 ## Points d'attention pour l'enregistrement
 - Le diagramme des 4 types de tests est essentiel — le garder visible
-- La demo k6 en temps reel est visuellement impressionnante — lui donner du temps
-- Le benchmark vitest bench est rapide et spectaculaire — montrer la difference
-- Lighthouse CI est un quick win pour la CI — insister sur la facilite d'integration
+- La demo k6 en temps réel est visuellement impressionnante — lui donner du temps
+- Le benchmark vitest bench est rapide et spectaculaire — montrer la différence
+- Lighthouse CI est un quick win pour la CI — insister sur la facilite d'intégration

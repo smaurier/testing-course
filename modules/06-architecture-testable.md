@@ -6,21 +6,21 @@
 
 ## Objectifs
 
-- Identifier pourquoi certains codes sont difficiles a tester
-- Maitriser l'injection de dependances (constructeur, parametre, factory)
+- Identifier pourquoi certains codes sont difficiles à tester
+- Maîtriser l'injection de dépendances (constructeur, paramètre, factory)
 - Exploiter les fonctions pures pour des tests simples et fiables
-- Appliquer les principes SOLID sous l'angle de la testabilite
+- Appliquer les principes SOLID sous l'angle de la testabilité
 - Comprendre l'architecture hexagonale (Ports & Adapters)
 - Implementer les patterns Repository et Service Layer
 - Reconnaitre et refactorer les anti-patterns courants
 
 ---
 
-## Pourquoi certains codes sont difficiles a tester
+## Pourquoi certains codes sont difficiles à tester
 
 ### Les symptomes
 
-Quand ecrire un test devient penible, c'est un signal de design :
+Quand écrire un test devient penible, c'est un signal de design :
 
 ```typescript
 // DIFFICILE A TESTER : dependances cachees
@@ -56,25 +56,25 @@ Pour tester cette classe, il faut :
 4. Mocker `Date` (vi.useFakeTimers)
 5. Mocker `PriceCalculator.compute` (vi.spyOn)
 
-Resultat : un test fragile, verbeux, qui teste surtout les mocks.
+Résultat : un test fragile, verbeux, qui teste surtout les mocks.
 
 ### Les causes profondes
 
 | Cause | Symptome | Solution |
 |-------|----------|----------|
-| Dependances hardcodees | `new Service()`, `require()` | Injection de dependances |
-| Etat global | Singletons, variables globales | Passer l'etat en parametre |
-| Methodes statiques | `Utils.calculate()` | Fonctions pures injectables |
-| I/O melangee a la logique | `fetch` dans un calcul | Separation couches |
-| God class | 1 classe, 20 methodes, 500 lignes | Single Responsibility |
+| Dependances hardcodees | `new Service()`, `require()` | Injection de dépendances |
+| État global | Singletons, variables globales | Passer l'état en paramètre |
+| Méthodes statiques | `Utils.calculate()` | Fonctions pures injectables |
+| I/O melangee à la logique | `fetch` dans un calcul | Separation couches |
+| God class | 1 classe, 20 méthodes, 500 lignes | Single Responsibility |
 
 ---
 
-## L'injection de dependances
+## L'injection de dépendances
 
 ### Principe
 
-Au lieu de creer ses dependances, un objet les recoit de l'exterieur.
+Au lieu de créer ses dépendances, un objet les recoit de l'exterieur.
 
 ### Injection par constructeur
 
@@ -172,9 +172,9 @@ describe('UserService', () => {
 });
 ```
 
-### Injection par parametre
+### Injection par paramètre
 
-Pour les fonctions stateless, on injecte directement dans les parametres :
+Pour les fonctions stateless, on injecte directement dans les paramètres :
 
 ```typescript
 // AVANT
@@ -222,7 +222,7 @@ it('should process payment successfully', async () => {
 
 ### Injection par factory
 
-Utile quand on veut centraliser la creation avec des valeurs par defaut :
+Utile quand on veut centraliser la création avec des valeurs par defaut :
 
 ```typescript
 interface OrderServiceDeps {
@@ -317,7 +317,7 @@ describe('OrderService', () => {
 ### Definition
 
 Une fonction pure :
-1. Retourne toujours le meme resultat pour les memes arguments
+1. Retourne toujours le même résultat pour les memes arguments
 2. N'a aucun effet de bord (pas de mutation, pas d'I/O)
 
 ```typescript
@@ -470,11 +470,11 @@ describe('formatOrderSummary', () => {
 
 ---
 
-## SOLID sous l'angle de la testabilite
+## SOLID sous l'angle de la testabilité
 
 ### S — Single Responsibility Principle
 
-Une classe = une raison de changer = facile a tester en isolation.
+Une classe = une raison de changer = facile à tester en isolation.
 
 ```typescript
 // MAUVAIS : OrderService fait tout
@@ -536,7 +536,7 @@ Chaque classe se teste independamment, sans mock des autres.
 
 ### O — Open/Closed Principle
 
-Ouvert a l'extension, ferme a la modification.
+Ouvert a l'extension, ferme à la modification.
 
 ```typescript
 // Strategie pattern pour les methodes de paiement
@@ -1011,7 +1011,7 @@ function calculateShipping(order: Order, deps: ShippingDeps): number {
 }
 ```
 
-### 3. Methodes statiques avec etat
+### 3. Méthodes statiques avec état
 
 ```typescript
 // MAUVAIS : statique avec etat global
@@ -1046,7 +1046,7 @@ class AnalyticsService {
 
 ## Exemple complet : refactoring d'un OrderService couple
 
-### AVANT : code difficile a tester
+### AVANT : code difficile à tester
 
 ```typescript
 // src/services/order-service-v1.ts
@@ -1278,23 +1278,23 @@ describe('computeTotal', () => {
 
 ## Checklist : mon code est-il testable ?
 
-Avant d'ecrire un test, verifiez :
+Avant d'écrire un test, verifiez :
 
-- [ ] Les dependances sont-elles injectees (pas de `new` ou `import` d'I/O dans la logique) ?
+- [ ] Les dépendances sont-elles injectees (pas de `new` ou `import` d'I/O dans la logique) ?
 - [ ] La logique pure est-elle separee des effets de bord ?
 - [ ] Chaque classe/fonction a-t-elle une seule responsabilite ?
-- [ ] Les interfaces sont-elles definies pour les dependances externes ?
-- [ ] Le code evite-t-il les singletons et l'etat global ?
-- [ ] Les fonctions sont-elles deterministes (meme entree = meme sortie) ?
-- [ ] Les methodes statiques sont-elles limitees aux utilitaires purs ?
+- [ ] Les interfaces sont-elles definies pour les dépendances externes ?
+- [ ] Le code evite-t-il les singletons et l'état global ?
+- [ ] Les fonctions sont-elles déterministes (même entree = même sortie) ?
+- [ ] Les méthodes statiques sont-elles limitees aux utilitaires purs ?
 
-Si une de ces cases n'est pas cochee, considerez un refactoring **avant** d'ecrire le test.
+Si une de ces cases n'est pas cochee, considerez un refactoring **avant** d'écrire le test.
 
 ---
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [05 - Tests asynchrones](./05-tests-asynchrones) | [07 - Tests de composants](./07-tests-de-composants) |
 
@@ -1308,3 +1308,13 @@ Si une de ces cases n'est pas cochee, considerez un refactoring **avant** d'ecri
 - Alistair Cockburn — [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)
 - Robert C. Martin — [The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
 - Mark Seemann — [Dependency Injection in .NET](https://www.manning.com/books/dependency-injection-principles-practices-patterns) (principes applicables a tout langage)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 06 architecture](../screencasts/screencast-06-architecture.md)
+2. **Lab** : [lab-06-architecture-testable](../labs/lab-06-architecture-testable/README)
+3. **Quiz** : [quiz 06 architecture](../quizzes/quiz-06-architecture.html)
+:::

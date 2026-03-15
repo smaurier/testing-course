@@ -4,11 +4,11 @@
 - **Duree estimee** : 15-18 min
 - **Module** : `modules/02-anatomie-dun-test.md`
 - **Lab associe** : Lab 02
-- **Prerequis** : Screencast 01
+- **Prérequis** : Screencast 01
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Projet de demo avec Vitest installe
 - [ ] Fichier `modules/02-anatomie-dun-test.md` ouvert
 
@@ -16,9 +16,9 @@
 
 ### [00:00-02:00] Introduction — Le pattern AAA
 
-> Tout test, quel que soit le framework ou le langage, suit trois etapes : Arrange, Act, Assert. C'est le pattern AAA. Arrange prepare le contexte, Act execute l'action, Assert verifie le resultat.
+> Tout test, quel que soit le framework ou le langage, suit trois étapes : Arrange, Act, Assert. C'est le pattern AAA. Arrange prepare le contexte, Act exécuté l'action, Assert vérifié le résultat.
 
-**Action** : Creer `src/shopping-cart.test.ts`.
+**Action** : Créer `src/shopping-cart.test.ts`.
 
 ```typescript
 import { describe, it, expect } from 'vitest';
@@ -40,11 +40,11 @@ describe('ShoppingCart', () => {
 });
 ```
 
-> Chaque section a un role precis. Si vous mettez de la logique dans Assert ou de la verification dans Arrange, le test devient confus.
+> Chaque section à un role précis. Si vous mettez de la logique dans Assert ou de la vérification dans Arrange, le test devient confus.
 
 ### [02:00-05:00] Structure — describe, it, expect
 
-> `describe` groupe les tests logiquement. `it` (ou `test`) definit un cas de test. `expect` cree une assertion. Cette structure est commune a Vitest, Jest, Mocha et Playwright.
+> `describe` groupe les tests logiquement. `it` (où `test`) définit un cas de test. `expect` créé une assertion. Cette structure est commune a Vitest, Jest, Mocha et Playwright.
 
 **Action** : Montrer l'imbrication de `describe`.
 
@@ -62,7 +62,7 @@ describe('UserService', () => {
 });
 ```
 
-> L'imbrication de `describe` cree une hierarchie claire dans le rapport de tests. Mais attention : ne pas imbriquer plus de 2-3 niveaux.
+> L'imbrication de `describe` créé une hiérarchie claire dans le rapport de tests. Mais attention : ne pas imbriquer plus de 2-3 niveaux.
 
 ### [05:00-08:00] Nommage — La convention "should"
 
@@ -83,13 +83,13 @@ it('should throw NotFoundError when user does not exist', () => { /* ... */ });
 it('given an expired token, should reject the request', () => { /* ... */ });
 ```
 
-> Un bon test doit etre comprehensible sans lire le code. Le nom seul doit suffire a comprendre ce qui est teste.
+> Un bon test doit etre comprehensible sans lire le code. Le nom seul doit suffire à comprendre ce qui est teste.
 
 ### [08:00-11:00] Setup et teardown — beforeEach, afterEach
 
-> Quand plusieurs tests partagent le meme setup, on utilise `beforeEach` et `afterEach` pour eviter la duplication.
+> Quand plusieurs tests partagent le même setup, on utilise `beforeEach` et `afterEach` pour éviter la duplication.
 
-**Action** : Creer un exemple avec setup/teardown.
+**Action** : Créer un exemple avec setup/teardown.
 
 ```typescript
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -119,7 +119,7 @@ describe('Database', () => {
 });
 ```
 
-> `beforeEach` s'execute avant CHAQUE test, pas une seule fois. C'est crucial pour l'isolation : chaque test part d'un etat propre.
+> `beforeEach` s'exécuté avant CHAQUE test, pas une seule fois. C'est crucial pour l'isolation : chaque test part d'un état propre.
 
 ### [11:00-14:00] Anti-patterns — Ce qu'il ne faut PAS faire
 
@@ -163,7 +163,7 @@ it('should work', () => {
 
 ### [14:00-16:00] L'isolation — Chaque test est une ile
 
-> L'isolation est le principe le plus important. Chaque test doit pouvoir s'executer seul, dans n'importe quel ordre, sans dependre des autres.
+> L'isolation est le principe le plus important. Chaque test doit pouvoir s'exécuter seul, dans n'importe quel ordre, sans dépendre des autres.
 
 **Action** : Afficher les regles d'isolation.
 
@@ -176,11 +176,11 @@ REGLES D'ISOLATION :
 5. Un test qui echoue ne doit pas faire echouer les suivants
 ```
 
-### [16:00-17:30] Recapitulatif
+### [16:00-17:30] Récapitulatif
 
-> Recapitulons. Le pattern AAA structure tout test : Arrange, Act, Assert. `describe`/`it` organisent les tests en hierarchie. Les noms decrivent le comportement attendu. `beforeEach`/`afterEach` mutualisent le setup. Et chaque test doit etre isole des autres.
+> Recapitulons. Le pattern AAA structure tout test : Arrange, Act, Assert. `describe`/`it` organisent les tests en hiérarchie. Les noms decrivent le comportement attendu. `beforeEach`/`afterEach` mutualisent le setup. Et chaque test doit etre isole des autres.
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -197,5 +197,5 @@ PROCHAINE ETAPE :
 ## Points d'attention pour l'enregistrement
 - Le pattern AAA est fondamental — bien marquer les trois sections avec des commentaires
 - Les anti-patterns resonnent avec l'experience de chacun — y passer du temps
-- Montrer l'execution des tests apres chaque exemple
-- L'isolation est souvent negligee par les debutants — insister
+- Montrer l'exécution des tests après chaque exemple
+- L'isolation est souvent negligee par les débutants — insister

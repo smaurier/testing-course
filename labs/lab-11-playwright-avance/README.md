@@ -2,33 +2,33 @@
 
 ## Objectifs
 
-Apprendre les patterns avances de test E2E : Page Object Model, fixtures, interception reseau, comparaison de screenshots, tagging et un scenario POM complet.
+Apprendre les patterns avances de test E2E : Page Object Model, fixtures, interception réseau, comparaison de screenshots, tagging et un scenario POM complet.
 
-## Concepts cles
+## Concepts clés
 
 - Page Object Model (POM) : BasePage, LoginPage, DashboardPage
 - Fixtures : contexte d'authentification, donnees de test
-- Interception reseau : intercepter et mocker les reponses
-- Comparaison de screenshots : capturer et comparer les etats
+- Interception réseau : intercepter et mocker les réponses
+- Comparaison de screenshots : capturer et comparer les états
 - Tagging : @smoke, @regression pour filtrer les tests
 - Scenario POM complet : LoginPage -> DashboardPage -> CRUD
 
 ## Exercices
 
 ### Exercice 1 : Page Object Model
-Implementez `BasePage`, `LoginPage` et `DashboardPage` avec des methodes metier.
+Implementez `BasePage`, `LoginPage` et `DashboardPage` avec des méthodes metier.
 
 ### Exercice 2 : Fixtures
 Creez `createAuthContext` et `createTestData` pour preparer les tests.
 
 ### Exercice 3 : Network interception
-Implementez `interceptRoute(url, response)` pour mocker les appels reseau.
+Implementez `interceptRoute(url, response)` pour mocker les appels réseau.
 
 ### Exercice 4 : Screenshot comparison
-Implementez `captureState()` et `assertUnchanged()` pour verifier les etats visuels.
+Implementez `captureState()` et `assertUnchanged()` pour vérifier les états visuels.
 
 ### Exercice 5 : Test tagging
-Implementez un systeme de tags (@smoke, @regression) pour filtrer les tests.
+Implementez un système de tags (@smoke, @regression) pour filtrer les tests.
 
 ### Exercice 6 : POM complet
 Scenario LoginPage -> DashboardPage avec create/edit/delete.

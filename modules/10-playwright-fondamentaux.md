@@ -8,11 +8,11 @@
 
 - Comprendre les avantages de Playwright (cross-browser, auto-wait, codegen, trace)
 - Installer et configurer un projet Playwright
-- Ecrire des tests E2E avec la syntaxe `test` / `expect`
-- Maitriser la navigation, les selecteurs et les actions
-- Utiliser les assertions specifiques a Playwright
-- Comprendre le mecanisme d'auto-wait
-- Generer des tests avec Codegen et debugger avec Trace Viewer
+- Écrire des tests E2E avec la syntaxe `test` / `expect`
+- Maîtriser la navigation, les selecteurs et les actions
+- Utiliser les assertions spécifiques a Playwright
+- Comprendre le mécanisme d'auto-wait
+- Générer des tests avec Codegen et debugger avec Trace Viewer
 - Mettre en place les hooks de test
 
 ---
@@ -32,15 +32,15 @@
 | Trace viewer | Integre | Dashboard (payant) | Non |
 | Codegen | Oui | Non (Cypress Studio deprecie) | IDE plugins |
 | API testing | Natif (request fixture) | Via cy.request() | Non |
-| Vitesse | Tres rapide | Rapide | Lent |
+| Vitesse | Très rapide | Rapide | Lent |
 
-### Les avantages cles
+### Les avantages clés
 
-1. **Cross-browser** : tester sur Chromium, Firefox et WebKit avec la meme syntaxe
-2. **Auto-wait** : Playwright attend automatiquement que les elements soient prets
-3. **Codegen** : generer du code de test en enregistrant vos actions dans le navigateur
-4. **Trace Viewer** : debugger visuellement avec screenshots, DOM, reseau, console
-5. **Isolation** : chaque test s'execute dans un contexte de navigateur isole
+1. **Cross-browser** : tester sur Chromium, Firefox et WebKit avec la même syntaxe
+2. **Auto-wait** : Playwright attend automatiquement que les éléments soient prets
+3. **Codegen** : générer du code de test en enregistrant vos actions dans le navigateur
+4. **Trace Viewer** : debugger visuellement avec screenshots, DOM, réseau, console
+5. **Isolation** : chaque test s'exécuté dans un contexte de navigateur isole
 6. **API testing** : tester les API REST directement sans navigateur
 
 ---
@@ -168,7 +168,7 @@ export default defineConfig({
 
 ---
 
-## Ecrire un premier test
+## Écrire un premier test
 
 ### Syntaxe de base
 
@@ -251,7 +251,7 @@ await page.waitForURL('**/profile/**');
 await page.waitForURL(/\/products\/\d+/);
 ```
 
-### Autres methodes de navigation
+### Autres méthodes de navigation
 
 ```typescript
 // Recharger la page
@@ -484,7 +484,7 @@ await expect(page).toHaveURL('/products');
 await expect(page).toHaveURL(/\/products\?page=2/);
 ```
 
-### Assertions sur les elements
+### Assertions sur les éléments
 
 ```typescript
 // Visibilite
@@ -537,9 +537,9 @@ await expect(page.getByRole('button', { name: /envoyer/i })).not.toBeDisabled();
 
 ---
 
-## Auto-wait : le mecanisme cle
+## Auto-wait : le mécanisme clé
 
-Playwright attend automatiquement que les elements soient prets avant d'interagir avec eux. C'est un avantage majeur par rapport a Selenium.
+Playwright attend automatiquement que les éléments soient prets avant d'interagir avec eux. C'est un avantage majeur par rapport a Selenium.
 
 ### Ce que Playwright attend avant un clic
 
@@ -633,9 +633,9 @@ test('visual check of product page', async ({ page }) => {
 
 ---
 
-## Codegen : generer du code de test
+## Codegen : générer du code de test
 
-Playwright Codegen enregistre vos actions dans le navigateur et genere le code correspondant.
+Playwright Codegen enregistre vos actions dans le navigateur et généré le code correspondant.
 
 ```bash
 # Lancer Codegen
@@ -654,12 +654,12 @@ npx playwright codegen --output=e2e/tests/generated.spec.ts http://localhost:300
 ### Workflow recommande
 
 1. Lancer Codegen pour enregistrer le scenario de base
-2. Copier le code genere dans votre fichier de test
+2. Copier le code généré dans votre fichier de test
 3. **Ameliorer les selecteurs** : remplacer les selecteurs CSS par `getByRole`, `getByLabel`, etc.
-4. **Ajouter les assertions** : Codegen genere les actions mais pas toujours les verifications
-5. **Refactorer** : extraire les helpers, creer des Page Objects
+4. **Ajouter les assertions** : Codegen généré les actions mais pas toujours les verifications
+5. **Refactorer** : extraire les helpers, créer des Page Objects
 
-### Exemple : code genere vs code ameliore
+### Exemple : code généré vs code ameliore
 
 ```typescript
 // Code genere par Codegen (brut)
@@ -690,7 +690,7 @@ test('should login with valid credentials', async ({ page }) => {
 
 ## Trace Viewer
 
-Le Trace Viewer est un outil de debugging visuel qui montre chaque action, screenshot, log reseau et erreur console.
+Le Trace Viewer est un outil de debugging visuel qui montre chaque action, screenshot, log réseau et erreur console.
 
 ### Activer la trace
 
@@ -718,9 +718,9 @@ npx playwright show-trace test-results/tests-login-chromium/trace.zip
 ### Ce que le Trace Viewer montre
 
 - Timeline de chaque action (goto, click, fill, etc.)
-- Screenshot avant et apres chaque action
-- Snapshot du DOM a chaque etape
-- Requetes reseau (URL, status, duree)
+- Screenshot avant et après chaque action
+- Snapshot du DOM à chaque étape
+- Requetes réseau (URL, status, duree)
 - Logs console (errors, warnings)
 - Source du test avec la ligne en cours
 
@@ -730,7 +730,7 @@ npx playwright show-trace test-results/tests-login-chromium/trace.zip
 
 ### `test.beforeAll` / `test.afterAll`
 
-Executes une fois par worker, avant/apres tous les tests du fichier.
+Executes une fois par worker, avant/après tous les tests du fichier.
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -748,7 +748,7 @@ test.afterAll(async () => {
 
 ### `test.beforeEach` / `test.afterEach`
 
-Executes avant/apres chaque test.
+Executes avant/après chaque test.
 
 ```typescript
 test.beforeEach(async ({ page }) => {
@@ -1072,10 +1072,10 @@ npx playwright install
 Ecrivez les tests E2E Playwright pour une application de gestion de contacts :
 1. Login avec identifiants valides / invalides
 2. Lister les contacts avec recherche et filtres
-3. Creer un nouveau contact (formulaire multi-etapes)
+3. Créer un nouveau contact (formulaire multi-étapes)
 4. Modifier un contact existant
 5. Supprimer un contact avec confirmation
-6. Tester la navigation au clavier (accessibilite)
+6. Tester la navigation au clavier (accessibilité)
 
 > Solution dans le [Lab 10](../labs/lab-10-playwright-fondamentaux/)
 
@@ -1083,9 +1083,9 @@ Ecrivez les tests E2E Playwright pour une application de gestion de contacts :
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
-| [09 - Tests d'integration](./09-tests-integration) | [11 - Playwright avance](./11-playwright-avance) |
+| [09 - Tests d'intégration](./09-tests-integration) | [11 - Playwright avance](./11-playwright-avance) |
 
 ---
 
@@ -1098,3 +1098,14 @@ Ecrivez les tests E2E Playwright pour une application de gestion de contacts :
 - Playwright — [Locators](https://playwright.dev/docs/locators)
 - Playwright — [Auto-waiting](https://playwright.dev/docs/actionability)
 - Playwright — [Trace Viewer](https://playwright.dev/docs/trace-viewer)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 10 playwright](../screencasts/screencast-10-playwright.md)
+2. **Lab** : [lab-10-playwright-fondamentaux](../labs/lab-10-playwright-fondamentaux/README)
+3. **Visualisation** : [Page Object Pattern](../visualizations/page-object.html)
+4. **Quiz** : [quiz 10 playwright](../quizzes/quiz-10-playwright.html)
+:::

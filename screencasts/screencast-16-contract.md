@@ -4,19 +4,19 @@
 - **Duree estimee** : 18-20 min
 - **Module** : `modules/16-contract-testing.md`
 - **Lab associe** : Lab 16
-- **Prerequis** : Screencast 15
+- **Prérequis** : Screencast 15
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Projet de demo avec Pact et Zod installes
 - [ ] Fichier `modules/16-contract-testing.md` ouvert
 
 ## Script
 
-### [00:00-02:30] Introduction — Le probleme des changements d'API cassants
+### [00:00-02:30] Introduction — Le problème des changements d'API cassants
 
-> Imaginez : l'equipe backend renomme un champ `name` en `fullName`. Tous les tests backend passent. Mais le frontend s'attend a `name` et casse en production. Le contract testing empeche ca.
+> Imaginez : l'équipe backend renomme un champ `name` en `fullName`. Tous les tests backend passent. Mais le frontend s'attend a `name` et casse en production. Le contract testing empeche ça.
 
 **Action** : Afficher le scenario.
 
@@ -38,9 +38,9 @@
 
 ### [02:30-06:00] Consumer-Driven Contracts avec Pact
 
-> Pact est l'outil de reference pour le contract testing. Le consumer (frontend) definit ce qu'il attend. Le provider (backend) verifie qu'il respecte le contrat.
+> Pact est l'outil de référence pour le contract testing. Le consumer (frontend) définit ce qu'il attend. Le provider (backend) vérifié qu'il respecte le contrat.
 
-**Action** : Ecrire un test consumer (frontend).
+**Action** : Écrire un test consumer (frontend).
 
 ```typescript
 import { PactV4, MatchersV3 } from '@pact-foundation/pact';
@@ -79,11 +79,11 @@ describe('Task API Contract', () => {
 });
 ```
 
-> Le test genere un fichier "pact" (contrat JSON) dans le dossier `pacts/`. Ce fichier est partage avec l'equipe backend.
+> Le test généré un fichier "pact" (contrat JSON) dans le dossier `pacts/`. Ce fichier est partage avec l'équipe backend.
 
-### [06:00-09:00] Verification cote provider (backend)
+### [06:00-09:00] Vérification cote provider (backend)
 
-**Action** : Ecrire le test provider.
+**Action** : Écrire le test provider.
 
 ```typescript
 import { Verifier } from '@pact-foundation/pact';
@@ -111,13 +111,13 @@ describe('Task API Provider Verification', () => {
 });
 ```
 
-> Le provider demarre son serveur, charge le contrat, et verifie que ses reponses correspondent. Si l'equipe backend renomme `title` en `taskTitle`, ce test echoue AVANT le merge.
+> Le provider demarre son serveur, charge le contrat, et vérifié que ses réponses correspondent. Si l'équipe backend renomme `title` en `taskTitle`, ce test echoue AVANT le merge.
 
 ### [09:00-12:00] Validation de schemas avec Zod
 
 > Zod offre une approche plus legere que Pact : partager des schemas TypeScript entre consumer et provider.
 
-**Action** : Creer un schema partage.
+**Action** : Créer un schema partage.
 
 ```typescript
 // shared/schemas/task.schema.ts
@@ -183,7 +183,7 @@ Changer un URL          | OUI       | Le consumer ne trouve plus la route
 
 > La regle de Postel : "Be conservative in what you send, be liberal in what you accept." Le provider doit respecter le contrat. Le consumer doit tolerer les champs inconnus.
 
-### [14:30-16:30] Workflow en equipe — Pact Broker
+### [14:30-16:30] Workflow en équipe — Pact Broker
 
 **Action** : Afficher le workflow.
 
@@ -203,9 +203,9 @@ CONSUMER ──pact──► BROKER ──pact──► PROVIDER
                    └── verification ────┘
 ```
 
-### [16:30-18:30] Recapitulatif
+### [16:30-18:30] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -221,7 +221,7 @@ PROCHAINE ETAPE :
 ```
 
 ## Points d'attention pour l'enregistrement
-- Le diagramme du bug "name → fullName" est tres parlant — y passer du temps
+- Le diagramme du bug "name → fullName" est très parlant — y passer du temps
 - La distinction consumer/provider doit etre claire avant de montrer le code
-- Zod est plus simple que Pact — le presenter comme une alternative pragmatique
-- Le tableau cassant/non-cassant est un reference utile
+- Zod est plus simple que Pact — le présenter comme une alternative pragmatique
+- Le tableau cassant/non-cassant est un référence utile

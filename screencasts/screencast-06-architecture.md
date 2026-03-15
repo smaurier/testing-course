@@ -4,21 +4,21 @@
 - **Duree estimee** : 18-20 min
 - **Module** : `modules/06-architecture-testable.md`
 - **Lab associe** : Lab 06
-- **Prerequis** : Screencast 05
+- **Prérequis** : Screencast 05
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Projet de demo avec Vitest installe
 - [ ] Fichier `modules/06-architecture-testable.md` ouvert
 
 ## Script
 
-### [00:00-02:30] Introduction — Pourquoi certains codes sont difficiles a tester
+### [00:00-02:30] Introduction — Pourquoi certains codes sont difficiles à tester
 
-> Si ecrire un test est penible, c'est souvent un signal de design, pas un probleme de testing. Les dependances cachees, l'etat global et le couplage fort rendent le code difficile a tester.
+> Si écrire un test est penible, c'est souvent un signal de design, pas un problème de testing. Les dépendances cachees, l'état global et le couplage fort rendent le code difficile à tester.
 
-**Action** : Montrer un code difficile a tester.
+**Action** : Montrer un code difficile à tester.
 
 ```typescript
 // DIFFICILE A TESTER — dependances cachees
@@ -35,11 +35,11 @@ export class OrderService {
 // Comment tester sans base de donnees ? Sans serveur email ?
 ```
 
-### [02:30-06:00] Injection de dependances — La solution
+### [02:30-06:00] Injection de dépendances — La solution
 
-> L'injection de dependances consiste a passer les dependances en parametre au lieu de les creer a l'interieur du code.
+> L'injection de dépendances consiste a passer les dépendances en paramètre au lieu de les créer a l'interieur du code.
 
-**Action** : Refactorer avec injection de dependances.
+**Action** : Refactorer avec injection de dépendances.
 
 ```typescript
 // FACILE A TESTER — dependances injectees
@@ -66,7 +66,7 @@ export class OrderService {
 }
 ```
 
-**Action** : Ecrire le test.
+**Action** : Écrire le test.
 
 ```typescript
 describe('OrderService', () => {
@@ -87,9 +87,9 @@ describe('OrderService', () => {
 });
 ```
 
-### [06:00-09:00] Fonctions pures — Le graal de la testabilite
+### [06:00-09:00] Fonctions pures — Le graal de la testabilité
 
-> Une fonction pure est la forme de code la plus facile a tester : meme entrees = meme sortie, pas d'effet de bord.
+> Une fonction pure est la forme de code la plus facile à tester : même entrees = même sortie, pas d'effet de bord.
 
 **Action** : Montrer l'extraction de logique pure.
 
@@ -123,7 +123,7 @@ describe('calculateFee', () => {
 });
 ```
 
-> La strategie : extraire la logique metier dans des fonctions pures, et garder le minimum de code "impure" (I/O, DB, API) dans une fine couche orchestratrice.
+> La stratégie : extraire la logique metier dans des fonctions pures, et garder le minimum de code "impure" (I/O, DB, API) dans une fine couche orchestratrice.
 
 ### [09:00-12:30] Architecture hexagonale — Ports & Adapters
 
@@ -190,11 +190,11 @@ describe('UserService', () => {
 });
 ```
 
-> Le fake est plus realiste qu'un mock car il a un vrai comportement. Il detecte des bugs que le mock ne detecterait pas.
+> Le fake est plus realiste qu'un mock car il à un vrai comportement. Il détecté des bugs que le mock ne detecterait pas.
 
-### [15:30-18:00] SOLID sous l'angle de la testabilite
+### [15:30-18:00] SOLID sous l'angle de la testabilité
 
-**Action** : Afficher le resume.
+**Action** : Afficher le résumé.
 
 ```
 PRINCIPE | IMPACT SUR LA TESTABILITE
@@ -206,9 +206,9 @@ I (ISP)  | Interfaces fines → mocks simples
 D (DIP)  | Depend des abstractions → injection facile
 ```
 
-### [18:00-19:30] Recapitulatif
+### [18:00-19:30] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -224,7 +224,7 @@ PROCHAINE ETAPE :
 ```
 
 ## Points d'attention pour l'enregistrement
-- Le refactoring avant/apres est le moment cle — montrer la difference de testabilite
+- Le refactoring avant/après est le moment clé — montrer la différence de testabilité
 - L'architecture hexagonale peut sembler abstraite — utiliser le diagramme
 - Le fake InMemoryRepository est plus parlant qu'un mock — insister
-- Ne pas etre dogmatique sur SOLID — presenter comme un guide
+- Ne pas etre dogmatique sur SOLID — présenter comme un guide

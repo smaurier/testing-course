@@ -1,4 +1,4 @@
-# Module 09 — Tests d'integration
+# Module 09 — Tests d'intégration
 
 | Difficulte | Duree estimee | Lab | Quiz |
 |------------|---------------|-----|------|
@@ -6,19 +6,19 @@
 
 ## Objectifs
 
-- Definir clairement les limites d'un test d'integration
+- Définir clairement les limites d'un test d'intégration
 - Tester des API Express/Fastify avec supertest
-- Tester l'integration base de donnees avec setup/teardown propres
+- Tester l'intégration base de donnees avec setup/teardown propres
 - Combiner composant + store + router + API (MSW) cote frontend
-- Gerer les fixtures avec des factories et des builders
+- Gérer les fixtures avec des factories et des builders
 - Utiliser Docker et Testcontainers pour des environnements reproductibles
-- Eviter les pieges classiques : lenteur, flakiness, etat partage
+- Éviter les pieges classiques : lenteur, flakiness, état partage
 
 ---
 
 ## Definition et limites
 
-### Ou se situe le test d'integration ?
+### Ou se situe le test d'intégration ?
 
 ```
         Unite            Integration            E2E
@@ -32,21 +32,21 @@
      Pas de I/O       I/O reelles           Lent
 ```
 
-### Qu'est-ce qu'un test d'integration ?
+### Qu'est-ce qu'un test d'intégration ?
 
-Un test d'integration verifie que **deux ou plusieurs modules** fonctionnent correctement **ensemble**. Contrairement aux tests unitaires, il inclut au moins une dependance reelle (base de donnees, API HTTP, systeme de fichiers, etc.).
+Un test d'intégration vérifié que **deux ou plusieurs modules** fonctionnent correctement **ensemble**. Contrairement aux tests unitaires, il inclut au moins une dépendance réelle (base de donnees, API HTTP, système de fichiers, etc.).
 
-| Critere | Test unitaire | Test d'integration | Test E2E |
+| Critere | Test unitaire | Test d'intégration | Test E2E |
 |---------|---------------|-------------------|----------|
-| Scope | 1 fonction/classe | 2+ modules ensemble | Application entiere |
+| Scope | 1 fonction/classe | 2+ modules ensemble | Application entière |
 | Dependances | Toutes mockees | Certaines reelles | Toutes reelles |
 | Base de donnees | Mockee | Reelle (test DB) | Reelle (staging) |
-| Reseau | Mocke | Reel ou MSW | Reel |
+| Réseau | Mocke | Reel ou MSW | Reel |
 | Vitesse | < 10ms | 50ms - 2s | 5s - 30s |
-| Confiance | Moyenne | Elevee | Tres elevee |
+| Confiance | Moyenne | Elevee | Très elevee |
 | Cout de maintenance | Faible | Moyen | Eleve |
 
-### Ce qu'un test d'integration couvre
+### Ce qu'un test d'intégration couvre
 
 ```typescript
 // Test unitaire : une seule fonction
@@ -354,7 +354,7 @@ describe('User API — Integration Tests', () => {
 
 ---
 
-## Tests d'integration base de donnees
+## Tests d'intégration base de donnees
 
 ### Setup et teardown
 
@@ -433,7 +433,7 @@ export class TestDatabase {
 
 ### Pattern : transaction rollback
 
-Au lieu de nettoyer les donnees apres chaque test, on peut encapsuler chaque test dans une transaction qu'on annule ensuite. C'est beaucoup plus rapide.
+Au lieu de nettoyer les donnees après chaque test, on peut encapsuler chaque test dans une transaction qu'on annule ensuite. C'est beaucoup plus rapide.
 
 ```typescript
 // test/helpers/transactional.ts
@@ -519,7 +519,7 @@ describe('OrderRepository — integration', () => {
 
 ---
 
-## Integration frontend : composant + store + router + API
+## Intégration frontend : composant + store + router + API
 
 ### Configuration complete avec Pinia + Vue Router + MSW
 
@@ -575,7 +575,7 @@ export function renderWithProviders(
 }
 ```
 
-### Test d'integration frontend complet
+### Test d'intégration frontend complet
 
 ```typescript
 // features/products/__tests__/ProductPage.integration.test.ts
@@ -991,7 +991,7 @@ export const seedData = {
 
 ---
 
-## Test de flux d'evenements
+## Test de flux d'événements
 
 ```typescript
 // Tester une chaine d'evenements : creation de commande → email → stock
@@ -1163,7 +1163,7 @@ it('should list users in alphabetical order', async () => {
 });
 ```
 
-### 3. Etat partage entre tests
+### 3. État partage entre tests
 
 ```typescript
 // MAUVAIS : variable partagee modifiee par les tests
@@ -1201,7 +1201,7 @@ describe('UserService', () => {
 });
 ```
 
-### 4. Dependance a l'ordre d'execution
+### 4. Dependance a l'ordre d'exécution
 
 ```typescript
 // MAUVAIS : test 2 depend de test 1
@@ -1231,12 +1231,12 @@ it('should list all users', async () => {
 
 ---
 
-## Checklist : quand ecrire un test d'integration ?
+## Checklist : quand écrire un test d'intégration ?
 
 - [ ] Le code combine plusieurs modules (service + repository + validation)
-- [ ] Le code interagit avec une base de donnees (requetes SQL, ORM)
+- [ ] Le code interagit avec une base de donnees (requêtes SQL, ORM)
 - [ ] Le code expose une API HTTP (routes, middleware, serialisation)
-- [ ] Le code implique un flux d'evenements (creation → notification → stock)
+- [ ] Le code implique un flux d'événements (création → notification → stock)
 - [ ] Le code combine frontend + store + router + API
 - [ ] Les tests unitaires ne donnent pas assez de confiance
 - [ ] Un bug est passe malgre les tests unitaires (regression test)
@@ -1245,7 +1245,7 @@ it('should list all users', async () => {
 
 ## Exercice pratique
 
-Implementez les tests d'integration pour un mini blog :
+Implementez les tests d'intégration pour un mini blog :
 - API Express avec routes CRUD (`/api/posts`, `/api/posts/:id`, `/api/posts/:id/comments`)
 - Repository PostgreSQL avec vraie base de test
 - Factories pour les posts et les commentaires
@@ -1258,7 +1258,7 @@ Implementez les tests d'integration pour un mini blog :
 
 ## Navigation
 
-| Precedent | Suivant |
+| Précédent | Suivant |
 |-----------|---------|
 | [08 - MSW Mock Service Worker](./08-msw-mock-service-worker) | [10 - Playwright fondamentaux](./10-playwright-fondamentaux) |
 
@@ -1267,8 +1267,18 @@ Implementez les tests d'integration pour un mini blog :
 ## Ressources
 
 - [Quiz 09 : Testez vos connaissances](../quizzes/quiz-09-integration.html)
-- [Lab 09 : Tests d'integration](../labs/lab-09-tests-integration/)
+- [Lab 09 : Tests d'intégration](../labs/lab-09-tests-integration/)
 - Supertest — [Documentation](https://github.com/ladjs/supertest)
 - Testcontainers — [Node.js](https://node.testcontainers.org/)
 - Martin Fowler — [IntegrationTest](https://martinfowler.com/bliki/IntegrationTest.html)
 - Ham Vocke — [The Practical Test Pyramid](https://martinfowler.com/articles/practical-test-pyramid.html)
+
+---
+
+<!-- parcours-recommande -->
+
+::: tip Parcours recommandé
+1. **Screencast** : [screencast 09 intégration](../screencasts/screencast-09-integration.md)
+2. **Lab** : [lab-09-tests-intégration](../labs/lab-09-tests-integration/README)
+3. **Quiz** : [quiz 09 intégration](../quizzes/quiz-09-integration.html)
+:::

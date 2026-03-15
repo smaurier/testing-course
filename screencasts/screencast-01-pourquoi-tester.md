@@ -4,11 +4,11 @@
 - **Duree estimee** : 15-18 min
 - **Module** : `modules/01-pourquoi-tester.md`
 - **Lab associe** : Lab 01
-- **Prerequis** : Screencast 00
+- **Prérequis** : Screencast 00
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Fichier `modules/01-pourquoi-tester.md` ouvert
 - [ ] Projet de demo du screencast 00 disponible
 
@@ -16,7 +16,7 @@
 
 ### [00:00-02:00] Introduction — Le cout des bugs
 
-> On entend souvent "on n'a pas le temps de tester". Mais la vraie question est : a-t-on le temps de NE PAS tester ? Plus un bug est decouvert tard, plus il coute cher. Un bug en design coute 1x, en dev 5x, en QA 10x, en production 100x, apres incident 1000x.
+> On entend souvent "on n'a pas le temps de tester". Mais la vraie question est : a-t-on le temps de NE PAS tester ? Plus un bug est decouvert tard, plus il coute cher. Un bug en design coute 1x, en dev 5x, en QA 10x, en production 100x, après incident 1000x.
 
 **Action** : Afficher la table des couts.
 
@@ -34,7 +34,7 @@ Post-incident      | 1000x       | Fuite de donnees, perte de confiance
 
 > Regardons un exemple concret. Un panier d'achat avec un bug subtil.
 
-**Action** : Creer `src/cart.ts`.
+**Action** : Créer `src/cart.ts`.
 
 ```typescript
 interface CartItem {
@@ -51,9 +51,9 @@ export function calculateTotal(items: CartItem[]): number {
 }
 ```
 
-> Ce bug passe inapercu si on teste manuellement avec des quantites de 1. Le client commande 3 t-shirts a 20 EUR, paye 20 EUR au lieu de 60 EUR. En production, ca coute tres cher.
+> Ce bug passe inapercu si on teste manuellement avec des quantites de 1. Le client commande 3 t-shirts a 20 EUR, paye 20 EUR au lieu de 60 EUR. En production, ça coute très cher.
 
-**Action** : Montrer le test qui l'aurait detecte.
+**Action** : Montrer le test qui l'aurait détecté.
 
 ```typescript
 import { describe, it, expect } from 'vitest';
@@ -69,7 +69,7 @@ describe('calculateTotal', () => {
 
 ### [05:00-08:30] La pyramide de tests
 
-> La pyramide de tests est le modele fondamental. En bas : beaucoup de tests unitaires, rapides et isoles. Au milieu : des tests d'integration, qui verifient que les modules fonctionnent ensemble. En haut : peu de tests E2E, lents mais realistes.
+> La pyramide de tests est le modèle fondamental. En bas : beaucoup de tests unitaires, rapides et isoles. Au milieu : des tests d'intégration, qui verifient que les modules fonctionnent ensemble. En haut : peu de tests E2E, lents mais realistes.
 
 **Action** : Afficher la pyramide.
 
@@ -85,11 +85,11 @@ describe('calculateTotal', () => {
 REGLE D'OR : plus on monte, moins on en ecrit
 ```
 
-> La regle : 70% unitaires, 20% integration, 10% E2E. Ce ratio n'est pas absolu mais donne une bonne base de depart.
+> La regle : 70% unitaires, 20% intégration, 10% E2E. Ce ratio n'est pas absolu mais donne une bonne base de depart.
 
 ### [08:30-11:00] Variantes modernes — Le trophee de testing
 
-> Kent C. Dodds propose une variante : le trophee de testing. Il met davantage l'accent sur les tests d'integration car ils offrent le meilleur rapport confiance/cout.
+> Kent C. Dodds propose une variante : le trophee de testing. Il met davantage l'accent sur les tests d'intégration car ils offrent le meilleur rapport confiance/cout.
 
 **Action** : Afficher le trophee.
 
@@ -106,11 +106,11 @@ REGLE D'OR : plus on monte, moins on en ecrit
          └───────┘
 ```
 
-> L'analyse statique (TypeScript, ESLint) est a la base. Elle attrape des bugs sans meme executer le code. Les tests d'integration sont le coeur car ils testent des cas d'usage reels sans la lenteur du E2E.
+> L'analyse statique (TypeScript, ESLint) est à la base. Elle attrape des bugs sans même exécuter le code. Les tests d'intégration sont le coeur car ils testent des cas d'usage réels sans la lenteur du E2E.
 
 ### [11:00-13:30] Quand tester et quand NE PAS tester
 
-> Le testing a un ROI. Tout ne merite pas d'etre teste de la meme maniere.
+> Le testing à un ROI. Tout ne merite pas d'etre teste de la même manière.
 
 **Action** : Afficher le tableau de decision.
 
@@ -126,7 +126,7 @@ Flux critiques (paiement, auth)   | Code qui va etre supprime
 
 > La regle : si un bug a cet endroit couterait cher en production, il faut un test. Si c'est du code trivial qui ne peut casser qu'en changeant intentionnellement, un test n'apporte pas de valeur.
 
-### [13:30-16:00] Le ROI du testing — Convaincre son equipe
+### [13:30-16:00] Le ROI du testing — Convaincre son équipe
 
 > Comment convaincre un product owner que le testing vaut l'investissement ?
 
@@ -144,13 +144,13 @@ RETOUR :
 - Onboarding accelere (comprendre le code via les tests)
 ```
 
-> Les tests ne ralentissent pas un projet — ils l'accelerent a moyen terme. Le cout initial est amorti des la premiere regression evitee.
+> Les tests ne ralentissent pas un projet — ils l'accelerent a moyen terme. Le cout initial est amorti des la première regression evitee.
 
-### [16:00-17:30] Recapitulatif
+### [16:00-17:30] Récapitulatif
 
-> Recapitulons. Les bugs coutent exponentiellement plus cher quand on les decouvre tard. La pyramide de tests guide la repartition des efforts. On teste en priorite la logique metier et les flux critiques. Et le ROI du testing est positif des le moyen terme.
+> Recapitulons. Les bugs coutent exponentiellement plus cher quand on les découvre tard. La pyramide de tests guide la repartition des efforts. On teste en priorite la logique metier et les flux critiques. Et le ROI du testing est positif des le moyen terme.
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -165,8 +165,8 @@ PROCHAINE ETAPE :
 ```
 
 ## Points d'attention pour l'enregistrement
-- Le bug du panier est tres parlant — bien montrer le FAIL du test
-- La pyramide de tests est un concept cle — y passer du temps
-- Le trophee de testing peut creer du debat — presenter comme une variante, pas un remplacement
-- Le tableau "quand tester / ne pas tester" est un reference utile
+- Le bug du panier est très parlant — bien montrer le FAIL du test
+- La pyramide de tests est un concept clé — y passer du temps
+- Le trophee de testing peut créer du debat — présenter comme une variante, pas un remplacement
+- Le tableau "quand tester / ne pas tester" est un référence utile
 - Garder un ton pragmatique, pas dogmatique

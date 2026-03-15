@@ -2,12 +2,12 @@
 
 ## Objectifs
 
-Maitriser la structure Arrange-Act-Assert (AAA) et implementer des classes testables avec des cas limites.
+Maîtriser la structure Arrange-Act-Assert (AAA) et implementer des classes testables avec des cas limites.
 
 ## Exercices
 
 ### Exercice 1 : Calculator
-Implementez une classe `Calculator` avec les methodes `add`, `subtract`, `multiply`, `divide` et un historique des operations.
+Implementez une classe `Calculator` avec les méthodes `add`, `subtract`, `multiply`, `divide` et un historique des operations.
 
 ### Exercice 2 : StringUtils (AAA)
 Ecrivez des tests structures AAA pour une classe `StringUtils` avec `capitalize`, `slugify`, `truncate`.

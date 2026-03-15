@@ -4,19 +4,19 @@
 - **Duree estimee** : 18-20 min
 - **Module** : `modules/08-msw-mock-service-worker.md`
 - **Lab associe** : Lab 08
-- **Prerequis** : Screencast 07
+- **Prérequis** : Screencast 07
 
 ## Setup
 - [ ] VS Code ouvert dans `testing-course/`
-- [ ] Terminal integre ouvert
+- [ ] Terminal intégré ouvert
 - [ ] Projet de demo avec Vitest + MSW installe
 - [ ] Fichier `modules/08-msw-mock-service-worker.md` ouvert
 
 ## Script
 
-### [00:00-02:30] Introduction — Pourquoi intercepter au niveau reseau ?
+### [00:00-02:30] Introduction — Pourquoi intercepter au niveau réseau ?
 
-> Quand on teste du code qui fait des appels HTTP, on peut mocker le module (vi.mock), mocker fetch globalement, ou intercepter au niveau reseau avec MSW. MSW est la meilleure approche car elle ne change pas votre code.
+> Quand on teste du code qui fait des appels HTTP, on peut mocker le module (vi.mock), mocker fetch globalement, ou intercepter au niveau réseau avec MSW. MSW est la meilleure approche car elle ne change pas votre code.
 
 **Action** : Comparer les trois approches.
 
@@ -37,7 +37,7 @@ http.get('/api/users', () => {
 });
 ```
 
-> MSW intercepte les vraies requetes HTTP. Votre code appelle vraiment `fetch`, la requete est capturee et une reponse simulee est retournee. Aucun mock, aucun changement de code.
+> MSW intercepte les vraies requêtes HTTP. Votre code appelle vraiment `fetch`, la requête est capturee et une réponse simulee est retournee. Aucun mock, aucun changement de code.
 
 ### [02:30-05:30] Installation et configuration
 
@@ -47,7 +47,7 @@ http.get('/api/users', () => {
 pnpm add -D msw
 ```
 
-**Action** : Creer les handlers.
+**Action** : Créer les handlers.
 
 ```typescript
 // src/mocks/handlers.ts
@@ -102,7 +102,7 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 ```
 
-### [05:30-09:00] Ecrire des handlers — GET, POST, PUT, DELETE
+### [05:30-09:00] Écrire des handlers — GET, POST, PUT, DELETE
 
 **Action** : Montrer la gamme complete des handlers.
 
@@ -195,9 +195,9 @@ describe('UserService', () => {
 
 > Le `afterEach(() => server.resetHandlers())` dans le setup global garantit que les overrides ne fuient pas entre les tests.
 
-### [12:00-14:30] MSW en developpement — Browser integration
+### [12:00-14:30] MSW en développement — Browser intégration
 
-> MSW fonctionne aussi dans le navigateur pour le developpement.
+> MSW fonctionne aussi dans le navigateur pour le développement.
 
 **Action** : Montrer la configuration browser.
 
@@ -218,7 +218,7 @@ async function bootstrap() {
 }
 ```
 
-> Le meme jeu de handlers est partage entre les tests et le developpement. Un seul endroit pour definir les reponses API.
+> Le même jeu de handlers est partage entre les tests et le développement. Un seul endroit pour définir les réponses API.
 
 ### [14:30-17:00] Patterns avances — Retry, pagination, auth
 
@@ -241,9 +241,9 @@ http.get('/api/tasks', ({ request }) => {
 });
 ```
 
-### [17:00-18:30] Recapitulatif
+### [17:00-18:30] Récapitulatif
 
-**Action** : Afficher le recapitulatif.
+**Action** : Afficher le récapitulatif.
 
 ```
 CE QU'IL FAUT RETENIR :
@@ -260,5 +260,5 @@ PROCHAINE ETAPE :
 ## Points d'attention pour l'enregistrement
 - La comparaison vi.mock vs fetch mock vs MSW est le moment decisif
 - Montrer que le code sous test ne change PAS avec MSW
-- L'override per-test pour les erreurs est un pattern cle
-- Insister sur onUnhandledRequest: 'error' — sans ca, les requetes non-mockees passent silencieusement
+- L'override per-test pour les erreurs est un pattern clé
+- Insister sur onUnhandledRequest: 'error' — sans ça, les requêtes non-mockees passent silencieusement

@@ -1,22 +1,22 @@
-# Lab 09 — Tests d'integration
+# Lab 09 — Tests d'intégration
 
 ## Objectifs
 
-Apprendre a tester l'integration entre plusieurs modules : service + base de donnees, evenements, fixtures, et un systeme complet API + service + DB + events.
+Apprendre à tester l'intégration entre plusieurs modules : service + base de donnees, événements, fixtures, et un système complet API + service + DB + events.
 
-## Concepts cles
+## Concepts clés
 
-- Base de donnees en memoire pour les tests
-- Tests de service integre avec la couche de persistance
+- Base de donnees en mémoire pour les tests
+- Tests de service intégré avec la couche de persistance
 - Isolation par rollback de transaction
-- Flux d'evenements entre services
+- Flux d'événements entre services
 - Factories de fixtures pour les donnees de test
-- Integration complete : routeur API + service + DB + bus d'evenements
+- Intégration complete : routeur API + service + DB + bus d'événements
 
 ## Exercices
 
-### Exercice 1 : createInMemoryDB — CRUD en memoire
-Implementez une base de donnees en memoire avec create, findById, findAll, update, delete.
+### Exercice 1 : createInMemoryDB — CRUD en mémoire
+Implementez une base de donnees en mémoire avec create, findById, findAll, update, delete.
 
 ### Exercice 2 : UserService + InMemoryDB
 Testez un UserService qui utilise InMemoryDB (create, findById, update, delete).
@@ -24,14 +24,14 @@ Testez un UserService qui utilise InMemoryDB (create, findById, update, delete).
 ### Exercice 3 : Transaction rollback
 Implementez un pattern de rollback pour isoler les tests.
 
-### Exercice 4 : Flux d'evenements
-Testez que OrderService emet un evenement consomme par NotificationService.
+### Exercice 4 : Flux d'événements
+Testez que OrderService emet un événement consomme par NotificationService.
 
 ### Exercice 5 : Fixture factory
 Creez des factories `createUser(overrides)` et `createOrder(overrides)` pour les donnees de test.
 
-### Exercice 6 : Integration complete
-Testez un systeme complet : routeur API + service + DB + bus d'evenements.
+### Exercice 6 : Intégration complete
+Testez un système complet : routeur API + service + DB + bus d'événements.
 
 ## Lancer le lab
 
