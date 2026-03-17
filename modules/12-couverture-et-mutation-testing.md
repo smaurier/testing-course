@@ -892,6 +892,220 @@ Reprenez un module de votre projet :
 
 ---
 
+## Visual regression testing
+
+### Qu'est-ce que le visual regression testing ?
+
+Le visual regression testing (test de régression visuelle) consiste a **capturer des screenshots** de l'interface a un instant donne, puis a les comparer automatiquement lors des prochains passages de tests. L'objectif est de detecter tout changement visuel involontaire : un bouton decale, une couleur modifiee, un texte tronque, une mise en page cassee.
+
+Contrairement aux tests unitaires ou d'integration qui verifient la logique, les tests visuels verifient ce que **l'utilisateur voit reellement**. Un composant peut passer tous ses tests fonctionnels tout en etant visuellement casse (CSS casse, z-index incorrect, overflow masque).
+
+### Pourquoi c'est important
+
+Les regressions visuelles sont parmi les bugs les plus difficiles a detecter automatiquement :
+
+- Un changement CSS dans un composant partage peut **casser 20 pages** sans qu'aucun test unitaire ne le detecte
+- Les **effets de bord CSS** (specificity wars, cascade, media queries) sont invisibles pour les tests classiques
+- Les **mises a jour de dependances** (framework UI, librairie de composants) peuvent introduire des changements subtils
+- Les **navigateurs** n'interpretent pas tous le CSS de la meme facon
+
+```
+Test unitaire      : "Le bouton a la classe .primary"           ✅
+Test d'integration : "Cliquer le bouton envoie le formulaire"   ✅
+Test visuel        : "Le bouton est rouge au lieu de bleu"      ❌ DETECTE !
+```
+
+### Outils principaux
+
+#### Playwright — `toHaveScreenshot()`
+
+Playwright integre nativement la comparaison de screenshots. C'est la solution la plus simple si vous utilisez deja Playwright pour vos tests E2E.
+
+```typescript
+import { test, expect } from '@playwright/test';
+
+test('page d\'accueil — apparence globale', async ({ page }) => {
+  await page.goto('/');
+  await expect(page).toHaveScreenshot('homepage.png');
+});
+
+test('bouton primary — etat normal et hover', async ({ page }) => {
+  await page.goto('/components/button');
+
+  // Screenshot d'un element specifique
+  const button = page.getByRole('button', { name: 'Envoyer' });
+  await expect(button).toHaveScreenshot('button-primary.png');
+
+  // Screenshot apres hover
+  await button.hover();
+  await expect(button).toHaveScreenshot('button-primary-hover.png');
+});
+
+test('formulaire — etat d\'erreur', async ({ page }) => {
+  await page.goto('/contact');
+  await page.getByRole('button', { name: 'Envoyer' }).click();
+  await expect(page).toHaveScreenshot('form-errors.png', {
+    maxDiffPixelRatio: 0.01, // tolerer 1% de pixels differents
+  });
+});
+```
+
+**Configuration dans `playwright.config.ts`** :
+
+```typescript
+export default defineConfig({
+  expect: {
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.005, // seuil global de tolerance
+      animations: 'disabled',   // desactiver les animations pour stabilite
+    },
+  },
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    // Un screenshot par navigateur = detection des differences cross-browser
+  ],
+});
+```
+
+**Gestion des baselines** :
+
+```bash
+# Generer les screenshots de reference (premiere fois)
+npx playwright test --update-snapshots
+
+# Lancer les tests (compare avec les baselines existantes)
+npx playwright test
+
+# Si un changement est volontaire, mettre a jour la baseline
+npx playwright test --update-snapshots
+```
+
+Les screenshots de reference sont stockes dans un dossier `__screenshots__` a cote des tests. Ils **doivent etre commites dans git** pour servir de baseline a l'equipe.
+
+#### Chromatic — visual testing pour Storybook
+
+[Chromatic](https://www.chromatic.com/) est un service cloud cree par l'equipe Storybook. Il capture automatiquement un screenshot de chaque story et detecte les changements.
+
+```bash
+# Installation
+pnpm add -D chromatic
+
+# Lancer (necessite un project token)
+pnpm chromatic --project-token=<token>
+```
+
+**Avantages de Chromatic** :
+
+- Integration native avec Storybook — chaque story devient un test visuel
+- Interface web pour approuver ou rejeter les changements visuels
+- Tests cross-navigateur automatiques (Chrome, Firefox, Safari)
+- Parallelisation cloud — rapide meme avec des centaines de composants
+
+**Inconvenients** :
+
+- Service payant au-dela du tier gratuit (5 000 snapshots/mois)
+- Necessite Storybook comme prerequis
+- Les screenshots sont stockes dans le cloud, pas en local
+
+#### Percy (BrowserStack)
+
+[Percy](https://percy.io/) est un service similaire a Chromatic, mais agnostique au framework. Il s'integre avec Playwright, Cypress, Puppeteer, Storybook, et d'autres.
+
+```typescript
+// Integration avec Playwright
+import percySnapshot from '@percy/playwright';
+
+test('homepage visual', async ({ page }) => {
+  await page.goto('/');
+  await percySnapshot(page, 'Homepage');
+});
+```
+
+### Quand utiliser le visual regression testing
+
+#### Cas ideaux
+
+| Contexte | Pourquoi |
+|----------|----------|
+| **Librairies de composants** (design system) | Chaque composant a un contrat visuel strict |
+| **Pages marketing / landing pages** | L'apparence est le produit — un pixel compte |
+| **Emails HTML** | Le rendu varie enormement entre clients mail |
+| **Refactoring CSS a grande echelle** | Detecter les effets de bord sur toutes les pages |
+| **Migration de framework UI** | Verifier que la nouvelle version rend identiquement |
+
+#### Quand ne PAS l'utiliser (ou avec prudence)
+
+| Contexte | Pourquoi |
+|----------|----------|
+| **UIs qui changent frequemment** | Chaque sprint genere des dizaines de faux positifs a approuver |
+| **Dashboards avec donnees dynamiques** | Les chiffres changent, les graphiques changent — screenshots instables |
+| **Contenus generes par l'utilisateur** | Impossible de predire le rendu exact |
+| **Animations complexes** | Les screenshots capturent un instant — l'animation peut etre cassee entre deux frames |
+
+> **Regle pratique** : si vous passez plus de temps a approuver des changements qu'a corriger des bugs, vos tests visuels couvrent trop de surface instable.
+
+### Integration avec la CI
+
+#### Workflow typique avec Playwright
+
+```yaml
+# .github/workflows/visual-tests.yml
+name: Visual Regression Tests
+on: pull_request
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run visual tests
+        run: pnpm exec playwright test --project=chromium
+
+      - name: Upload diff artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diffs
+          path: test-results/
+          retention-days: 7
+```
+
+#### Workflow d'approbation
+
+Le workflow d'approbation des changements visuels est critique pour eviter la frustration :
+
+```
+1. Developpeur pousse une PR
+2. CI lance les tests visuels
+3. Si diff detectee :
+   a. Playwright : le test echoue, le dev regarde les diffs dans les artifacts
+   b. Chromatic/Percy : interface web avec comparaison cote a cote
+4. Si le changement est volontaire :
+   a. Playwright : `--update-snapshots` puis commit les nouvelles baselines
+   b. Chromatic/Percy : clic "Approve" dans l'interface web
+5. Si le changement est involontaire :
+   a. Le dev corrige le bug CSS et re-pousse
+```
+
+### Bonnes pratiques
+
+1. **Desactiver les animations** dans les tests visuels (`animations: 'disabled'`) pour eviter les screenshots flous
+2. **Utiliser des donnees deterministes** (mocks, fixtures) pour que les screenshots soient reproductibles
+3. **Tester par composant** plutot que par page entiere — les diffs sont plus faciles a analyser
+4. **Definir une tolerance** (`maxDiffPixelRatio`) pour absorber les differences sub-pixel entre OS
+5. **Limiter le scope** : ne testez visuellement que les composants stables et critiques
+6. **Documenter le process d'approbation** pour que toute l'equipe sache comment gerer les diffs
+
+---
+
 <!-- parcours-recommande -->
 
 ::: tip Parcours recommandé

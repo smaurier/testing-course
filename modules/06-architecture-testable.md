@@ -14,6 +14,8 @@
 - Implementer les patterns Repository et Service Layer
 - Reconnaitre et refactorer les anti-patterns courants
 
+> **Analogie** : L'injection de dépendances pour le testing, c'est comme un plateau de cinéma. Au lieu d'utiliser une vraie voiture pour une cascade (la vraie base de données), tu utilises une maquette (un mock). Le script (ton code) ne change pas — seul l'accessoire est différent.
+
 ---
 
 ## Pourquoi certains codes sont difficiles à tester

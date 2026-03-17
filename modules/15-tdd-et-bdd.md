@@ -14,6 +14,8 @@
 - Comparer TDD, BDD et ATDD
 - Choisir entre Outside-in et Inside-out TDD
 
+> **Analogie** : Le TDD, c'est écrire la recette AVANT de cuisiner. Tu décris d'abord le goût attendu (le test), puis tu cuisines (le code), puis tu goûtes (tu lances le test). Si le goût ne correspond pas, tu ajustes la recette. Le BDD, c'est quand le client écrit la recette dans sa langue ("En tant que convive, je veux un plat salé").
+
 ---
 
 ## TDD : Test-Driven Development

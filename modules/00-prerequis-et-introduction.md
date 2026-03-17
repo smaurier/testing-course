@@ -15,6 +15,8 @@
 - Écrire et exécuter un premier test
 - Naviguer dans la structure du cours
 
+> **Analogie** : Les tests, c'est comme un filet de sécurité sous un trapéziste. Il ne l'empêche pas de tomber, mais il lui permet d'oser des figures plus audacieuses. Sans filet (sans tests), tu codes prudemment. Avec filet, tu refactores avec confiance.
+
 ---
 
 ## Pourquoi un cours dedie au testing ?
