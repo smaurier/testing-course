@@ -8,6 +8,8 @@ import { createTestRunner, createMockFn, delay } from "../test-utils.ts";
 // Exercise 1: Promises — resolve et reject
 // =============================================================================
 
+// JS-REPETITION: callback_error_first,promise_finally
+
 function fetchUser(id: number): Promise<{ id: number; name: string }> {
   return new Promise((resolve, reject) => {
     globalThis.setTimeout(() => {

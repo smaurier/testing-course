@@ -8,6 +8,8 @@ import { createTestRunner } from "../test-utils.ts";
 // Exercise 1: Promises — resolve et reject
 // =============================================================================
 
+// JS-REPETITION: callback_error_first,promise_finally
+
 function fetchUser(_id: number): Promise<{ id: number; name: string }> {
   // TODO: retourne un user si id > 0, rejette sinon
   throw new Error("Not implemented");
