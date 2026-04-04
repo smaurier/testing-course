@@ -20,6 +20,28 @@ function fetchUser(id: number): Promise<{ id: number; name: string }> {
   });
 }
 
+function fetchUserCb(id: number, callback: (err: Error | null, user?: { id: number; name: string }) => void): void {
+  globalThis.setTimeout(() => {
+    if (id > 0) {
+      callback(null, { id, name: `User_${id}` });
+      return;
+    }
+    callback(new Error('Invalid user ID'));
+  }, 10);
+}
+
+function fetchUserCbAsPromise(id: number): Promise<{ id: number; name: string }> {
+  return new Promise((resolve, reject) => {
+    fetchUserCb(id, (err, user) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(user!);
+    });
+  });
+}
+
 function fetchWithTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
@@ -187,6 +209,24 @@ await test('Ex1: fetchUser rejects for invalid id', async () => {
     assert(err.message.includes('Invalid'));
   }
   assert(threw, 'Should have rejected');
+});
+
+await test('Ex1: fetchUserCb utilise le style callback error-first', async () => {
+  const user = await new Promise<{ id: number; name: string }>((resolve, reject) => {
+    fetchUserCb(2, (err, result) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(result!);
+    });
+  });
+  assertEqual(user.id, 2);
+});
+
+await test('Ex1: fetchUserCbAsPromise transforme le callback en Promise', async () => {
+  const user = await fetchUserCbAsPromise(3);
+  assertEqual(user.name, 'User_3');
 });
 
 await test('Ex1: fetchWithTimeout resolves when fast enough', async () => {

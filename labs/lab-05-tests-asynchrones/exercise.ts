@@ -13,6 +13,16 @@ function fetchUser(_id: number): Promise<{ id: number; name: string }> {
   throw new Error('Not implemented');
 }
 
+function fetchUserCb(_id: number, _callback: (err: Error | null, user?: { id: number; name: string }) => void): void {
+  // TODO: version callback error-first de fetchUser
+  throw new Error('Not implemented');
+}
+
+function fetchUserCbAsPromise(_id: number): Promise<{ id: number; name: string }> {
+  // TODO: transformez fetchUserCb en Promise
+  throw new Error('Not implemented');
+}
+
 function fetchWithTimeout<T>(_promise: Promise<T>, _ms: number): Promise<T> {
   // TODO: rejette si la promise ne se resout pas en ms millisecondes
   throw new Error('Not implemented');
@@ -84,6 +94,24 @@ await test('Ex1: fetchUser rejects for invalid id', async () => {
   let threw = false;
   try { await fetchUser(-1); } catch { threw = true; }
   assert(threw);
+});
+
+await test('Ex1: fetchUserCb utilise le style callback error-first', async () => {
+  const user = await new Promise<{ id: number; name: string }>((resolve, reject) => {
+    fetchUserCb(2, (err, result) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(result!);
+    });
+  });
+  assertEqual(user.id, 2);
+});
+
+await test('Ex1: fetchUserCbAsPromise transforme le callback en Promise', async () => {
+  const user = await fetchUserCbAsPromise(3);
+  assertEqual(user.name, 'User_3');
 });
 
 await test('Ex3: pubsub delivers messages', () => {
