@@ -2,7 +2,7 @@
 // Lab 05 — Tests asynchrones (Exercices)
 // =============================================================================
 
-import { createTestRunner } from '../test-utils.ts';
+import { createTestRunner } from "../test-utils.ts";
 
 // =============================================================================
 // Exercise 1: Promises — resolve et reject
@@ -10,31 +10,40 @@ import { createTestRunner } from '../test-utils.ts';
 
 function fetchUser(_id: number): Promise<{ id: number; name: string }> {
   // TODO: retourne un user si id > 0, rejette sinon
-  throw new Error('Not implemented');
+  throw new Error("Not implemented");
 }
 
-function fetchUserCb(_id: number, _callback: (err: Error | null, user?: { id: number; name: string }) => void): void {
+function fetchUserCb(
+  _id: number,
+  _callback: (err: Error | null, user?: { id: number; name: string }) => void,
+): void {
   // TODO: version callback error-first de fetchUser
-  throw new Error('Not implemented');
+  throw new Error("Not implemented");
 }
 
-function fetchUserCbAsPromise(_id: number): Promise<{ id: number; name: string }> {
+function fetchUserCbAsPromise(
+  _id: number,
+): Promise<{ id: number; name: string }> {
   // TODO: transformez fetchUserCb en Promise
-  throw new Error('Not implemented');
+  throw new Error("Not implemented");
 }
 
 function fetchWithTimeout<T>(_promise: Promise<T>, _ms: number): Promise<T> {
   // TODO: rejette si la promise ne se resout pas en ms millisecondes
-  throw new Error('Not implemented');
+  throw new Error("Not implemented");
 }
 
 // =============================================================================
 // Exercise 2: RetryWithDelay
 // =============================================================================
 
-function retryWithDelay<T>(_fn: () => Promise<T>, _retries: number, _delayMs: number): Promise<T> {
+function retryWithDelay<T>(
+  _fn: () => Promise<T>,
+  _retries: number,
+  _delayMs: number,
+): Promise<T> {
   // TODO: reessaie fn jusqu'a retries fois avec un delai de delayMs
-  throw new Error('Not implemented');
+  throw new Error("Not implemented");
 }
 
 // =============================================================================
@@ -44,11 +53,11 @@ function retryWithDelay<T>(_fn: () => Promise<T>, _retries: number, _delayMs: nu
 class PubSub<T = unknown> {
   subscribe(_event: string, _handler: (data: T) => void): () => void {
     // TODO: abonne un handler et retourne une fonction de desabonnement
-    throw new Error('Not implemented');
+    throw new Error("Not implemented");
   }
   publish(_event: string, _data: T): void {
     // TODO: publie un evenement
-    throw new Error('Not implemented');
+    throw new Error("Not implemented");
   }
 }
 
@@ -56,18 +65,26 @@ class PubSub<T = unknown> {
 // Exercise 4: Debounce
 // =============================================================================
 
-function debounce<T extends (...args: any[]) => void>(_fn: T, _delayMs: number): T & { cancel: () => void } {
+function debounce<T extends (...args: any[]) => void>(
+  _fn: T,
+  _delayMs: number,
+): T & { cancel: () => void } {
   // TODO: retourne une version debouncee de fn
-  throw new Error('Not implemented');
+  throw new Error("Not implemented");
 }
 
 // =============================================================================
 // Exercise 5: Polling
 // =============================================================================
 
-function pollUntil<T>(_fn: () => Promise<T>, _condition: (result: T) => boolean, _intervalMs: number, _timeoutMs: number): Promise<T> {
+function pollUntil<T>(
+  _fn: () => Promise<T>,
+  _condition: (result: T) => boolean,
+  _intervalMs: number,
+  _timeoutMs: number,
+): Promise<T> {
   // TODO: appelle fn toutes les intervalMs ms jusqu'a ce que condition soit vraie ou timeout
-  throw new Error('Not implemented');
+  throw new Error("Not implemented");
 }
 
 // =============================================================================
@@ -76,55 +93,73 @@ function pollUntil<T>(_fn: () => Promise<T>, _condition: (result: T) => boolean,
 
 class AsyncCounter {
   // TODO: implementez un compteur avec increment async et getCount
-  async increment(): Promise<void> { throw new Error('Not implemented'); }
-  getCount(): number { throw new Error('Not implemented'); }
+  async increment(): Promise<void> {
+    throw new Error("Not implemented");
+  }
+  getCount(): number {
+    throw new Error("Not implemented");
+  }
 }
 
 // =============================================================================
 // Tests
 // =============================================================================
 
-const { test, assertEqual, assert, run } = createTestRunner('Lab 05 — Tests asynchrones');
+const { test, assertEqual, assert, run } = createTestRunner(
+  "Lab 05 — Tests asynchrones",
+);
 
-await test('Ex1: fetchUser resolves for valid id', async () => {
+await test("Ex1: fetchUser resolves for valid id", async () => {
   const user = await fetchUser(1);
   assertEqual(user.id, 1);
 });
-await test('Ex1: fetchUser rejects for invalid id', async () => {
+await test("Ex1: fetchUser rejects for invalid id", async () => {
   let threw = false;
-  try { await fetchUser(-1); } catch { threw = true; }
+  try {
+    await fetchUser(-1);
+  } catch {
+    threw = true;
+  }
   assert(threw);
 });
 
-await test('Ex1: fetchUserCb utilise le style callback error-first', async () => {
-  const user = await new Promise<{ id: number; name: string }>((resolve, reject) => {
-    fetchUserCb(2, (err, result) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve(result!);
-    });
-  });
+await test("Ex1: fetchUserCb utilise le style callback error-first", async () => {
+  const user = await new Promise<{ id: number; name: string }>(
+    (resolve, reject) => {
+      fetchUserCb(2, (err, result) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(result!);
+      });
+    },
+  );
   assertEqual(user.id, 2);
 });
 
-await test('Ex1: fetchUserCbAsPromise transforme le callback en Promise', async () => {
+await test("Ex1: fetchUserCbAsPromise transforme le callback en Promise", async () => {
   const user = await fetchUserCbAsPromise(3);
-  assertEqual(user.name, 'User_3');
+  assertEqual(user.name, "User_3");
 });
 
-await test('Ex3: pubsub delivers messages', () => {
+await test("Ex3: pubsub delivers messages", () => {
   const ps = new PubSub<string>();
-  let received = '';
-  ps.subscribe('test', (data) => { received = data; });
-  ps.publish('test', 'hello');
-  assertEqual(received, 'hello');
+  let received = "";
+  ps.subscribe("test", (data) => {
+    received = data;
+  });
+  ps.publish("test", "hello");
+  assertEqual(received, "hello");
 });
 
-await test('Ex6: concurrent increments', async () => {
+await test("Ex6: concurrent increments", async () => {
   const counter = new AsyncCounter();
-  await Promise.all([counter.increment(), counter.increment(), counter.increment()]);
+  await Promise.all([
+    counter.increment(),
+    counter.increment(),
+    counter.increment(),
+  ]);
   assertEqual(counter.getCount(), 3);
 });
 
