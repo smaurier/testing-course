@@ -1,7 +1,7 @@
 # Module 09 — Tests d'intégration
 
-| Difficulte | Duree estimee | Lab | Quiz |
-|------------|---------------|-----|------|
+| Difficulte | Duree estimee | Lab                                         | Quiz                                           |
+| ---------- | ------------- | ------------------------------------------- | ---------------------------------------------- |
 | 4/5        | 90 min        | [Lab 09](../labs/lab-09-tests-integration/) | [Quiz 09](../quizzes/quiz-09-integration.html) |
 
 ## Objectifs
@@ -36,15 +36,15 @@
 
 Un test d'intégration vérifié que **deux ou plusieurs modules** fonctionnent correctement **ensemble**. Contrairement aux tests unitaires, il inclut au moins une dépendance réelle (base de donnees, API HTTP, système de fichiers, etc.).
 
-| Critere | Test unitaire | Test d'intégration | Test E2E |
-|---------|---------------|-------------------|----------|
-| Scope | 1 fonction/classe | 2+ modules ensemble | Application entière |
-| Dependances | Toutes mockees | Certaines reelles | Toutes reelles |
-| Base de donnees | Mockee | Reelle (test DB) | Reelle (staging) |
-| Réseau | Mocke | Reel ou MSW | Reel |
-| Vitesse | < 10ms | 50ms - 2s | 5s - 30s |
-| Confiance | Moyenne | Elevee | Très elevee |
-| Cout de maintenance | Faible | Moyen | Eleve |
+| Critere             | Test unitaire     | Test d'intégration  | Test E2E            |
+| ------------------- | ----------------- | ------------------- | ------------------- |
+| Scope               | 1 fonction/classe | 2+ modules ensemble | Application entière |
+| Dependances         | Toutes mockees    | Certaines reelles   | Toutes reelles      |
+| Base de donnees     | Mockee            | Reelle (test DB)    | Reelle (staging)    |
+| Réseau              | Mocke             | Reel ou MSW         | Reel                |
+| Vitesse             | < 10ms            | 50ms - 2s           | 5s - 30s            |
+| Confiance           | Moyenne           | Elevee              | Très elevee         |
+| Cout de maintenance | Faible            | Moyen               | Eleve               |
 
 ### Ce qu'un test d'intégration couvre
 
@@ -87,16 +87,16 @@ class OrderService {
 
 ```typescript
 // src/app.ts — l'application Express sans demarrer le serveur
-import express from 'express';
-import { userRouter } from './routes/userRoutes';
-import { errorHandler } from './middleware/errorHandler';
-import { authMiddleware } from './middleware/auth';
+import express from "express";
+import { userRouter } from "./routes/userRoutes";
+import { errorHandler } from "./middleware/errorHandler";
+import { authMiddleware } from "./middleware/auth";
 
 export function createApp(): express.Application {
   const app = express();
 
   app.use(express.json());
-  app.use('/api/users', authMiddleware, userRouter);
+  app.use("/api/users", authMiddleware, userRouter);
   app.use(errorHandler);
 
   return app;
@@ -105,31 +105,31 @@ export function createApp(): express.Application {
 
 ```typescript
 // src/routes/userRoutes.ts
-import { Router, type Request, type Response } from 'express';
-import { UserService } from '../services/UserService';
+import { Router, type Request, type Response } from "express";
+import { UserService } from "../services/UserService";
 
 export function createUserRouter(userService: UserService): Router {
   const router = Router();
 
-  router.get('/', async (_req: Request, res: Response) => {
+  router.get("/", async (_req: Request, res: Response) => {
     const users = await userService.findAll();
     res.json({ users, total: users.length });
   });
 
-  router.get('/:id', async (req: Request, res: Response) => {
+  router.get("/:id", async (req: Request, res: Response) => {
     const user = await userService.findById(req.params.id);
     if (!user) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: "User not found" });
       return;
     }
     res.json(user);
   });
 
-  router.post('/', async (req: Request, res: Response) => {
+  router.post("/", async (req: Request, res: Response) => {
     const { name, email } = req.body;
 
     if (!name || !email) {
-      res.status(400).json({ error: 'Name and email are required' });
+      res.status(400).json({ error: "Name and email are required" });
       return;
     }
 
@@ -137,19 +137,19 @@ export function createUserRouter(userService: UserService): Router {
     res.status(201).json(user);
   });
 
-  router.put('/:id', async (req: Request, res: Response) => {
+  router.put("/:id", async (req: Request, res: Response) => {
     const updated = await userService.update(req.params.id, req.body);
     if (!updated) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: "User not found" });
       return;
     }
     res.json(updated);
   });
 
-  router.delete('/:id', async (req: Request, res: Response) => {
+  router.delete("/:id", async (req: Request, res: Response) => {
     const deleted = await userService.delete(req.params.id);
     if (!deleted) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: "User not found" });
       return;
     }
     res.status(204).send();
@@ -163,14 +163,14 @@ export function createUserRouter(userService: UserService): Router {
 
 ```typescript
 // src/__tests__/integration/users.test.ts
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import request from 'supertest';
-import { createApp } from '../../app';
-import { Database } from '../../database';
-import { UserService } from '../../services/UserService';
-import { UserRepository } from '../../repositories/UserRepository';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import request from "supertest";
+import { createApp } from "../../app";
+import { Database } from "../../database";
+import { UserService } from "../../services/UserService";
+import { UserRepository } from "../../repositories/UserRepository";
 
-describe('User API — Integration Tests', () => {
+describe("User API — Integration Tests", () => {
   let app: ReturnType<typeof createApp>;
   let db: Database;
   let authToken: string;
@@ -178,11 +178,11 @@ describe('User API — Integration Tests', () => {
   beforeAll(async () => {
     // Connexion a la base de test
     db = new Database({
-      host: 'localhost',
+      host: "localhost",
       port: 5433, // Port dedie pour les tests
-      database: 'testdb',
-      user: 'test',
-      password: 'test',
+      database: "testdb",
+      user: "test",
+      password: "test",
     });
     await db.connect();
     await db.migrate();
@@ -193,12 +193,12 @@ describe('User API — Integration Tests', () => {
     app = createApp(userService);
 
     // Obtenir un token de test
-    authToken = 'Bearer test-token-123';
+    authToken = "Bearer test-token-123";
   });
 
   beforeEach(async () => {
     // Nettoyer les tables avant chaque test
-    await db.query('DELETE FROM users');
+    await db.query("DELETE FROM users");
     // Inserer des donnees de base
     await db.query(`
       INSERT INTO users (id, name, email, created_at) VALUES
@@ -213,139 +213,139 @@ describe('User API — Integration Tests', () => {
 
   // --- GET /api/users ---
 
-  describe('GET /api/users', () => {
-    it('should return all users', async () => {
+  describe("GET /api/users", () => {
+    it("should return all users", async () => {
       const response = await request(app)
-        .get('/api/users')
-        .set('Authorization', authToken)
+        .get("/api/users")
+        .set("Authorization", authToken)
         .expect(200);
 
       expect(response.body.users).toHaveLength(2);
       expect(response.body.total).toBe(2);
       expect(response.body.users[0]).toMatchObject({
-        name: 'Alice Martin',
-        email: 'alice@example.com',
+        name: "Alice Martin",
+        email: "alice@example.com",
       });
     });
 
-    it('should return 401 without auth token', async () => {
-      await request(app)
-        .get('/api/users')
-        .expect(401);
+    it("should return 401 without auth token", async () => {
+      await request(app).get("/api/users").expect(401);
     });
   });
 
   // --- GET /api/users/:id ---
 
-  describe('GET /api/users/:id', () => {
-    it('should return user by id', async () => {
+  describe("GET /api/users/:id", () => {
+    it("should return user by id", async () => {
       const response = await request(app)
-        .get('/api/users/u1')
-        .set('Authorization', authToken)
+        .get("/api/users/u1")
+        .set("Authorization", authToken)
         .expect(200);
 
       expect(response.body).toMatchObject({
-        id: 'u1',
-        name: 'Alice Martin',
-        email: 'alice@example.com',
+        id: "u1",
+        name: "Alice Martin",
+        email: "alice@example.com",
       });
     });
 
-    it('should return 404 for unknown user', async () => {
+    it("should return 404 for unknown user", async () => {
       const response = await request(app)
-        .get('/api/users/unknown-id')
-        .set('Authorization', authToken)
+        .get("/api/users/unknown-id")
+        .set("Authorization", authToken)
         .expect(404);
 
-      expect(response.body.error).toBe('User not found');
+      expect(response.body.error).toBe("User not found");
     });
   });
 
   // --- POST /api/users ---
 
-  describe('POST /api/users', () => {
-    it('should create a new user', async () => {
+  describe("POST /api/users", () => {
+    it("should create a new user", async () => {
       const response = await request(app)
-        .post('/api/users')
-        .set('Authorization', authToken)
-        .send({ name: 'Charlie Durand', email: 'charlie@example.com' })
+        .post("/api/users")
+        .set("Authorization", authToken)
+        .send({ name: "Charlie Durand", email: "charlie@example.com" })
         .expect(201);
 
       expect(response.body).toMatchObject({
-        name: 'Charlie Durand',
-        email: 'charlie@example.com',
+        name: "Charlie Durand",
+        email: "charlie@example.com",
       });
       expect(response.body.id).toBeDefined();
 
       // Verifier en base
-      const dbUser = await db.query('SELECT * FROM users WHERE email = $1', [
-        'charlie@example.com',
+      const dbUser = await db.query("SELECT * FROM users WHERE email = $1", [
+        "charlie@example.com",
       ]);
       expect(dbUser.rows).toHaveLength(1);
     });
 
-    it('should return 400 for missing required fields', async () => {
+    it("should return 400 for missing required fields", async () => {
       const response = await request(app)
-        .post('/api/users')
-        .set('Authorization', authToken)
-        .send({ name: 'Charlie' }) // email manquant
+        .post("/api/users")
+        .set("Authorization", authToken)
+        .send({ name: "Charlie" }) // email manquant
         .expect(400);
 
-      expect(response.body.error).toBe('Name and email are required');
+      expect(response.body.error).toBe("Name and email are required");
     });
 
-    it('should return 409 for duplicate email', async () => {
+    it("should return 409 for duplicate email", async () => {
       const response = await request(app)
-        .post('/api/users')
-        .set('Authorization', authToken)
-        .send({ name: 'Alice Clone', email: 'alice@example.com' })
+        .post("/api/users")
+        .set("Authorization", authToken)
+        .send({ name: "Alice Clone", email: "alice@example.com" })
         .expect(409);
 
-      expect(response.body.error).toContain('already exists');
+      expect(response.body.error).toContain("already exists");
     });
   });
 
   // --- PUT /api/users/:id ---
 
-  describe('PUT /api/users/:id', () => {
-    it('should update an existing user', async () => {
+  describe("PUT /api/users/:id", () => {
+    it("should update an existing user", async () => {
       const response = await request(app)
-        .put('/api/users/u1')
-        .set('Authorization', authToken)
-        .send({ name: 'Alice Martin-Dupont' })
+        .put("/api/users/u1")
+        .set("Authorization", authToken)
+        .send({ name: "Alice Martin-Dupont" })
         .expect(200);
 
-      expect(response.body.name).toBe('Alice Martin-Dupont');
-      expect(response.body.email).toBe('alice@example.com'); // Inchange
+      expect(response.body.name).toBe("Alice Martin-Dupont");
+      expect(response.body.email).toBe("alice@example.com"); // Inchange
     });
 
-    it('should return 404 for unknown user', async () => {
+    it("should return 404 for unknown user", async () => {
       await request(app)
-        .put('/api/users/unknown-id')
-        .set('Authorization', authToken)
-        .send({ name: 'Ghost' })
+        .put("/api/users/unknown-id")
+        .set("Authorization", authToken)
+        .send({ name: "Ghost" })
         .expect(404);
     });
   });
 
   // --- DELETE /api/users/:id ---
 
-  describe('DELETE /api/users/:id', () => {
-    it('should delete an existing user', async () => {
+  describe("DELETE /api/users/:id", () => {
+    it("should delete an existing user", async () => {
       await request(app)
-        .delete('/api/users/u1')
-        .set('Authorization', authToken)
+        .delete("/api/users/u1")
+        .set("Authorization", authToken)
         .expect(204);
 
       // Verifier en base
-      const dbUser = await db.query('SELECT * FROM users WHERE id = $1', ['u1']);
+      const dbUser = await db.query("SELECT * FROM users WHERE id = $1", [
+        "u1",
+      ]);
       expect(dbUser.rows).toHaveLength(0);
     });
 
-    it('should return 404 for unknown user', async () => {
+    it("should return 404 for unknown user", async () => {
       await request(app)
-        .delete('/api/users/unknown-id')
-        .set('Authorization', authToken)
+        .delete("/api/users/unknown-id")
+        .set("Authorization", authToken)
         .expect(404);
     });
   });
@@ -360,20 +360,20 @@ describe('User API — Integration Tests', () => {
 
 ```typescript
 // test/helpers/database.ts
-import { Pool, type PoolConfig } from 'pg';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { Pool, type PoolConfig } from "pg";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 export class TestDatabase {
   private pool: Pool;
 
   constructor(config?: Partial<PoolConfig>) {
     this.pool = new Pool({
-      host: process.env.TEST_DB_HOST ?? 'localhost',
+      host: process.env.TEST_DB_HOST ?? "localhost",
       port: Number(process.env.TEST_DB_PORT ?? 5433),
-      database: process.env.TEST_DB_NAME ?? 'testdb',
-      user: process.env.TEST_DB_USER ?? 'test',
-      password: process.env.TEST_DB_PASSWORD ?? 'test',
+      database: process.env.TEST_DB_NAME ?? "testdb",
+      user: process.env.TEST_DB_USER ?? "test",
+      password: process.env.TEST_DB_PASSWORD ?? "test",
       max: 5,
       ...config,
     });
@@ -382,8 +382,8 @@ export class TestDatabase {
   async setup(): Promise<void> {
     // Executer les migrations
     const migrationSQL = readFileSync(
-      join(__dirname, '../../migrations/001_init.sql'),
-      'utf-8',
+      join(__dirname, "../../migrations/001_init.sql"),
+      "utf-8",
     );
     await this.pool.query(migrationSQL);
   }
@@ -418,7 +418,7 @@ export class TestDatabase {
         const placeholders = values.map((_, i) => `$${i + 1}`);
 
         await this.pool.query(
-          `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`,
+          `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${placeholders.join(", ")})`,
           values,
         );
       }
@@ -437,7 +437,7 @@ Au lieu de nettoyer les donnees après chaque test, on peut encapsuler chaque te
 
 ```typescript
 // test/helpers/transactional.ts
-import { type Pool, type PoolClient } from 'pg';
+import { type Pool, type PoolClient } from "pg";
 
 export class TransactionalTestContext {
   private client: PoolClient | null = null;
@@ -446,17 +446,17 @@ export class TransactionalTestContext {
 
   async begin(): Promise<PoolClient> {
     this.client = await this.pool.connect();
-    await this.client.query('BEGIN');
+    await this.client.query("BEGIN");
 
     // Creer un savepoint pour pouvoir rollback partiellement si besoin
-    await this.client.query('SAVEPOINT test_start');
+    await this.client.query("SAVEPOINT test_start");
 
     return this.client;
   }
 
   async rollback(): Promise<void> {
     if (this.client) {
-      await this.client.query('ROLLBACK');
+      await this.client.query("ROLLBACK");
       this.client.release();
       this.client = null;
     }
@@ -466,7 +466,7 @@ export class TransactionalTestContext {
 
 ```typescript
 // Usage dans les tests
-describe('OrderRepository — integration', () => {
+describe("OrderRepository — integration", () => {
   let testDb: TestDatabase;
   let txContext: TransactionalTestContext;
   let client: PoolClient;
@@ -496,20 +496,22 @@ describe('OrderRepository — integration', () => {
     await testDb.teardown();
   });
 
-  it('should create an order linked to a user', async () => {
+  it("should create an order linked to a user", async () => {
     const repo = new OrderRepository(client); // Utiliser le client transactionnel
 
     const order = await repo.create({
-      userId: 'u1',
-      items: [{ productId: 'p1', quantity: 2, unitPrice: 29.99 }],
+      userId: "u1",
+      items: [{ productId: "p1", quantity: 2, unitPrice: 29.99 }],
     });
 
     expect(order.id).toBeDefined();
-    expect(order.userId).toBe('u1');
+    expect(order.userId).toBe("u1");
     expect(order.totalAmount).toBe(59.98);
 
     // Verifier en base (dans la meme transaction)
-    const result = await client.query('SELECT * FROM orders WHERE id = $1', [order.id]);
+    const result = await client.query("SELECT * FROM orders WHERE id = $1", [
+      order.id,
+    ]);
     expect(result.rows).toHaveLength(1);
   });
 
@@ -525,16 +527,20 @@ describe('OrderRepository — integration', () => {
 
 ```typescript
 // test/helpers/renderWithProviders.ts
-import { render, type RenderOptions } from '@testing-library/vue';
-import { createTestingPinia, type TestingOptions } from '@pinia/testing';
-import { createRouter, createMemoryHistory, type RouteRecordRaw } from 'vue-router';
-import { type Component } from 'vue';
+import { render, type RenderOptions } from "@testing-library/vue";
+import { createTestingPinia, type TestingOptions } from "@pinia/testing";
+import {
+  createRouter,
+  createMemoryHistory,
+  type RouteRecordRaw,
+} from "vue-router";
+import { type Component } from "vue";
 
 interface RenderWithProvidersOptions {
   piniaOptions?: TestingOptions;
   routes?: RouteRecordRaw[];
   initialRoute?: string;
-  renderOptions?: Omit<RenderOptions, 'global'>;
+  renderOptions?: Omit<RenderOptions, "global">;
 }
 
 export function renderWithProviders(
@@ -543,8 +549,8 @@ export function renderWithProviders(
 ) {
   const {
     piniaOptions = {},
-    routes = [{ path: '/', component: { template: '<div />' } }],
-    initialRoute = '/',
+    routes = [{ path: "/", component: { template: "<div />" } }],
+    initialRoute = "/",
     renderOptions = {},
   } = options;
 
@@ -579,48 +585,54 @@ export function renderWithProviders(
 
 ```typescript
 // features/products/__tests__/ProductPage.integration.test.ts
-import { describe, it, expect, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/vue';
-import userEvent from '@testing-library/user-event';
-import { http, HttpResponse } from 'msw';
-import { server } from '../../../mocks/server';
-import { renderWithProviders } from '../../../../test/helpers/renderWithProviders';
-import ProductPage from '../ProductPage.vue';
-import CartSummary from '../../cart/CartSummary.vue';
-import AppLayout from '../../../layouts/AppLayout.vue';
+import { describe, it, expect, beforeEach } from "vitest";
+import { screen, waitFor } from "@testing-library/vue";
+import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
+import { server } from "../../../mocks/server";
+import { renderWithProviders } from "../../../../test/helpers/renderWithProviders";
+import ProductPage from "../ProductPage.vue";
+import CartSummary from "../../cart/CartSummary.vue";
+import AppLayout from "../../../layouts/AppLayout.vue";
 
 // Routes de l'application
 const routes = [
-  { path: '/', component: { template: '<div>Home</div>' } },
-  { path: '/products', component: ProductPage },
-  { path: '/products/:id', component: ProductPage },
-  { path: '/cart', component: CartSummary },
+  { path: "/", component: { template: "<div>Home</div>" } },
+  { path: "/products", component: ProductPage },
+  { path: "/products/:id", component: ProductPage },
+  { path: "/cart", component: CartSummary },
 ];
 
-describe('ProductPage — integration', () => {
+describe("ProductPage — integration", () => {
   beforeEach(() => {
     // Handlers par defaut (happy path)
     server.use(
-      http.get('/api/products', () => {
+      http.get("/api/products", () => {
         return HttpResponse.json({
           products: [
-            { id: 'p1', name: 'Clavier', price: 129.99, stock: 5 },
-            { id: 'p2', name: 'Souris', price: 79.99, stock: 0 },
+            { id: "p1", name: "Clavier", price: 129.99, stock: 5 },
+            { id: "p2", name: "Souris", price: 79.99, stock: 0 },
           ],
         });
       }),
-      http.post('/api/cart/items', async ({ request }) => {
-        const body = await request.json() as { productId: string; quantity: number };
-        return HttpResponse.json({
-          id: 'ci1',
-          productId: body.productId,
-          quantity: body.quantity,
-          addedAt: new Date().toISOString(),
-        }, { status: 201 });
+      http.post("/api/cart/items", async ({ request }) => {
+        const body = (await request.json()) as {
+          productId: string;
+          quantity: number;
+        };
+        return HttpResponse.json(
+          {
+            id: "ci1",
+            productId: body.productId,
+            quantity: body.quantity,
+            addedAt: new Date().toISOString(),
+          },
+          { status: 201 },
+        );
       }),
-      http.get('/api/cart', () => {
+      http.get("/api/cart", () => {
         return HttpResponse.json({
-          items: [{ id: 'ci1', productId: 'p1', quantity: 1, price: 129.99 }],
+          items: [{ id: "ci1", productId: "p1", quantity: 1, price: 129.99 }],
           total: 129.99,
           itemCount: 1,
         });
@@ -628,20 +640,22 @@ describe('ProductPage — integration', () => {
     );
   });
 
-  it('should display products and add to cart', async () => {
+  it("should display products and add to cart", async () => {
     const user = userEvent.setup();
 
     renderWithProviders(AppLayout, {
       routes,
-      initialRoute: '/products',
+      initialRoute: "/products",
     });
 
     // Attendre le chargement des produits
-    expect(await screen.findByText('Clavier')).toBeTruthy();
-    expect(screen.getByText('129,99 €')).toBeTruthy();
+    expect(await screen.findByText("Clavier")).toBeTruthy();
+    expect(screen.getByText("129,99 €")).toBeTruthy();
 
     // Le bouton "Ajouter au panier" pour la souris doit etre desactive (stock 0)
-    const addButtons = screen.getAllByRole('button', { name: /ajouter au panier/i });
+    const addButtons = screen.getAllByRole("button", {
+      name: /ajouter au panier/i,
+    });
     expect(addButtons[1]).toBeDisabled(); // Souris en rupture
 
     // Ajouter le clavier au panier
@@ -652,50 +666,57 @@ describe('ProductPage — integration', () => {
 
     // Le compteur du panier dans le header doit se mettre a jour
     await waitFor(() => {
-      expect(screen.getByTestId('cart-count')).toHaveTextContent('1');
+      expect(screen.getByTestId("cart-count")).toHaveTextContent("1");
     });
   });
 
-  it('should handle API error gracefully', async () => {
+  it("should handle API error gracefully", async () => {
     server.use(
-      http.get('/api/products', () => {
-        return HttpResponse.json({ error: 'Service unavailable' }, { status: 503 });
+      http.get("/api/products", () => {
+        return HttpResponse.json(
+          { error: "Service unavailable" },
+          { status: 503 },
+        );
       }),
     );
 
     renderWithProviders(AppLayout, {
       routes,
-      initialRoute: '/products',
+      initialRoute: "/products",
     });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    expect(await screen.findByRole("alert")).toHaveTextContent(
       /impossible de charger les produits/i,
     );
 
     // Bouton de retry
-    expect(screen.getByRole('button', { name: /reessayer/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /reessayer/i })).toBeTruthy();
   });
 
-  it('should navigate to cart after adding item', async () => {
+  it("should navigate to cart after adding item", async () => {
     const user = userEvent.setup();
 
     const { router } = renderWithProviders(AppLayout, {
       routes,
-      initialRoute: '/products',
+      initialRoute: "/products",
     });
 
-    await screen.findByText('Clavier');
+    await screen.findByText("Clavier");
 
     // Ajouter au panier
-    const addButton = screen.getAllByRole('button', { name: /ajouter au panier/i })[0];
+    const addButton = screen.getAllByRole("button", {
+      name: /ajouter au panier/i,
+    })[0];
     await user.click(addButton);
 
     // Cliquer sur "Voir le panier" dans la notification
-    await user.click(await screen.findByRole('link', { name: /voir le panier/i }));
+    await user.click(
+      await screen.findByRole("link", { name: /voir le panier/i }),
+    );
 
     // Verifier la navigation
     await waitFor(() => {
-      expect(router.currentRoute.value.path).toBe('/cart');
+      expect(router.currentRoute.value.path).toBe("/cart");
     });
   });
 });
@@ -711,8 +732,11 @@ Testcontainers demarre automatiquement des conteneurs Docker pour vos tests.
 
 ```typescript
 // test/helpers/testcontainers.ts
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { Pool } from 'pg';
+import {
+  PostgreSqlContainer,
+  type StartedPostgreSqlContainer,
+} from "@testcontainers/postgresql";
+import { Pool } from "pg";
 
 let container: StartedPostgreSqlContainer;
 let pool: Pool;
@@ -721,10 +745,10 @@ export async function startPostgresContainer(): Promise<{
   pool: Pool;
   connectionString: string;
 }> {
-  container = await new PostgreSqlContainer('postgres:16-alpine')
-    .withDatabase('testdb')
-    .withUsername('test')
-    .withPassword('test')
+  container = await new PostgreSqlContainer("postgres:17-alpine")
+    .withDatabase("testdb")
+    .withUsername("test")
+    .withPassword("test")
     .withExposedPorts(5432)
     .start();
 
@@ -733,7 +757,10 @@ export async function startPostgresContainer(): Promise<{
   pool = new Pool({ connectionString });
 
   // Executer les migrations
-  const migrations = readFileSync(join(__dirname, '../../migrations/001_init.sql'), 'utf-8');
+  const migrations = readFileSync(
+    join(__dirname, "../../migrations/001_init.sql"),
+    "utf-8",
+  );
   await pool.query(migrations);
 
   return { pool, connectionString };
@@ -751,11 +778,15 @@ export function getPool(): Pool {
 
 ```typescript
 // test/integration/withTestcontainers.test.ts
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { startPostgresContainer, stopPostgresContainer, getPool } from '../helpers/testcontainers';
-import { UserRepository } from '../../src/repositories/UserRepository';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import {
+  startPostgresContainer,
+  stopPostgresContainer,
+  getPool,
+} from "../helpers/testcontainers";
+import { UserRepository } from "../../src/repositories/UserRepository";
 
-describe('UserRepository — with Testcontainers', () => {
+describe("UserRepository — with Testcontainers", () => {
   beforeAll(async () => {
     await startPostgresContainer();
   }, 60_000); // Timeout de 60s pour le demarrage du container
@@ -766,33 +797,33 @@ describe('UserRepository — with Testcontainers', () => {
 
   beforeEach(async () => {
     const pool = getPool();
-    await pool.query('TRUNCATE TABLE users CASCADE');
+    await pool.query("TRUNCATE TABLE users CASCADE");
   });
 
-  it('should insert and retrieve a user', async () => {
+  it("should insert and retrieve a user", async () => {
     const repo = new UserRepository(getPool());
 
     const created = await repo.create({
-      name: 'Alice',
-      email: 'alice@test.com',
+      name: "Alice",
+      email: "alice@test.com",
     });
 
     expect(created.id).toBeDefined();
 
     const found = await repo.findById(created.id);
     expect(found).toMatchObject({
-      name: 'Alice',
-      email: 'alice@test.com',
+      name: "Alice",
+      email: "alice@test.com",
     });
   });
 
-  it('should enforce unique email constraint', async () => {
+  it("should enforce unique email constraint", async () => {
     const repo = new UserRepository(getPool());
 
-    await repo.create({ name: 'Alice', email: 'alice@test.com' });
+    await repo.create({ name: "Alice", email: "alice@test.com" });
 
     await expect(
-      repo.create({ name: 'Alice Clone', email: 'alice@test.com' }),
+      repo.create({ name: "Alice Clone", email: "alice@test.com" }),
     ).rejects.toThrow(/unique/i);
   });
 });
@@ -804,7 +835,7 @@ describe('UserRepository — with Testcontainers', () => {
 # docker-compose.test.yml
 services:
   postgres-test:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       POSTGRES_DB: testdb
       POSTGRES_USER: test
@@ -812,7 +843,7 @@ services:
     ports:
       - "5433:5432"
     tmpfs:
-      - /var/lib/postgresql/data  # RAM disk = plus rapide
+      - /var/lib/postgresql/data # RAM disk = plus rapide
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test -d testdb"]
       interval: 2s
@@ -843,7 +874,7 @@ services:
 
 ```typescript
 // test/factories/userFactory.ts
-import { type User } from '../../src/types';
+import { type User } from "../../src/types";
 
 let idCounter = 0;
 
@@ -855,18 +886,18 @@ function nextId(): string {
 export function createUser(overrides: Partial<User> = {}): User {
   return {
     id: nextId(),
-    name: 'John Doe',
+    name: "John Doe",
     email: `john-${idCounter}@example.com`,
-    role: 'user',
-    createdAt: new Date('2025-01-01'),
-    updatedAt: new Date('2025-01-01'),
+    role: "user",
+    createdAt: new Date("2025-01-01"),
+    updatedAt: new Date("2025-01-01"),
     isActive: true,
     ...overrides,
   };
 }
 
 // Usage dans les tests
-const admin = createUser({ name: 'Admin', role: 'admin' });
+const admin = createUser({ name: "Admin", role: "admin" });
 const inactiveUser = createUser({ isActive: false });
 const users = Array.from({ length: 10 }, () => createUser());
 ```
@@ -875,7 +906,7 @@ const users = Array.from({ length: 10 }, () => createUser());
 
 ```typescript
 // test/factories/orderBuilder.ts
-import { type Order, type OrderItem, type OrderStatus } from '../../src/types';
+import { type Order, type OrderItem, type OrderStatus } from "../../src/types";
 
 export class OrderBuilder {
   private order: Order;
@@ -883,9 +914,9 @@ export class OrderBuilder {
   constructor() {
     this.order = {
       id: `order-${Date.now()}`,
-      userId: 'default-user',
+      userId: "default-user",
       items: [],
-      status: 'pending',
+      status: "pending",
       totalAmount: 0,
       createdAt: new Date(),
       shippingAddress: null,
@@ -903,7 +934,7 @@ export class OrderBuilder {
     return this;
   }
 
-  withItem(item: Partial<OrderItem> & Pick<OrderItem, 'productId'>): this {
+  withItem(item: Partial<OrderItem> & Pick<OrderItem, "productId">): this {
     const fullItem: OrderItem = {
       productId: item.productId,
       name: item.name ?? `Product ${item.productId}`,
@@ -929,12 +960,12 @@ export class OrderBuilder {
   }
 
   shipped(): this {
-    this.order.status = 'shipped';
+    this.order.status = "shipped";
     return this;
   }
 
   cancelled(): this {
-    this.order.status = 'cancelled';
+    this.order.status = "cancelled";
     return this;
   }
 
@@ -945,16 +976,16 @@ export class OrderBuilder {
 
 // Usage
 const order = new OrderBuilder()
-  .forUser('u1')
-  .withItem({ productId: 'p1', quantity: 2, unitPrice: 29.99 })
-  .withItem({ productId: 'p2', quantity: 1, unitPrice: 49.99 })
-  .withShippingAddress('123 Rue de Paris')
+  .forUser("u1")
+  .withItem({ productId: "p1", quantity: 2, unitPrice: 29.99 })
+  .withItem({ productId: "p2", quantity: 1, unitPrice: 49.99 })
+  .withShippingAddress("123 Rue de Paris")
   .build();
 
 // Scenario "commande livree"
 const shippedOrder = new OrderBuilder()
-  .forUser('u2')
-  .withItem({ productId: 'p1' })
+  .forUser("u2")
+  .withItem({ productId: "p1" })
   .shipped()
   .build();
 ```
@@ -963,26 +994,46 @@ const shippedOrder = new OrderBuilder()
 
 ```typescript
 // test/fixtures/seed.ts
-import { createUser } from '../factories/userFactory';
-import { OrderBuilder } from '../factories/orderBuilder';
+import { createUser } from "../factories/userFactory";
+import { OrderBuilder } from "../factories/orderBuilder";
 
 export const seedData = {
   users: [
-    createUser({ id: 'u1', name: 'Alice Martin', email: 'alice@test.com', role: 'admin' }),
-    createUser({ id: 'u2', name: 'Bob Dupont', email: 'bob@test.com' }),
-    createUser({ id: 'u3', name: 'Charlie Durand', email: 'charlie@test.com', isActive: false }),
+    createUser({
+      id: "u1",
+      name: "Alice Martin",
+      email: "alice@test.com",
+      role: "admin",
+    }),
+    createUser({ id: "u2", name: "Bob Dupont", email: "bob@test.com" }),
+    createUser({
+      id: "u3",
+      name: "Charlie Durand",
+      email: "charlie@test.com",
+      isActive: false,
+    }),
   ],
 
   orders: [
     new OrderBuilder()
-      .withId('o1')
-      .forUser('u1')
-      .withItem({ productId: 'p1', name: 'Clavier', quantity: 1, unitPrice: 129.99 })
+      .withId("o1")
+      .forUser("u1")
+      .withItem({
+        productId: "p1",
+        name: "Clavier",
+        quantity: 1,
+        unitPrice: 129.99,
+      })
       .build(),
     new OrderBuilder()
-      .withId('o2')
-      .forUser('u2')
-      .withItem({ productId: 'p2', name: 'Souris', quantity: 2, unitPrice: 79.99 })
+      .withId("o2")
+      .forUser("u2")
+      .withItem({
+        productId: "p2",
+        name: "Souris",
+        quantity: 2,
+        unitPrice: 79.99,
+      })
       .shipped()
       .build(),
   ],
@@ -995,7 +1046,7 @@ export const seedData = {
 
 ```typescript
 // Tester une chaine d'evenements : creation de commande → email → stock
-describe('Order creation flow', () => {
+describe("Order creation flow", () => {
   let orderService: OrderService;
   let emailService: EmailService;
   let stockService: StockService;
@@ -1015,7 +1066,12 @@ describe('Order creation flow', () => {
     };
 
     stockService = new StockService(stockRepo, eventBus);
-    orderService = new OrderService(orderRepo, stockService, emailService, eventBus);
+    orderService = new OrderService(
+      orderRepo,
+      stockService,
+      emailService,
+      eventBus,
+    );
 
     // Seed : produit avec stock = 2
     await getPool().query(`
@@ -1023,45 +1079,48 @@ describe('Order creation flow', () => {
     `);
   });
 
-  it('should create order, decrement stock, and send confirmation email', async () => {
+  it("should create order, decrement stock, and send confirmation email", async () => {
     const order = await orderService.createOrder({
-      userId: 'u1',
-      items: [{ productId: 'p1', quantity: 1 }],
+      userId: "u1",
+      items: [{ productId: "p1", quantity: 1 }],
     });
 
     // 1. La commande est creee en base
     expect(order.id).toBeDefined();
-    expect(order.status).toBe('confirmed');
+    expect(order.status).toBe("confirmed");
 
     // 2. Le stock est decremente
-    const stock = await getPool().query('SELECT stock FROM products WHERE id = $1', ['p1']);
+    const stock = await getPool().query(
+      "SELECT stock FROM products WHERE id = $1",
+      ["p1"],
+    );
     expect(stock.rows[0].stock).toBe(1);
 
     // 3. L'email de confirmation est envoye
     expect(emailService.sendOrderConfirmation).toHaveBeenCalledWith(
-      'u1',
+      "u1",
       expect.objectContaining({ id: order.id }),
     );
   });
 
-  it('should send stock alert when stock reaches threshold', async () => {
+  it("should send stock alert when stock reaches threshold", async () => {
     // Commander tout le stock
     await orderService.createOrder({
-      userId: 'u1',
-      items: [{ productId: 'p1', quantity: 2 }],
+      userId: "u1",
+      items: [{ productId: "p1", quantity: 2 }],
     });
 
     // Le stock est a 0 → alerte envoyee
     expect(emailService.sendStockAlert).toHaveBeenCalledWith(
-      expect.objectContaining({ productId: 'p1', remainingStock: 0 }),
+      expect.objectContaining({ productId: "p1", remainingStock: 0 }),
     );
   });
 
-  it('should reject order when insufficient stock', async () => {
+  it("should reject order when insufficient stock", async () => {
     await expect(
       orderService.createOrder({
-        userId: 'u1',
-        items: [{ productId: 'p1', quantity: 5 }], // Stock = 2, demande = 5
+        userId: "u1",
+        items: [{ productId: "p1", quantity: 5 }], // Stock = 2, demande = 5
       }),
     ).rejects.toThrow(/insufficient stock/i);
 
@@ -1069,7 +1128,10 @@ describe('Order creation flow', () => {
     expect(emailService.sendOrderConfirmation).not.toHaveBeenCalled();
 
     // Stock inchange
-    const stock = await getPool().query('SELECT stock FROM products WHERE id = $1', ['p1']);
+    const stock = await getPool().query(
+      "SELECT stock FROM products WHERE id = $1",
+      ["p1"],
+    );
     expect(stock.rows[0].stock).toBe(2);
   });
 });
@@ -1083,39 +1145,41 @@ describe('Order creation flow', () => {
 
 ```typescript
 // MAUVAIS : chaque test cree et detruit la base
-describe('Slow tests', () => {
+describe("Slow tests", () => {
   beforeEach(async () => {
-    await createDatabase();     // 500ms
-    await runMigrations();      // 300ms
-    await seedData();           // 200ms
+    await createDatabase(); // 500ms
+    await runMigrations(); // 300ms
+    await seedData(); // 200ms
   });
   afterEach(async () => {
-    await dropDatabase();       // 200ms
+    await dropDatabase(); // 200ms
   });
   // Total overhead par test : ~1200ms
 });
 
 // BON : setup une fois, nettoyer entre les tests
-describe('Fast tests', () => {
+describe("Fast tests", () => {
   beforeAll(async () => {
-    await createDatabase();     // 500ms (une seule fois)
-    await runMigrations();      // 300ms (une seule fois)
+    await createDatabase(); // 500ms (une seule fois)
+    await runMigrations(); // 300ms (une seule fois)
   });
   beforeEach(async () => {
-    await truncateTables();     // 50ms
-    await seedData();           // 100ms
+    await truncateTables(); // 50ms
+    await seedData(); // 100ms
   });
   afterAll(async () => {
-    await dropDatabase();       // 200ms (une seule fois)
+    await dropDatabase(); // 200ms (une seule fois)
   });
   // Total overhead par test : ~150ms
 });
 
 // ENCORE MIEUX : transaction rollback
-describe('Fastest tests', () => {
-  beforeAll(async () => { /* setup DB */ });
+describe("Fastest tests", () => {
+  beforeAll(async () => {
+    /* setup DB */
+  });
   beforeEach(async () => {
-    await beginTransaction();   // 1ms
+    await beginTransaction(); // 1ms
   });
   afterEach(async () => {
     await rollbackTransaction(); // 1ms
@@ -1128,14 +1192,14 @@ describe('Fastest tests', () => {
 
 ```typescript
 // MAUVAIS : depend du temps reel
-it('should expire token after 1 hour', async () => {
+it("should expire token after 1 hour", async () => {
   const token = await authService.createToken(user);
   await sleep(3600_000); // Attendre 1 heure ?!
   await expect(authService.validate(token)).rejects.toThrow();
 });
 
 // BON : injecter le temps
-it('should expire token after 1 hour', async () => {
+it("should expire token after 1 hour", async () => {
   vi.useFakeTimers();
   const token = await authService.createToken(user);
 
@@ -1148,15 +1212,15 @@ it('should expire token after 1 hour', async () => {
 
 ```typescript
 // MAUVAIS : ordre d'execution non garanti
-it('should list users in alphabetical order', async () => {
-  const users = await userService.findAll({ sort: 'name' });
+it("should list users in alphabetical order", async () => {
+  const users = await userService.findAll({ sort: "name" });
   // Si la DB retourne un ordre different quand il n'y a pas d'ORDER BY...
-  expect(users[0].name).toBe('Alice'); // FLAKY!
+  expect(users[0].name).toBe("Alice"); // FLAKY!
 });
 
 // BON : trier dans le test ou verifier le tri
-it('should list users in alphabetical order', async () => {
-  const users = await userService.findAll({ sort: 'name' });
+it("should list users in alphabetical order", async () => {
+  const users = await userService.findAll({ sort: "name" });
   const names = users.map((u) => u.name);
   const sorted = [...names].sort();
   expect(names).toEqual(sorted); // Verifie que c'est trie, peu importe l'ordre initial
@@ -1169,34 +1233,34 @@ it('should list users in alphabetical order', async () => {
 // MAUVAIS : variable partagee modifiee par les tests
 let sharedUser: User;
 
-describe('UserService', () => {
+describe("UserService", () => {
   beforeAll(async () => {
-    sharedUser = await userService.create({ name: 'Shared' });
+    sharedUser = await userService.create({ name: "Shared" });
   });
 
-  it('test 1 — modifies shared user', async () => {
-    await userService.update(sharedUser.id, { name: 'Modified' });
+  it("test 1 — modifies shared user", async () => {
+    await userService.update(sharedUser.id, { name: "Modified" });
     // sharedUser.name est maintenant 'Modified' pour les tests suivants !
   });
 
-  it('test 2 — expects original name', async () => {
+  it("test 2 — expects original name", async () => {
     const user = await userService.findById(sharedUser.id);
-    expect(user.name).toBe('Shared'); // ECHOUE si test 1 s'execute avant !
+    expect(user.name).toBe("Shared"); // ECHOUE si test 1 s'execute avant !
   });
 });
 
 // BON : chaque test cree ses propres donnees
-describe('UserService', () => {
-  it('test 1', async () => {
-    const user = await userService.create({ name: 'User1' });
-    await userService.update(user.id, { name: 'Modified' });
+describe("UserService", () => {
+  it("test 1", async () => {
+    const user = await userService.create({ name: "User1" });
+    await userService.update(user.id, { name: "Modified" });
     // Pas d'impact sur les autres tests
   });
 
-  it('test 2', async () => {
-    const user = await userService.create({ name: 'User2' });
+  it("test 2", async () => {
+    const user = await userService.create({ name: "User2" });
     const found = await userService.findById(user.id);
-    expect(found.name).toBe('User2'); // Toujours OK
+    expect(found.name).toBe("User2"); // Toujours OK
   });
 });
 ```
@@ -1205,24 +1269,24 @@ describe('UserService', () => {
 
 ```typescript
 // MAUVAIS : test 2 depend de test 1
-it('should create a user', async () => {
-  const user = await request(app).post('/api/users').send({ name: 'Alice' });
+it("should create a user", async () => {
+  const user = await request(app).post("/api/users").send({ name: "Alice" });
   expect(user.status).toBe(201);
 });
 
-it('should list the created user', async () => {
-  const res = await request(app).get('/api/users');
+it("should list the created user", async () => {
+  const res = await request(app).get("/api/users");
   expect(res.body.users).toHaveLength(1); // Depend de test 1 !
 });
 
 // BON : chaque test est autonome
-it('should list all users', async () => {
+it("should list all users", async () => {
   // Arrange : creer les donnees necessaires
-  await request(app).post('/api/users').send({ name: 'Alice' });
-  await request(app).post('/api/users').send({ name: 'Bob' });
+  await request(app).post("/api/users").send({ name: "Alice" });
+  await request(app).post("/api/users").send({ name: "Bob" });
 
   // Act
-  const res = await request(app).get('/api/users');
+  const res = await request(app).get("/api/users");
 
   // Assert
   expect(res.body.users).toHaveLength(2);
@@ -1246,6 +1310,7 @@ it('should list all users', async () => {
 ## Exercice pratique
 
 Implementez les tests d'intégration pour un mini blog :
+
 - API Express avec routes CRUD (`/api/posts`, `/api/posts/:id`, `/api/posts/:id/comments`)
 - Repository PostgreSQL avec vraie base de test
 - Factories pour les posts et les commentaires
@@ -1258,8 +1323,8 @@ Implementez les tests d'intégration pour un mini blog :
 
 ## Navigation
 
-| Précédent | Suivant |
-|-----------|---------|
+| Précédent                                                    | Suivant                                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
 | [08 - MSW Mock Service Worker](./08-msw-mock-service-worker) | [10 - Playwright fondamentaux](./10-playwright-fondamentaux) |
 
 ---
@@ -1278,7 +1343,8 @@ Implementez les tests d'intégration pour un mini blog :
 <!-- parcours-recommande -->
 
 ::: tip Parcours recommandé
+
 1. **Screencast** : [screencast 09 intégration](../screencasts/screencast-09-integration.md)
 2. **Lab** : [lab-09-tests-intégration](../labs/lab-09-tests-integration/README)
 3. **Quiz** : [quiz 09 intégration](../quizzes/quiz-09-integration.html)
-:::
+   :::

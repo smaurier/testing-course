@@ -1,7 +1,7 @@
 # Module 13 — Tests en CI/CD
 
-| Difficulte | Duree estimee | Lab | Quiz |
-|------------|---------------|-----|------|
+| Difficulte | Duree estimee | Lab                             | Quiz                                     |
+| ---------- | ------------- | ------------------------------- | ---------------------------------------- |
 | 4/5        | 90 min        | [Lab 13](../labs/lab-13-ci-cd/) | [Quiz 13](../quizzes/quiz-13-ci-cd.html) |
 
 ## Objectifs
@@ -37,13 +37,13 @@
 
 ### Cout de correction selon le moment de detection
 
-| Detecte en... | Cout relatif | Exemple |
-|---------------|-------------|---------|
-| IDE (live) | 1x | TypeScript error, ESLint |
-| Pre-commit | 2x | Lint, format, tests rapides |
-| CI (PR) | 5x | Tests complets, couverture |
-| Staging | 20x | Bug en review manuelle |
-| Production | 100x | Incident client, rollback |
+| Detecte en... | Cout relatif | Exemple                     |
+| ------------- | ------------ | --------------------------- |
+| IDE (live)    | 1x           | TypeScript error, ESLint    |
+| Pre-commit    | 2x           | Lint, format, tests rapides |
+| CI (PR)       | 5x           | Tests complets, couverture  |
+| Staging       | 20x          | Bug en review manuelle      |
+| Production    | 100x         | Incident client, rollback   |
 
 ---
 
@@ -244,24 +244,24 @@ jobs:
 ### Matrix strategy : tester sur plusieurs Node/OS
 
 ```yaml
-  unit-tests:
-    name: Unit Tests (Node ${{ matrix.node }}, ${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        node: [18, 20, 22]
-        os: [ubuntu-latest, windows-latest]
-        exclude:
-          - node: 18
-            os: windows-latest # Exclure une combinaison
+unit-tests:
+  name: Unit Tests (Node ${{ matrix.node }}, ${{ matrix.os }})
+  runs-on: ${{ matrix.os }}
+  strategy:
+    fail-fast: false
+    matrix:
+      node: [18, 20, 22]
+      os: [ubuntu-latest, windows-latest]
+      exclude:
+        - node: 18
+          os: windows-latest # Exclure une combinaison
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node }}
-      # ...
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node }}
+    # ...
 ```
 
 ---
@@ -275,13 +275,13 @@ jobs:
 export default defineConfig({
   test: {
     // Pool de workers
-    pool: 'forks', // 'threads' | 'forks' | 'vmThreads'
+    pool: "forks", // 'threads' | 'forks' | 'vmThreads'
 
     // Nombre de workers (par defaut : nombre de CPUs)
     poolOptions: {
       forks: {
-        maxForks: 4,    // Maximum 4 process
-        minForks: 1,    // Minimum 1
+        maxForks: 4, // Maximum 4 process
+        minForks: 1, // Minimum 1
       },
     },
 
@@ -306,11 +306,11 @@ export default defineConfig({
 
 ```typescript
 // playwright.config.ts
-import { defineConfig } from '@playwright/test';
+import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   // Nombre de workers locaux
-  workers: process.env.CI ? 2 : '50%',
+  workers: process.env.CI ? 2 : "50%",
 
   // Nombre de tentatives en CI
   retries: process.env.CI ? 2 : 0,
@@ -323,16 +323,16 @@ export default defineConfig({
 ### Repartition intelligente des tests
 
 ```yaml
-  # Splitter les tests par duree estimee
-  e2e-tests:
-    strategy:
-      matrix:
-        shard: [1, 2, 3, 4]
+# Splitter les tests par duree estimee
+e2e-tests:
+  strategy:
+    matrix:
+      shard: [1, 2, 3, 4]
 
-    steps:
-      # ...
-      - name: Run E2E tests
-        run: pnpm playwright test --shard=${{ matrix.shard }}/4
+  steps:
+    # ...
+    - name: Run E2E tests
+      run: pnpm playwright test --shard=${{ matrix.shard }}/4
 ```
 
 Playwright repartit automatiquement les fichiers de test entre les shards de manière equilibree.
@@ -347,9 +347,9 @@ Playwright repartit automatiquement les fichiers de test entre les shards de man
 // vitest.config.ts
 export default defineConfig({
   test: {
-    reporters: ['default', 'junit'],
+    reporters: ["default", "junit"],
     outputFile: {
-      junit: 'test-results/junit.xml',
+      junit: "test-results/junit.xml",
     },
   },
 });
@@ -371,13 +371,13 @@ export default defineConfig({
 ### Intégration Codecov
 
 ```yaml
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage/lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
-          flags: unit-tests
-          fail_ci_if_error: false
+- name: Upload coverage
+  uses: codecov/codecov-action@v4
+  with:
+    file: ./coverage/lcov.info
+    token: ${{ secrets.CODECOV_TOKEN }}
+    flags: unit-tests
+    fail_ci_if_error: false
 ```
 
 Configuration Codecov :
@@ -403,14 +403,14 @@ comment:
 ### GitHub PR Checks et commentaires
 
 ```yaml
-      - name: Post test results as PR comment
-        if: github.event_name == 'pull_request' && always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: Unit Test Results
-          path: test-results/junit.xml
-          reporter: java-junit
-          fail-on-error: false
+- name: Post test results as PR comment
+  if: github.event_name == 'pull_request' && always()
+  uses: dorny/test-reporter@v1
+  with:
+    name: Unit Test Results
+    path: test-results/junit.xml
+    reporter: java-junit
+    fail-on-error: false
 ```
 
 ---
@@ -420,10 +420,10 @@ comment:
 ### Fail-fast (defaut pour matrix)
 
 ```yaml
-    strategy:
-      fail-fast: true # Arrete tous les jobs si un echoue
-      matrix:
-        node: [18, 20, 22]
+strategy:
+  fail-fast: true # Arrete tous les jobs si un echoue
+  matrix:
+    node: [18, 20, 22]
 ```
 
 **Avantage** : feedback rapide, economie de minutes CI.
@@ -432,13 +432,14 @@ comment:
 ### Run-all
 
 ```yaml
-    strategy:
-      fail-fast: false # Tous les jobs tournent meme si un echoue
-      matrix:
-        shard: [1, 2, 3, 4]
+strategy:
+  fail-fast: false # Tous les jobs tournent meme si un echoue
+  matrix:
+    shard: [1, 2, 3, 4]
 ```
 
 **Quand utiliser run-all :**
+
 - E2E tests avec sharding (on veut tous les résultats)
 - Matrix OS/Node (on veut savoir quels environnements cassent)
 - Tests non-déterministes en investigation
@@ -452,14 +453,14 @@ jobs:
 
   unit-tests:
     strategy:
-      fail-fast: true   # Rapide, un echec = tout le lot echoue
+      fail-fast: true # Rapide, un echec = tout le lot echoue
       matrix:
         node: [18, 20]
 
   e2e-tests:
-    needs: [lint]        # Gate : lint doit passer d'abord
+    needs: [lint] # Gate : lint doit passer d'abord
     strategy:
-      fail-fast: false   # Collecter tous les resultats
+      fail-fast: false # Collecter tous les resultats
       matrix:
         shard: [1, 2, 3, 4]
 ```
@@ -490,13 +491,8 @@ pnpm lint-staged
 // package.json (ou .lintstagedrc.json)
 {
   "lint-staged": {
-    "*.{ts,tsx}": [
-      "eslint --fix --max-warnings 0",
-      "vitest related --run"
-    ],
-    "*.{json,md,yml}": [
-      "prettier --write"
-    ]
+    "*.{ts,tsx}": ["eslint --fix --max-warnings 0", "vitest related --run"],
+    "*.{json,md,yml}": ["prettier --write"]
   }
 }
 ```
@@ -530,6 +526,7 @@ git commit --no-verify -m "hotfix: emergency patch"
 ### Le problème
 
 Un test flaky passe localement mais echoue aleatoirement en CI (où l'inverse). Causes typiques :
+
 - Timing (timeouts trop courts en CI)
 - Ressources limitees (CPU/RAM sur runners)
 - Acces réseau
@@ -538,32 +535,32 @@ Un test flaky passe localement mais echoue aleatoirement en CI (où l'inverse). 
 ### Detection automatique
 
 ```yaml
-      - name: Run tests with flaky detection
-        run: |
-          # Lancer 3 fois pour detecter les flaky
-          for i in 1 2 3; do
-            pnpm vitest run --reporter=json --outputFile=results-$i.json || true
-          done
+- name: Run tests with flaky detection
+  run: |
+    # Lancer 3 fois pour detecter les flaky
+    for i in 1 2 3; do
+      pnpm vitest run --reporter=json --outputFile=results-$i.json || true
+    done
 
-      - name: Analyze flaky tests
-        run: |
-          node scripts/detect-flaky.js results-1.json results-2.json results-3.json
+- name: Analyze flaky tests
+  run: |
+    node scripts/detect-flaky.js results-1.json results-2.json results-3.json
 ```
 
 ```typescript
 // scripts/detect-flaky.ts
-import { readFileSync } from 'node:fs';
+import { readFileSync } from "node:fs";
 
 interface TestResult {
   testResults: Array<{
     name: string;
-    status: 'passed' | 'failed';
+    status: "passed" | "failed";
   }>;
 }
 
 function detectFlaky(files: string[]): void {
-  const allResults = files.map((f) =>
-    JSON.parse(readFileSync(f, 'utf-8')) as TestResult,
+  const allResults = files.map(
+    (f) => JSON.parse(readFileSync(f, "utf-8")) as TestResult,
   );
 
   const testStatuses = new Map<string, Set<string>>();
@@ -582,12 +579,12 @@ function detectFlaky(files: string[]): void {
     .map(([name]) => name);
 
   if (flakyTests.length > 0) {
-    console.error('Flaky tests detected:');
+    console.error("Flaky tests detected:");
     flakyTests.forEach((t) => console.error(`  - ${t}`));
     process.exit(1);
   }
 
-  console.log('No flaky tests detected.');
+  console.log("No flaky tests detected.");
 }
 
 detectFlaky(process.argv.slice(2));
@@ -598,9 +595,9 @@ detectFlaky(process.argv.slice(2));
 ```typescript
 // vitest.config.ts — marquer les tests flaky
 // Utiliser un tag pour les identifier
-describe('Payment flow', () => {
-  it.skipIf(process.env.QUARANTINE !== 'true')(
-    'should process payment via external gateway',
+describe("Payment flow", () => {
+  it.skipIf(process.env.QUARANTINE !== "true")(
+    "should process payment via external gateway",
     async () => {
       // Ce test est flaky — en quarantaine
     },
@@ -615,16 +612,13 @@ describe('Payment flow', () => {
 export default defineConfig({
   retries: process.env.CI ? 2 : 0,
 
-  reporter: [
-    ['html'],
-    ['json', { outputFile: 'test-results/results.json' }],
-  ],
+  reporter: [["html"], ["json", { outputFile: "test-results/results.json" }]],
 
   use: {
     // Traces uniquement sur retry (pour diagnostiquer)
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
-    video: 'on-first-retry',
+    trace: "on-first-retry",
+    screenshot: "only-on-failure",
+    video: "on-first-retry",
   },
 });
 ```
@@ -665,7 +659,7 @@ CMD ["pnpm", "test"]
 # docker-compose.test.yml
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       POSTGRES_DB: testdb
       POSTGRES_USER: test
@@ -694,40 +688,40 @@ services:
 ### Utiliser Docker dans GitHub Actions
 
 ```yaml
-  integration-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+integration-tests:
+  runs-on: ubuntu-latest
+  timeout-minutes: 20
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: testdb
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+  services:
+    postgres:
+      image: postgres:17-alpine
+      env:
+        POSTGRES_DB: testdb
+        POSTGRES_USER: test
+        POSTGRES_PASSWORD: test
+      ports:
+        - 5432:5432
+      options: >-
+        --health-cmd pg_isready
+        --health-interval 10s
+        --health-timeout 5s
+        --health-retries 5
 
-    steps:
-      - uses: actions/checkout@v4
+  steps:
+    - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
+    - uses: pnpm/action-setup@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+    - run: pnpm install --frozen-lockfile
 
-      - name: Run integration tests
-        run: pnpm vitest run --project integration
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/testdb
+    - name: Run integration tests
+      run: pnpm vitest run --project integration
+      env:
+        DATABASE_URL: postgresql://test:test@localhost:5432/testdb
 ```
 
 ---
@@ -737,70 +731,70 @@ services:
 ### Caching agressif
 
 ```yaml
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ~/.pnpm-store
-          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            pnpm-${{ runner.os }}-
+- name: Cache pnpm store
+  uses: actions/cache@v4
+  with:
+    path: ~/.pnpm-store
+    key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+    restore-keys: |
+      pnpm-${{ runner.os }}-
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+- name: Cache Playwright browsers
+  uses: actions/cache@v4
+  with:
+    path: ~/.cache/ms-playwright
+    key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 ```
 
 ### Exécution conditionnelle
 
 ```yaml
-  unit-tests:
-    # Ne lancer que si des fichiers source ont change
-    if: |
-      github.event_name == 'push' ||
-      contains(github.event.pull_request.labels.*.name, 'run-tests') ||
-      !contains(github.event.head_commit.message, '[skip ci]')
+unit-tests:
+  # Ne lancer que si des fichiers source ont change
+  if: |
+    github.event_name == 'push' ||
+    contains(github.event.pull_request.labels.*.name, 'run-tests') ||
+    !contains(github.event.head_commit.message, '[skip ci]')
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
 
-      - name: Check for source changes
-        id: changes
-        run: |
-          CHANGED=$(git diff --name-only HEAD~1 | grep -E '^(src|tests)/' | wc -l)
-          echo "source_changed=$CHANGED" >> $GITHUB_OUTPUT
+    - name: Check for source changes
+      id: changes
+      run: |
+        CHANGED=$(git diff --name-only HEAD~1 | grep -E '^(src|tests)/' | wc -l)
+        echo "source_changed=$CHANGED" >> $GITHUB_OUTPUT
 
-      - name: Run tests
-        if: steps.changes.outputs.source_changed != '0'
-        run: pnpm vitest run
+    - name: Run tests
+      if: steps.changes.outputs.source_changed != '0'
+      run: pnpm vitest run
 ```
 
 ### Timeout et budget
 
 ```yaml
-  e2e-tests:
-    timeout-minutes: 30 # Tuer le job apres 30 min
+e2e-tests:
+  timeout-minutes: 30 # Tuer le job apres 30 min
 
-    steps:
-      # ...
-      - name: Run E2E (with timeout)
-        run: timeout 1200 pnpm playwright test # 20 min max
+  steps:
+    # ...
+    - name: Run E2E (with timeout)
+      run: timeout 1200 pnpm playwright test # 20 min max
 ```
 
 ### Résumé des stratégies d'optimisation
 
-| Stratégie | Gain estime | Complexite |
-|-----------|-------------|------------|
-| Cache pnpm/node_modules | 30-60% install time | Faible |
-| Cache Playwright browsers | 2-3 min | Faible |
-| Exécution conditionnelle | 100% (skip entier) | Moyenne |
-| Sharding E2E | 50-75% | Moyenne |
-| `fail-fast: true` (unit) | Variable | Faible |
-| `concurrency` + cancel | Evite les runs inutiles | Faible |
-| Runners self-hosted | Variable | Haute |
+| Stratégie                 | Gain estime             | Complexite |
+| ------------------------- | ----------------------- | ---------- |
+| Cache pnpm/node_modules   | 30-60% install time     | Faible     |
+| Cache Playwright browsers | 2-3 min                 | Faible     |
+| Exécution conditionnelle  | 100% (skip entier)      | Moyenne    |
+| Sharding E2E              | 50-75%                  | Moyenne    |
+| `fail-fast: true` (unit)  | Variable                | Faible     |
+| `concurrency` + cancel    | Evite les runs inutiles | Faible     |
+| Runners self-hosted       | Variable                | Haute      |
 
 ---
 
@@ -942,8 +936,8 @@ Creez un pipeline GitHub Actions pour votre projet :
 
 ## Navigation
 
-| Précédent | Suivant |
-|-----------|---------|
+| Précédent                                                                  | Suivant                                                        |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | [12 - Couverture et mutation testing](./12-couverture-et-mutation-testing) | [14 - Flaky tests et debugging](./14-flaky-tests-et-debugging) |
 
 ---
@@ -963,8 +957,9 @@ Creez un pipeline GitHub Actions pour votre projet :
 <!-- parcours-recommande -->
 
 ::: tip Parcours recommandé
+
 1. **Screencast** : [screencast 13 ci cd](../screencasts/screencast-13-ci-cd.md)
 2. **Lab** : [lab-13-ci-cd](../labs/lab-13-ci-cd/README)
 3. **Visualisation** : [Pipeline CI/CD](../visualizations/ci-pipeline.html)
 4. **Quiz** : [quiz 13 ci cd](../quizzes/quiz-13-ci-cd.html)
-:::
+   :::
