@@ -2,13 +2,15 @@
 
 | Difficulte | Duree estimee | Lab | Quiz |
 |------------|---------------|-----|------|
-| 4/5        | 90 min        | [Lab 15](../labs/lab-15-tdd-bdd/) | [Quiz 15](../quizzes/quiz-15-tdd-bdd.html) |
+| 4/5        | 120 min       | [Lab 15](../labs/lab-15-tdd-bdd/) | [Quiz 15](../quizzes/quiz-15-tdd-bdd.html) |
 
 ## Objectifs
 
 - Comprendre et pratiquer le cycle TDD Red-Green-Refactor
+- Ancrer le réflexe RED — écrire les tests toi-même avant tout
+- Utiliser TDD comme mécanisme de contrôle du code généré par IA
 - Savoir quand TDD est benefique et quand il l'est moins
-- Realiser un kata TDD complet (StringCalculator)
+- Realiser un kata TDD complet (StringCalculator) from scratch
 - Écrire des spécifications BDD en Given-When-Then
 - Configurer Cucumber.js avec TypeScript
 - Comparer TDD, BDD et ATDD
@@ -24,7 +26,7 @@
 
 ```
      ┌──────────┐
-     │   RED    │  1. Ecrire un test qui echoue
+     │   RED    │  1. Ecrire un test qui echoue  ← LA phase à ancrer
      │  (fail)  │
      └────┬─────┘
           │
@@ -102,159 +104,315 @@ export function add(...numbers: number[]): number {
 
 ---
 
-## Kata TDD : StringCalculator
+## La phase RED — le réflexe fondamental
 
-Le kata StringCalculator est un exercice classique pour pratiquer le TDD. Voici le deroulement complet, étape par étape.
+> C'est la phase que les labs classiques ne t'entrainent pas à faire. Dans la plupart des exercices, les tests sont déjà écrits — tu implémentes pour les passer. C'est utile, mais ce n'est pas le réflexe TDD. Le réflexe TDD, c'est **toi** qui écris le test avant d'avoir une seule ligne d'implémentation.
 
-### Étape 1 : chaine vide retourne 0
+### Pourquoi c'est difficile à ancrer
+
+Tu as l'habitude de penser : "qu'est-ce que mon code doit faire ?" et d'implémenter immédiatement. TDD te force à une question différente : "comment est-ce que je saurais que mon code fait ce qu'il doit faire ?" Ces deux questions produisent des designs très différents.
+
+Quand tu écris le test en premier :
+- tu definis l'interface publique avant l'implémentation (noms de méthodes, paramètres, retours)
+- tu forces une décision sur les cas limites avant de coder
+- tu identifies les dépendances à injecter plutôt qu'à instancier en dur
+
+### Le protocole RED strict
+
+Pour chaque nouvelle fonctionnalité, dans cet ordre — sans exception :
+
+```
+1. Écris une phrase : "ce code doit [comportement]"
+2. Traduis cette phrase en assertion : expect(code).toBe(résultat)
+3. Lance → doit être ROUGE (si vert, le test ne test rien)
+4. Écris le minimum de code pour passer
+5. Lance → doit être VERT
+6. Refactor si nécessaire, relance → doit rester VERT
+7. Retour à 1
+```
+
+### Ce que "minimum de code" veut dire vraiment
+
+C'est contre-intuitif. Pour `expect(calculate('')).toBe(0)`, le code minimal est :
 
 ```typescript
-// RED
-import { describe, it, expect } from 'vitest';
-import { calculate } from './string-calculator';
+export function calculate(_input: string): number {
+  return 0; // toujours 0
+}
+```
 
-describe('StringCalculator', () => {
-  it('should return 0 for an empty string', () => {
-    expect(calculate('')).toBe(0);
-  });
+Pas `if (input === '') return 0; else return parseFloat(input)`. Ça, c'est anticiper le prochain test. L'implémentation générale émerge des tests successifs — tu ne la prévois pas.
+
+---
+
+## Kata TDD : StringCalculator — pratique RED phase
+
+> **Instructions** : lis chaque étape, **ferme le module**, écris le test toi-même, lance, implémente. Reviens ici seulement pour l'étape suivante — pas pour la solution.
+
+Le kata est présenté sous forme d'exigences successives. Chaque exigence = un nouveau test à écrire.
+
+### Setup
+
+```bash
+# Crée un fichier vide — PAS de tests pré-écrits
+touch labs/lab-15-tdd-bdd/kata-stringcalculator.ts
+```
+
+Structure de départ :
+
+```typescript
+import { createTestRunner } from '../test-utils.ts';
+
+const { test, assertEqual, assertThrows, run } = createTestRunner('StringCalculator kata');
+
+// --- TES TESTS ICI ---
+
+run();
+```
+
+---
+
+### Exigence 1 — chaine vide retourne 0
+
+> `calculate('')` → `0`
+
+Ferme le module. Écris le test. Lance. Implémente. Lance. ✓ Reviens.
+
+<details>
+<summary>Test attendu</summary>
+
+```typescript
+await test('empty string returns 0', () => {
+  assertEqual(calculate(''), 0);
 });
 ```
 
+</details>
+
+<details>
+<summary>Implémentation minimale</summary>
+
 ```typescript
-// GREEN
-// src/string-calculator.ts
 export function calculate(_input: string): number {
   return 0;
 }
 ```
 
-### Étape 2 : un seul nombre
+</details>
+
+---
+
+### Exigence 2 — un seul nombre
+
+> `calculate('1')` → `1` | `calculate('5')` → `5`
+
+Ferme. Écris le test. Lance (rouge). Implémente (minimum). Lance (vert).
+
+<details>
+<summary>Test attendu</summary>
 
 ```typescript
-// RED
-it('should return the number for a single number string', () => {
-  expect(calculate('1')).toBe(1);
-});
-
-it('should handle different single numbers', () => {
-  expect(calculate('5')).toBe(5);
+await test('single number returns itself', () => {
+  assertEqual(calculate('1'), 1);
+  assertEqual(calculate('5'), 5);
 });
 ```
 
+</details>
+
+<details>
+<summary>Implémentation minimale</summary>
+
 ```typescript
-// GREEN
 export function calculate(input: string): number {
   if (input === '') return 0;
   return Number(input);
 }
 ```
 
-### Étape 3 : deux nombres separes par une virgule
+</details>
+
+---
+
+### Exigence 3 — deux nombres séparés par une virgule
+
+> `calculate('1,2')` → `3`
+
+<details>
+<summary>Test attendu</summary>
 
 ```typescript
-// RED
-it('should return the sum of two comma-separated numbers', () => {
-  expect(calculate('1,2')).toBe(3);
+await test('two comma-separated numbers returns sum', () => {
+  assertEqual(calculate('1,2'), 3);
 });
 ```
 
+</details>
+
+<details>
+<summary>Implémentation minimale</summary>
+
 ```typescript
-// GREEN
 export function calculate(input: string): number {
   if (input === '') return 0;
-
-  const numbers = input.split(',').map(Number);
-  return numbers.reduce((sum, n) => sum + n, 0);
+  return input.split(',').map(Number).reduce((sum, n) => sum + n, 0);
 }
 ```
 
-### Étape 4 : nombre arbitraire de valeurs
+</details>
+
+---
+
+### Exigence 4 — nombre arbitraire de valeurs
+
+> `calculate('1,2,3,4,5')` → `15`
+
+<details>
+<summary>Test attendu</summary>
 
 ```typescript
-// RED
-it('should handle any amount of numbers', () => {
-  expect(calculate('1,2,3,4,5')).toBe(15);
+await test('any number of values', () => {
+  assertEqual(calculate('1,2,3,4,5'), 15);
 });
 ```
 
+</details>
+
+<details>
+<summary>Implémentation minimale</summary>
+
 ```typescript
-// GREEN — le code precedent gere deja ce cas !
-// REFACTOR — rien a changer, les tests passent
+// Le code précédent gère déjà ce cas — pas de changement.
+// REFACTOR : rien à faire. C'est ça, le baby step.
 ```
 
-### Étape 5 : supporter le saut de ligne comme separateur
+</details>
+
+---
+
+### Exigence 5 — saut de ligne comme séparateur
+
+> `calculate('1\n2,3')` → `6`
+
+<details>
+<summary>Test attendu</summary>
 
 ```typescript
-// RED
-it('should handle newlines as separators', () => {
-  expect(calculate('1\n2,3')).toBe(6);
+await test('newline as separator', () => {
+  assertEqual(calculate('1\n2,3'), 6);
 });
 ```
 
+</details>
+
+<details>
+<summary>Implémentation minimale</summary>
+
 ```typescript
-// GREEN
 export function calculate(input: string): number {
   if (input === '') return 0;
-
-  // Remplacer les newlines par des virgules
-  const normalized = input.replace(/\n/g, ',');
-  const numbers = normalized.split(',').map(Number);
-  return numbers.reduce((sum, n) => sum + n, 0);
+  return input.replace(/\n/g, ',').split(',').map(Number).reduce((sum, n) => sum + n, 0);
 }
 ```
 
-### Étape 6 : separateur personnalise
+</details>
+
+---
+
+### Exigence 6 — séparateur personnalisé
+
+> Format `//[sep]\n[nombres]` : `calculate('//;\n1;2')` → `3`
+
+<details>
+<summary>Test attendu</summary>
 
 ```typescript
-// RED
-it('should support custom delimiter defined in first line', () => {
-  // Format: "//[delimiter]\n[numbers]"
-  expect(calculate('//;\n1;2')).toBe(3);
-});
-
-it('should support custom delimiter with pipe', () => {
-  expect(calculate('//|\n1|2|3')).toBe(6);
+await test('custom delimiter', () => {
+  assertEqual(calculate('//;\n1;2'), 3);
+  assertEqual(calculate('//|\n1|2|3'), 6);
 });
 ```
 
+</details>
+
+<details>
+<summary>Implémentation minimale</summary>
+
 ```typescript
-// GREEN
 export function calculate(input: string): number {
   if (input === '') return 0;
 
   let delimiter = /[,\n]/;
   let body = input;
 
-  // Detecter un delimiteur personnalise
   if (input.startsWith('//')) {
     const newlineIndex = input.indexOf('\n');
-    const customDelimiter = input.substring(2, newlineIndex);
-    // Echapper les caracteres speciaux regex
-    const escaped = customDelimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const custom = input.substring(2, newlineIndex);
+    const escaped = custom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     delimiter = new RegExp(escaped);
     body = input.substring(newlineIndex + 1);
   }
 
-  const numbers = body.split(delimiter).map(Number);
-  return numbers.reduce((sum, n) => sum + n, 0);
+  return body.split(delimiter).map(Number).reduce((sum, n) => sum + n, 0);
 }
 ```
 
-### Étape 7 : nombres negatifs interdits
+</details>
+
+---
+
+### Exigence 7 — nombres négatifs interdits
+
+> `calculate('1,-2,3')` → throw `'Negatives not allowed: -2'`
+> `calculate('-1,-2,3')` → throw `'Negatives not allowed: -1, -2'`
+
+<details>
+<summary>Test attendu</summary>
 
 ```typescript
-// RED
-it('should throw for negative numbers', () => {
-  expect(() => calculate('1,-2,3')).toThrow('Negatives not allowed: -2');
-});
-
-it('should list all negative numbers in error message', () => {
-  expect(() => calculate('-1,-2,3')).toThrow('Negatives not allowed: -1, -2');
+await test('negative numbers throw', () => {
+  assertThrows(() => calculate('1,-2,3'), 'Negatives not allowed: -2');
+  assertThrows(() => calculate('-1,-2,3'), 'Negatives not allowed: -1, -2');
 });
 ```
 
+</details>
+
+<details>
+<summary>Implémentation minimale</summary>
+
 ```typescript
-// GREEN
+// Dans calculate(), après split :
+const negatives = numbers.filter(n => n < 0);
+if (negatives.length > 0) {
+  throw new Error(`Negatives not allowed: ${negatives.join(', ')}`);
+}
+```
+
+</details>
+
+---
+
+### Exigence 8 — ignorer les nombres > 1000
+
+> `calculate('2,1001')` → `2` | `calculate('1000,2')` → `1002`
+
+<details>
+<summary>Test attendu</summary>
+
+```typescript
+await test('numbers over 1000 are ignored', () => {
+  assertEqual(calculate('2,1001'), 2);
+  assertEqual(calculate('1000,2'), 1002);
+});
+```
+
+</details>
+
+<details>
+<summary>Implémentation finale complète</summary>
+
+```typescript
 export function calculate(input: string): number {
   if (input === '') return 0;
 
@@ -263,115 +421,109 @@ export function calculate(input: string): number {
 
   if (input.startsWith('//')) {
     const newlineIndex = input.indexOf('\n');
-    const customDelimiter = input.substring(2, newlineIndex);
-    const escaped = customDelimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const custom = input.substring(2, newlineIndex);
+    const escaped = custom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     delimiter = new RegExp(escaped);
     body = input.substring(newlineIndex + 1);
   }
 
   const numbers = body.split(delimiter).map(Number);
 
-  // Verifier les negatifs
-  const negatives = numbers.filter((n) => n < 0);
+  const negatives = numbers.filter(n => n < 0);
   if (negatives.length > 0) {
     throw new Error(`Negatives not allowed: ${negatives.join(', ')}`);
   }
 
-  return numbers.reduce((sum, n) => sum + n, 0);
+  return numbers.filter(n => n <= 1000).reduce((sum, n) => sum + n, 0);
 }
 ```
 
-### Étape 8 : ignorer les nombres > 1000
+</details>
 
-```typescript
-// RED
-it('should ignore numbers greater than 1000', () => {
-  expect(calculate('2,1001')).toBe(2);
-});
+---
 
-it('should include 1000 exactly', () => {
-  expect(calculate('1000,2')).toBe(1002);
-});
+### Bilan du kata
+
+Après ces 8 étapes tu as écrit 8 tests toi-même, tu as implémenté incrementalement, et l'algo final a émergé des tests — pas de ta tête. C'est ça le TDD.
+
+Observe ce qui s'est passé entre l'étape 1 et l'étape 8 : le code de l'étape 1 était faux pour l'étape 2. C'est normal. Baby steps.
+
+---
+
+## TDD et IA — le seul workflow qui fonctionne
+
+> Cette section n'existe pas dans les ressources classiques sur le TDD. Elle est critique en 2026.
+
+### Le piège du "génère-moi ça"
+
+```
+❌ Workflow délégation (le piège)
+
+Tu → IA : "écris-moi une fonction qui valide un email"
+IA → toi : 40 lignes, regex complexe, 3 cas non demandés
+Tu : "looks good" → merge
 ```
 
-```typescript
-// GREEN + REFACTOR
-export function calculate(input: string): number {
-  if (input === '') return 0;
+Le problème : tu n'as jamais défini ce que "valide" signifie dans TON contexte. L'IA a fait des choix implicites que tu n'as pas contrôlés.
 
-  let delimiter = /[,\n]/;
-  let body = input;
+### Le workflow TDD+IA
 
-  if (input.startsWith('//')) {
-    const newlineIndex = input.indexOf('\n');
-    const customDelimiter = input.substring(2, newlineIndex);
-    const escaped = customDelimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    delimiter = new RegExp(escaped);
-    body = input.substring(newlineIndex + 1);
-  }
+```
+✅ Workflow contrôle (TDD appliqué à l'IA)
 
-  const numbers = body.split(delimiter).map(Number);
+1. TU écris le test (ou la liste des cas)
+   expect(validateEmail('a@b.com')).toBe(true)
+   expect(validateEmail('invalid')).toBe(false)
+   expect(validateEmail('')).toBe(false)
+   // ton contexte : est-ce que 'a@b.c' est valide ici ? → tu décides AVANT
 
-  const negatives = numbers.filter((n) => n < 0);
-  if (negatives.length > 0) {
-    throw new Error(`Negatives not allowed: ${negatives.join(', ')}`);
-  }
+2. TU donnes le test à l'IA comme contrainte
+   "implémente validateEmail() pour que ces tests passent"
 
-  return numbers
-    .filter((n) => n <= 1000)
-    .reduce((sum, n) => sum + n, 0);
-}
+3. TU lis chaque ligne du code généré
+   → une ligne qui n'est pas nécessaire pour passer un test = risque
+
+4. TU lances les tests
+   → si rouge : tu sais exactement POURQUOI
+   → si vert : tu as la preuve, pas juste la confiance
 ```
 
-### Suite de tests finale
+### Règle pratique
+
+**Avant tout prompt qui génère du code :**
 
 ```typescript
-import { describe, it, expect } from 'vitest';
-import { calculate } from './string-calculator';
+// Écris d'abord en commentaire :
+// ATTENDU : validateEmail('a@b.com') → true
+// ATTENDU : validateEmail('invalid') → false
+// ATTENDU : validateEmail('') → false
+// QUESTION : validateEmail('a@b.c') → true ou false dans ce contexte ?
 
-describe('StringCalculator', () => {
-  // Cas de base
-  it('should return 0 for empty string', () => {
-    expect(calculate('')).toBe(0);
-  });
-
-  it('should return number for single value', () => {
-    expect(calculate('42')).toBe(42);
-  });
-
-  // Addition
-  it('should sum two numbers', () => {
-    expect(calculate('1,2')).toBe(3);
-  });
-
-  it('should sum multiple numbers', () => {
-    expect(calculate('1,2,3,4,5')).toBe(15);
-  });
-
-  // Separateurs
-  it('should handle newline separator', () => {
-    expect(calculate('1\n2,3')).toBe(6);
-  });
-
-  it('should handle custom delimiter', () => {
-    expect(calculate('//;\n1;2')).toBe(3);
-  });
-
-  // Validation
-  it('should throw for negatives', () => {
-    expect(() => calculate('-1,2,-3')).toThrow('Negatives not allowed: -1, -3');
-  });
-
-  // Filtrage
-  it('should ignore numbers > 1000', () => {
-    expect(calculate('2,1001,3')).toBe(5);
-  });
-
-  it('should include 1000', () => {
-    expect(calculate('1000,1')).toBe(1001);
-  });
-});
+// Maintenant tu peux demander à l'IA
 ```
+
+Ces 3-4 lignes te forcent à avoir une opinion avant de voir ce que l'IA propose. L'écart entre ta liste et le code généré est ton terrain d'apprentissage — c'est là que tu vois où l'IA brode.
+
+### Revue critique systématique
+
+Pour chaque génération IA, avant d'accepter :
+
+```
+□ Identifie une ligne qui n'était pas nécessaire pour passer tes tests
+□ Si elle existe : pourquoi est-elle là ? (optimisation prématurée ? cas non demandé ?)
+□ Les noms de variables sont-ils du domaine métier ou des noms IA génériques ?
+□ Y a-t-il de la gestion d'erreur pour des cas qui ne peuvent pas arriver ?
+□ Le code exprime-t-il l'intention ou l'implémentation ?
+```
+
+### Quand TDD+IA brille particulièrement
+
+| Situation | Ce que tu fais | Ce que l'IA fait |
+|-----------|---------------|-----------------|
+| Algo complexe (bowling, StringCalculator) | Écris les tests cas par cas | Implémente pour les passer |
+| Feature inconnue (nouveau domaine) | Définis les contrats avec des tests | Remplit les contrats |
+| Bug fix | Écris le test qui reproduit le bug d'abord | Corrige pour que le test passe |
+| Refactor | Tes tests existants = filet de sécurité | Refactore sous contrainte |
 
 ---
 
@@ -671,7 +823,6 @@ describe('UserService', () => {
 // 3. Enfin, le controller (couche haute)
 describe('UserController', () => {
   it('should return 200 with user profile', async () => {
-    // Utilise le vrai service et le vrai repository
     const response = await request(app).get('/users/1');
     expect(response.status).toBe(200);
   });
@@ -846,7 +997,6 @@ export default {
 ### Intégration avec des outils de documentation
 
 ```bash
-# Installer le generateur de rapport
 pnpm add -D cucumber-html-reporter
 ```
 
@@ -869,12 +1019,8 @@ reporter.generate({
 });
 ```
 
-### Avantage clé
-
 > Si un scenario Gherkin passe, la fonctionnalite decrite **fonctionne**.
 > Si un scenario echoue, la fonctionnalite est **cassee** et la doc le dit.
-
-Contrairement à un wiki ou un Confluence qui peut devenir obsolete, la living doc est **mecaniquement liee au code**.
 
 ---
 
@@ -931,8 +1077,12 @@ it('should waive shipping for orders over 50 euros', () => { /* ... */ });
 ## Checklist du module
 
 - [ ] Je comprends le cycle Red-Green-Refactor
-- [ ] J'ai realise le kata StringCalculator en TDD pur
+- [ ] J'ai fait le kata StringCalculator en **écrivant moi-même chaque test** (phase RED)
+- [ ] Je sais ce que "minimum de code" signifie réellement (ex : `return 0` pour le premier test)
+- [ ] J'ai realise un kata TDD complet (StringCalculator ou RomanNumerals)
 - [ ] Je sais quand TDD est adapte et quand il l'est moins
+- [ ] J'écris mes assertions AVANT de demander du code à l'IA
+- [ ] Je lis chaque ligne de code généré par l'IA avant d'accepter
 - [ ] Je sais écrire des scenarios Given-When-Then en Gherkin
 - [ ] J'ai configure Cucumber.js avec TypeScript
 - [ ] Je comprends la différence entre Inside-out et Outside-in TDD
@@ -943,21 +1093,23 @@ it('should waive shipping for orders over 50 euros', () => { /* ... */ });
 
 ## Exercice pratique
 
-### Partie 1 : Kata TDD
+### Partie 1 : Kata StringCalculator from scratch (phase RED)
 
-Implementez un `RomanNumeralConverter` en TDD strict :
-- `toRoman(1)` -> `"I"`, `toRoman(4)` -> `"IV"`, ..., `toRoman(3999)` -> `"MMMCMXCIX"`
-- Ecrivez un test, faites-le passer, refactorisez. Repetez.
+Ouvre `labs/lab-15-tdd-bdd/kata-stringcalculator.ts` (fichier vide). Suis les 8 exigences du module ci-dessus, une par une, en écrivant toi-même chaque test avant de regarder la solution.
 
-### Partie 2 : BDD
+Règle : une exigence à la fois. Pas d'implémentation sans test rouge d'abord.
 
-Ecrivez les scenarios Gherkin et les step définitions pour une feature "Gestion de taches" :
+### Partie 2 : Lab TDD (phase GREEN guidée)
+
+Ouvre `labs/lab-15-tdd-bdd/exercise.ts`. Les tests sont déjà écrits — implémente les 6 exercices, un test à la fois.
+
+### Partie 3 : BDD
+
+Écris les scenarios Gherkin et les step définitions pour une feature "Gestion de taches" :
 - Créer une tache
 - Marquer une tache comme terminee
 - Filtrer les taches par statut
 - Supprimer une tache
-
-> Solution dans le [Lab 15](../labs/lab-15-tdd-bdd/)
 
 ---
 
@@ -980,11 +1132,11 @@ Ecrivez les scenarios Gherkin et les step définitions pour une feature "Gestion
 
 ---
 
-<!-- parcours-recommande -->
-
 ::: tip Parcours recommandé
-1. **Screencast** : [screencast 15 tdd bdd](../screencasts/screencast-15-tdd-bdd.md)
-2. **Lab** : [lab-15-tdd-bdd](../labs/lab-15-tdd-bdd/README)
-3. **Visualisation** : [Cycle TDD](../visualizations/tdd-cycle.html)
-4. **Quiz** : [quiz 15 tdd bdd](../quizzes/quiz-15-tdd-bdd.html)
+1. **Module** : lis jusqu'à "La phase RED" inclus
+2. **Kata** : `labs/lab-15-tdd-bdd/kata-stringcalculator.ts` — 8 exigences, phase RED
+3. **Lab** : `labs/lab-15-tdd-bdd/exercise.ts` — 6 exercices, phase GREEN
+4. **Screencast** : [screencast 15 tdd bdd](../screencasts/screencast-15-tdd-bdd.md)
+5. **Visualisation** : [Cycle TDD](../visualizations/tdd-cycle.html)
+6. **Quiz** : [quiz 15 tdd bdd](../quizzes/quiz-15-tdd-bdd.html)
 :::
