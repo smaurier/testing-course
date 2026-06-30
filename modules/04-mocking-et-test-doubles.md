@@ -1,1155 +1,347 @@
-# Module 04 — Mocking et test doubles
-
-| Difficulte | Duree estimee | Lab | Quiz |
-|------------|---------------|-----|------|
-| 3/5        | 90 min        | [Lab 04](../labs/lab-04-mocking/) | [Quiz 04](../quizzes/quiz-04-mocking.html) |
-
-## Objectifs
-
-- Connaître la taxonomie des test doubles (dummy, stub, spy, mock, fake)
-- Maîtriser vi.fn(), vi.spyOn(), vi.mock() et vi.hoisted()
-- Savoir mocker des modules, des timers et des dates
-- Comprendre le mocking partiel
-- Identifier l'anti-pattern du sur-mocking (over-mocking)
-- Considerer l'injection de dépendances comme alternative
-
+---
+titre: Mocking et test doubles
+cours: 06-testing
+notions: [test-double, dummy, stub, spy, mock, fake, dependency-injection, vi.fn, vi.spyOn, vi.mock, vi.hoisted, mock-partiel, fake-timers, date-mocking, over-mocking, tester-le-comportement]
+outcomes: [choisir le bon type de test double selon l'intention du test, isoler du code via injection de dépendances, écrire un spy/mock/fake avec l'API Vitest, mocker un module et des timers, éviter le sur-mock et le test de l'implémentation]
+prerequis: [anatomie-dun-test, vitest-fondamentaux, assertions]
+next: 05-tests-asynchrones
+libs: [{ name: vitest, version: ^4.1.9 }]
+tribuzen: tests logique domaine (invitation, RBAC) — Vitest réel
+last-reviewed: 2026-06
 ---
 
-## Taxonomie des test doubles
+# Mocking et test doubles
 
-Gerard Meszaros (puis Martin Fowler) définit 5 types de "doublures" de test :
+> **Outcomes — tu sauras FAIRE :** choisir le bon test double selon ce que le test doit prouver, isoler un service par injection de dépendances, écrire spy/mock/fake/partiel/fake-timers avec l'API Vitest réelle, et reconnaître le sur-mock et le test-de-l'implémentation.
+> **Difficulté :** :star::star::star:
 
-### 1. Dummy
+## 1. Cas concret d'abord
 
-Un objet passe en paramètre mais jamais utilise. Il remplit un slot obligatoire.
+Dans TribuZen, quand un membre invite quelqu'un dans sa famille, `InvitationService.invite()` doit : (a) refuser un email déjà invité, (b) persister l'invitation en base, (c) envoyer **exactement une** notification email. Tu veux tester cette logique **maintenant**, sans base Postgres lancée et sans envoyer de vrai email.
 
 ```typescript
-interface Logger {
-  info(message: string): void;
-  error(message: string): void;
+// src/invitation/invitation-service.ts
+export interface InvitationRepo {
+  existsPending(familyId: string, email: string): Promise<boolean>;
+  save(familyId: string, email: string): Promise<{ id: string }>;
+}
+export interface Notifier {
+  sendInvitationEmail(email: string, familyId: string): Promise<void>;
 }
 
-// Le dummy logger ne fait rien — on ne teste pas les logs ici
-const dummyLogger: Logger = {
-  info: () => {},
-  error: () => {},
-};
+export class InvitationService {
+  constructor(private repo: InvitationRepo, private notifier: Notifier) {}
 
-function createUserService(logger: Logger): UserService {
-  return new UserService(logger);
-}
-
-it('should create a user', () => {
-  const service = createUserService(dummyLogger); // dummy : pas utilise dans l'assertion
-  const user = service.create({ name: 'Alice' });
-  expect(user.name).toBe('Alice');
-});
-```
-
-### 2. Stub
-
-Retourne des réponses predefinies. Ne vérifié pas comment il est appele.
-
-```typescript
-interface PricingAPI {
-  getExchangeRate(from: string, to: string): Promise<number>;
-}
-
-// Stub : retourne toujours la meme valeur
-const stubPricingAPI: PricingAPI = {
-  getExchangeRate: async (_from: string, _to: string) => 1.08, // EUR/USD fixe
-};
-
-it('should convert EUR to USD using exchange rate', async () => {
-  const converter = new CurrencyConverter(stubPricingAPI);
-  const result = await converter.convert(100, 'EUR', 'USD');
-  expect(result).toBeCloseTo(108, 2);
-});
-```
-
-### 3. Spy
-
-Enregistre les appels (arguments, nombre d'appels) sans changer le comportement.
-
-```typescript
-it('should log a warning when user has weak password', () => {
-  const logger = {
-    warn: vi.fn(), // spy : enregistre les appels
-    info: vi.fn(),
-    error: vi.fn(),
-  };
-
-  const validator = new PasswordValidator(logger);
-  validator.validate('123'); // mot de passe faible
-
-  // On verifie QUE le spy a ete appele (pas le retour)
-  expect(logger.warn).toHaveBeenCalledWith(
-    expect.stringContaining('weak password')
-  );
-  expect(logger.warn).toHaveBeenCalledTimes(1);
-});
-```
-
-### 4. Mock
-
-Comme un spy, mais avec des attentes predefinies sur la façon dont il sera appele. L'echec du test vient du mock, pas de l'assertion finale.
-
-```typescript
-it('should send exactly one confirmation email', () => {
-  const emailService = {
-    send: vi.fn(), // mock avec attente
-  };
-
-  const orderService = new OrderService(emailService);
-  orderService.placeOrder({ item: 'Book', qty: 1 });
-
-  // L'assertion porte sur LE MOCK (comment il a ete utilise)
-  expect(emailService.send).toHaveBeenCalledOnce();
-  expect(emailService.send).toHaveBeenCalledWith(
-    expect.objectContaining({
-      subject: expect.stringContaining('Confirmation'),
-    })
-  );
-});
-```
-
-### 5. Fake
-
-Une implementation simplifiee mais fonctionnelle. Contrairement au stub, elle a de la logique.
-
-```typescript
-// Fake : une base de donnees en memoire
-class FakeUserRepository implements UserRepository {
-  private users: Map<number, User> = new Map();
-  private nextId = 1;
-
-  async findById(id: number): Promise<User | null> {
-    return this.users.get(id) ?? null;
-  }
-
-  async save(data: Omit<User, 'id'>): Promise<User> {
-    const user = { ...data, id: this.nextId++ };
-    this.users.set(user.id, user);
-    return user;
-  }
-
-  async delete(id: number): Promise<boolean> {
-    return this.users.delete(id);
-  }
-
-  async findAll(): Promise<User[]> {
-    return [...this.users.values()];
+  async invite(familyId: string, email: string): Promise<{ id: string }> {
+    if (await this.repo.existsPending(familyId, email)) {
+      throw new Error('ALREADY_INVITED');
+    }
+    const invitation = await this.repo.save(familyId, email);
+    await this.notifier.sendInvitationEmail(email, familyId);
+    return invitation;
   }
 }
-
-describe('UserService with FakeRepository', () => {
-  let service: UserService;
-  let repo: FakeUserRepository;
-
-  beforeEach(() => {
-    repo = new FakeUserRepository();
-    service = new UserService(repo);
-  });
-
-  it('should create and retrieve a user', async () => {
-    const created = await service.create({ name: 'Alice', email: 'alice@test.com' });
-    const found = await service.getById(created.id);
-    expect(found).toEqual(created);
-  });
-
-  it('should return null for non-existent user', async () => {
-    const found = await service.getById(999);
-    expect(found).toBeNull();
-  });
-});
 ```
 
-### Résumé : quand utiliser quoi ?
+Question centrale : comment remplacer `repo` (I/O base) et `notifier` (I/O réseau) par des **doublures** qui te laissent vérifier le comportement de `invite()` ? Réponse : les **test doubles**, injectés via le constructeur. La suite donne la taxonomie, l'API Vitest, et les pièges.
 
-| Type | Comportement | Vérification | Cas d'usage |
-|------|-------------|--------------|-------------|
-| Dummy | Aucun | Non | Remplir un paramètre obligatoire |
-| Stub | Reponse fixe | Non | Controler les donnees d'entree |
-| Spy | Reel + enregistre | Oui (appels) | Vérifier les interactions |
-| Mock | Configure + enregistre | Oui (attentes) | Vérifier le protocole |
-| Fake | Simplifie | Non | Remplacer infrastructure (DB, API) |
+## 2. Théorie complète, concise
 
----
+### Test double : définition
 
-## vi.fn() — mock functions
+Un **test double** est tout objet qui remplace une dépendance réelle pendant un test (terme de Gerard Meszaros, popularisé par Martin Fowler). Cinq types, classés par **ce qu'ils font** et **ce qu'on vérifie**.
 
-### Création et utilisation
+| Type | Comportement | On vérifie ? | Usage |
+|------|--------------|--------------|-------|
+| **Dummy** | rien | non | remplir un paramètre obligatoire jamais utilisé |
+| **Stub** | réponses figées | non | contrôler les **entrées** que reçoit le code testé |
+| **Spy** | réel **+** enregistre les appels | oui (les appels) | vérifier une **interaction** sans changer le comportement |
+| **Mock** | configuré + enregistre, avec attentes | oui (le protocole) | vérifier *comment* une dépendance est appelée |
+| **Fake** | implémentation simplifiée mais réelle | non | remplacer une infra lourde (DB en mémoire) |
 
-```typescript
-import { describe, it, expect, vi } from 'vitest';
+Distinction clé **stub vs mock** (Fowler, *Mocks Aren't Stubs*) : un **stub** fait du *state verification* (on assert sur le résultat/l'état final) ; un **mock** fait du *behavior verification* (on assert sur les appels eux-mêmes — `toHaveBeenCalledWith`). Un **spy** est un mock qui laisse passer le vrai comportement.
 
-// Creer une fonction mock
-const mockFn = vi.fn();
+### Injection de dépendances (DI) = condition de testabilité
 
-// Appeler la fonction
-mockFn('hello');
-mockFn(42, true);
-
-// Verifier les appels
-expect(mockFn).toHaveBeenCalled();
-expect(mockFn).toHaveBeenCalledTimes(2);
-expect(mockFn).toHaveBeenCalledWith('hello');
-expect(mockFn).toHaveBeenCalledWith(42, true);
-expect(mockFn).toHaveBeenLastCalledWith(42, true);
-expect(mockFn).toHaveBeenNthCalledWith(1, 'hello');
-```
-
-### mockReturnValue / mockReturnValueOnce
+On ne mocke bien que ce qu'on peut **substituer**. Si un service `import`e en dur sa base et son emailer, il faut le hack `vi.mock` au niveau module. Si au contraire il **reçoit** ses dépendances (constructeur ou paramètre), le test injecte des doubles sans aucun outil de mock de module :
 
 ```typescript
-const mockRandom = vi.fn();
-
-// Retourne toujours la meme valeur
-mockRandom.mockReturnValue(0.5);
-expect(mockRandom()).toBe(0.5);
-expect(mockRandom()).toBe(0.5);
-
-// Retourne des valeurs differentes en sequence
-mockRandom
-  .mockReturnValueOnce(0.1)
-  .mockReturnValueOnce(0.9)
-  .mockReturnValue(0.5); // fallback
-
-expect(mockRandom()).toBe(0.1); // premier appel
-expect(mockRandom()).toBe(0.9); // deuxieme appel
-expect(mockRandom()).toBe(0.5); // tous les suivants
-```
-
-### mockResolvedValue / mockRejectedValue
-
-```typescript
-// Pour les fonctions async
-const mockFetch = vi.fn();
-
-mockFetch.mockResolvedValue({ id: 1, name: 'Alice' });
-const result = await mockFetch(1);
-expect(result).toEqual({ id: 1, name: 'Alice' });
-
-// Simuler une erreur
-mockFetch.mockRejectedValue(new Error('Network error'));
-await expect(mockFetch(1)).rejects.toThrow('Network error');
-
-// Sequence : succes puis echec
-mockFetch
-  .mockResolvedValueOnce({ id: 1, name: 'Alice' })
-  .mockRejectedValueOnce(new Error('Not found'));
-
-expect(await mockFetch(1)).toEqual({ id: 1, name: 'Alice' });
-await expect(mockFetch(999)).rejects.toThrow('Not found');
-```
-
-### mockImplementation
-
-```typescript
-// Implementation complete
-const mockCalculate = vi.fn().mockImplementation((a: number, b: number) => {
-  return a * b + 10; // logique simplifiee pour le test
-});
-
-expect(mockCalculate(3, 4)).toBe(22);
-
-// Implementation differente par appel
-const mockFetch = vi.fn()
-  .mockImplementationOnce(async (id: number) => {
-    if (id === 1) return { id: 1, name: 'Alice' };
-    throw new Error('Not found');
-  })
-  .mockImplementationOnce(async () => {
-    throw new Error('Server down');
-  });
-```
-
-### Inspecter les appels
-
-```typescript
-const mockFn = vi.fn();
-mockFn('a', 1);
-mockFn('b', 2);
-mockFn('c', 3);
-
-// .mock.calls — tableau de tous les appels (chaque appel = tableau d'arguments)
-expect(mockFn.mock.calls).toEqual([
-  ['a', 1],
-  ['b', 2],
-  ['c', 3],
-]);
-
-// .mock.calls[0] — arguments du premier appel
-expect(mockFn.mock.calls[0]).toEqual(['a', 1]);
-
-// .mock.results — tableau des resultats
-const mockAdd = vi.fn((a: number, b: number) => a + b);
-mockAdd(1, 2);
-mockAdd(3, 4);
-expect(mockAdd.mock.results).toEqual([
-  { type: 'return', value: 3 },
-  { type: 'return', value: 7 },
-]);
-
-// .mock.lastCall — dernier appel
-expect(mockFn.mock.lastCall).toEqual(['c', 3]);
-```
-
-### Reinitialiser les mocks
-
-```typescript
-const mockFn = vi.fn().mockReturnValue(42);
-mockFn();
-
-// mockClear — efface l'historique des appels, garde l'implementation
-mockFn.mockClear();
-expect(mockFn).not.toHaveBeenCalled();
-expect(mockFn()).toBe(42); // implementation preservee
-
-// mockReset — efface tout (appels + implementation)
-mockFn.mockReset();
-expect(mockFn()).toBeUndefined(); // plus d'implementation
-
-// mockRestore — restaure l'implementation originale (utile avec spyOn)
-// Voir section vi.spyOn ci-dessous
-
-// Global : dans afterEach
-afterEach(() => {
-  vi.restoreAllMocks(); // restaure tous les mocks/spies
-});
-```
-
----
-
-## vi.spyOn() — espionner des méthodes
-
-### Espionner sans modifier
-
-```typescript
-import { describe, it, expect, vi, afterEach } from 'vitest';
-
-const calculator = {
-  add(a: number, b: number): number {
-    return a + b;
-  },
-  multiply(a: number, b: number): number {
-    return a * b;
-  },
-};
-
-describe('Calculator spy', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('should track calls to add', () => {
-    const spy = vi.spyOn(calculator, 'add');
-
-    const result = calculator.add(2, 3);
-
-    // Le comportement original est preserve
-    expect(result).toBe(5);
-
-    // Mais on peut verifier les appels
-    expect(spy).toHaveBeenCalledWith(2, 3);
-    expect(spy).toHaveBeenCalledTimes(1);
-  });
-});
-```
-
-### Espionner et remplacer
-
-```typescript
-it('should override the implementation', () => {
-  const spy = vi.spyOn(calculator, 'multiply').mockReturnValue(999);
-
-  const result = calculator.multiply(2, 3);
-
-  expect(result).toBe(999); // valeur mockee
-  expect(spy).toHaveBeenCalledWith(2, 3);
-});
-```
-
-### Espionner console, Math, Date
-
-```typescript
-describe('console spy', () => {
-  it('should spy on console.error', () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    logError('Something went wrong');
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Something went wrong')
-    );
-  });
-});
-
-describe('Math spy', () => {
-  it('should control Math.random', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.42);
-
-    const result = generateId(); // utilise Math.random() internement
-    expect(result).toBe('42'); // deterministe
-  });
-});
-```
-
-### Espionner des getters et setters
-
-```typescript
-const config = {
-  _theme: 'light' as string,
-  get theme(): string {
-    return this._theme;
-  },
-  set theme(value: string) {
-    this._theme = value;
-  },
-};
-
-it('should spy on getter', () => {
-  const spy = vi.spyOn(config, 'theme', 'get').mockReturnValue('dark');
-  expect(config.theme).toBe('dark');
-  expect(spy).toHaveBeenCalled();
-});
-
-it('should spy on setter', () => {
-  const spy = vi.spyOn(config, 'theme', 'set');
-  config.theme = 'dark';
-  expect(spy).toHaveBeenCalledWith('dark');
-});
-```
-
----
-
-## vi.mock() — mocker des modules
-
-### Auto-mocking
-
-```typescript
-// vi.mock remplace TOUT le module par des vi.fn()
-vi.mock('./user-repository');
-
-import { UserRepository } from './user-repository';
-// Toutes les fonctions exportees sont des vi.fn()
-
-it('should call repository', () => {
-  const repo = new UserRepository();
-  // repo.findById est un vi.fn() — retourne undefined par defaut
-
-  // On peut configurer le retour
-  vi.mocked(repo.findById).mockResolvedValue({ id: 1, name: 'Alice' });
-
-  // ...
-});
-```
-
-### Mock avec factory
-
-```typescript
-// Fournir une implementation mock
-vi.mock('./email-service', () => ({
-  sendEmail: vi.fn().mockResolvedValue({ messageId: 'abc-123' }),
-  sendBulkEmails: vi.fn().mockResolvedValue({ sent: 5, failed: 0 }),
-}));
-
-import { sendEmail, sendBulkEmails } from './email-service';
-
-describe('OrderService', () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('should send confirmation email after order', async () => {
-    const orderService = new OrderService();
-    await orderService.placeOrder({ item: 'Book', qty: 1 });
-
-    expect(sendEmail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: expect.any(String),
-        subject: expect.stringContaining('Confirmation'),
-      })
-    );
-  });
-});
-```
-
-### Mock de module par defaut (default export)
-
-```typescript
-// src/services/analytics.ts
-export default class Analytics {
-  track(event: string, data: Record<string, unknown>): void { /* ... */ }
-  identify(userId: string): void { /* ... */ }
-}
-
-// Dans le test
-vi.mock('./services/analytics', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    track: vi.fn(),
-    identify: vi.fn(),
-  })),
-}));
-
-import Analytics from './services/analytics';
-
-it('should track order event', () => {
-  const analytics = new Analytics();
-  const service = new OrderService(analytics);
-
-  service.placeOrder({ item: 'Book' });
-
-  expect(analytics.track).toHaveBeenCalledWith('order_placed', { item: 'Book' });
-});
-```
-
----
-
-## vi.hoisted() — hoisting des variables mock
-
-`vi.mock()` est hisse (hoisted) en haut du fichier par Vitest. Cela pose un problème si la factory utilise des variables :
-
-```typescript
-// PROBLEME : mockFn n'est pas encore defini quand vi.mock est hisse
-const mockFn = vi.fn();
-
-vi.mock('./module', () => ({
-  doSomething: mockFn, // ReferenceError !
-}));
-```
-
-Solution avec `vi.hoisted()` :
-
-```typescript
-// vi.hoisted() est AUSSI hisse, mais AVANT vi.mock
-const { mockDoSomething } = vi.hoisted(() => ({
-  mockDoSomething: vi.fn(),
-}));
-
-vi.mock('./module', () => ({
-  doSomething: mockDoSomething,
-}));
-
-import { doSomething } from './module';
-// doSomething === mockDoSomething
-
-it('should call doSomething', () => {
-  mockDoSomething.mockReturnValue(42);
-  expect(doSomething()).toBe(42);
-});
-```
-
-### Ordre d'exécution réel
-
-```typescript
-// Ce que vous ecrivez :
-import { foo } from './foo';
-const { mockBar } = vi.hoisted(() => ({ mockBar: vi.fn() }));
-vi.mock('./bar', () => ({ bar: mockBar }));
-import { bar } from './bar';
-
-// Ce que Vitest execute reellement :
-// 1. vi.hoisted(() => ({ mockBar: vi.fn() }))  — declare mockBar
-// 2. vi.mock('./bar', () => ({ bar: mockBar })) — enregistre le mock
-// 3. import { foo } from './foo'                — charge foo (reel)
-// 4. import { bar } from './bar'                — charge bar (mock)
-```
-
----
-
-## Mocking partiel
-
-Parfois on veut mocker UNE fonction d'un module et garder le reste réel :
-
-```typescript
-// src/utils/math.ts
-export function add(a: number, b: number): number { return a + b; }
-export function multiply(a: number, b: number): number { return a * b; }
-export function complexCalculation(x: number): number {
-  return multiply(add(x, 10), 2); // utilise add et multiply
+// Difficile à tester : dépendances importées en dur
+import { db } from './db';
+import { sendEmail } from './email';
+export async function invite(email: string) { /* utilise db, sendEmail */ }
+
+// Testable : dépendances injectées
+export class InvitationService {
+  constructor(private repo: InvitationRepo, private notifier: Notifier) {}
 }
 ```
 
+La DI est le levier #1 de testabilité : elle transforme un mock-de-module (fragile) en simple objet passé en argument.
+
+### API Vitest des mock functions — `vi.fn()`
+
+`vi.fn()` crée une fonction-mock qui enregistre ses appels et dont on pilote le retour.
+
 ```typescript
-// Mock partiel : seulement multiply
+import { vi, expect } from 'vitest';
+
+const fn = vi.fn();
+fn('a'); fn('b', 2);
+
+expect(fn).toHaveBeenCalled();
+expect(fn).toHaveBeenCalledTimes(2);
+expect(fn).toHaveBeenCalledWith('b', 2);
+expect(fn).toHaveBeenLastCalledWith('b', 2);
+expect(fn).toHaveBeenNthCalledWith(1, 'a');
+
+// Inspection brute
+fn.mock.calls;     // [['a'], ['b', 2]]
+fn.mock.lastCall;  // ['b', 2]
+fn.mock.results;   // [{ type: 'return', value: undefined }, ...]
+```
+
+Piloter le retour :
+
+```typescript
+vi.fn().mockReturnValue(42);              // sync, toujours 42
+vi.fn().mockReturnValueOnce(1).mockReturnValue(0); // séquence puis fallback
+vi.fn().mockResolvedValue({ id: '1' });   // async résolu
+vi.fn().mockRejectedValue(new Error('x')); // async rejeté
+vi.fn().mockImplementation((a, b) => a + b); // logique custom
+```
+
+Réinitialisation (sémantiques distinctes — piège fréquent) :
+
+- `mockClear()` : efface l'historique des appels, **garde** l'implémentation.
+- `mockReset()` : efface appels **+** implémentation (retour `undefined`).
+- `mockRestore()` : restaure l'implémentation **originale** (utile uniquement avec `vi.spyOn`).
+- Globaux : `vi.clearAllMocks()`, `vi.resetAllMocks()`, `vi.restoreAllMocks()` (typiquement dans `afterEach`).
+
+### Espionner une méthode existante — `vi.spyOn()`
+
+`vi.spyOn(obj, 'method')` enveloppe une méthode existante : par défaut le **vrai** code s'exécute et on observe les appels (spy pur). Chaîner `.mockReturnValue/.mockImplementation` pour remplacer (mock).
+
+```typescript
+const spy = vi.spyOn(calc, 'add');          // comportement réel préservé
+calc.add(2, 3);                             // renvoie 5 réellement
+expect(spy).toHaveBeenCalledWith(2, 3);
+
+vi.spyOn(calc, 'mul').mockReturnValue(999); // ici on remplace
+vi.spyOn(console, 'error').mockImplementation(() => {}); // museler un effet de bord
+vi.spyOn(Math, 'random').mockReturnValue(0.42);          // déterminisme
+vi.spyOn(obj, 'prop', 'get').mockReturnValue('x');       // getter
+```
+
+Toujours rétablir : `afterEach(() => vi.restoreAllMocks())`, sinon le spy fuit sur les autres tests.
+
+### Mocker un module entier — `vi.mock()`
+
+Quand la dépendance est `import`ée en dur (pas injectable), `vi.mock(path)` remplace le module.
+
+```typescript
+// Auto-mock : toutes les exports deviennent des vi.fn()
+vi.mock('./email');
+import { sendEmail } from './email';
+vi.mocked(sendEmail).mockResolvedValue(undefined);
+
+// Factory : on fournit l'implémentation
+vi.mock('./email', () => ({
+  sendEmail: vi.fn().mockResolvedValue({ messageId: 'abc' }),
+}));
+```
+
+`vi.mock` est **hoisté** (remonté) en haut du fichier par Vitest, avant les `import`. Conséquence : la factory ne peut pas référencer une variable déclarée plus bas — elle n'existe pas encore.
+
+### Hoisting des variables de mock — `vi.hoisted()`
+
+```typescript
+// PROBLÈME : mockSend est hoisté APRÈS sa lecture par vi.mock
+const mockSend = vi.fn();
+vi.mock('./email', () => ({ sendEmail: mockSend })); // ReferenceError
+
+// SOLUTION : vi.hoisted remonte AUSSI, mais avant vi.mock
+const { mockSend } = vi.hoisted(() => ({ mockSend: vi.fn() }));
+vi.mock('./email', () => ({ sendEmail: mockSend }));
+```
+
+Ordre réel exécuté par Vitest : `vi.hoisted` → `vi.mock` → `import`.
+
+### Mock partiel — garder le reste réel
+
+```typescript
 vi.mock('./utils/math', async (importOriginal) => {
-  const original = await importOriginal<typeof import('./utils/math')>();
-  return {
-    ...original,                              // garder add et complexCalculation
-    multiply: vi.fn().mockReturnValue(100),   // mocker multiply
-  };
-});
-
-import { add, multiply, complexCalculation } from './utils/math';
-
-it('add should still work normally', () => {
-  expect(add(2, 3)).toBe(5); // implementation reelle
-});
-
-it('multiply is mocked', () => {
-  expect(multiply(2, 3)).toBe(100); // valeur mockee
+  const actual = await importOriginal<typeof import('./utils/math')>();
+  return { ...actual, multiply: vi.fn().mockReturnValue(100) };
 });
 ```
 
----
+`add` reste réel, seul `multiply` est mocké.
 
-## Timer mocking
+### Fake timers et fake date
 
-### vi.useFakeTimers / vi.useRealTimers
+Pour du code dépendant du temps (debounce, retry, `Date.now()`), on remplace l'horloge :
 
 ```typescript
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
-function debounce<T extends (...args: unknown[]) => void>(
-  fn: T,
-  delay: number
-): (...args: Parameters<T>) => void {
-  let timeoutId: ReturnType<typeof setTimeout>;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => fn(...args), delay);
-  };
-}
-
-describe('debounce', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('should not call function before delay', () => {
-    const fn = vi.fn();
-    const debounced = debounce(fn, 300);
-
-    debounced();
-
-    // 299ms plus tard
-    vi.advanceTimersByTime(299);
-    expect(fn).not.toHaveBeenCalled();
-  });
-
-  it('should call function after delay', () => {
-    const fn = vi.fn();
-    const debounced = debounce(fn, 300);
-
-    debounced();
-
-    vi.advanceTimersByTime(300);
-    expect(fn).toHaveBeenCalledOnce();
-  });
-
-  it('should reset timer on subsequent calls', () => {
-    const fn = vi.fn();
-    const debounced = debounce(fn, 300);
-
-    debounced();
-    vi.advanceTimersByTime(200);
-    debounced(); // reset le timer
-    vi.advanceTimersByTime(200);
-
-    expect(fn).not.toHaveBeenCalled(); // seulement 200ms depuis le dernier appel
-
-    vi.advanceTimersByTime(100);
-    expect(fn).toHaveBeenCalledOnce();
-  });
-
-  it('should pass arguments to the original function', () => {
-    const fn = vi.fn();
-    const debounced = debounce(fn, 100);
-
-    debounced('hello', 42);
-    vi.advanceTimersByTime(100);
-
-    expect(fn).toHaveBeenCalledWith('hello', 42);
-  });
-});
+vi.useFakeTimers();
+vi.setSystemTime(new Date('2026-06-30T12:00:00Z')); // fige l'heure
+vi.advanceTimersByTime(300);   // avance de N ms → déclenche les timers dus
+vi.advanceTimersToNextTimer(); // saute au prochain timer
+vi.runAllTimers();             // vide la file
+vi.getTimerCount();            // timers en attente
+vi.useRealTimers();            // TOUJOURS restaurer en afterEach
 ```
 
-### Autres méthodes de controle des timers
+### Mocker un global — `vi.stubGlobal()`
 
 ```typescript
-describe('Timer control methods', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('advanceTimersByTime — avance de N ms', () => {
-    const fn = vi.fn();
-    setTimeout(fn, 1000);
-
-    vi.advanceTimersByTime(500);
-    expect(fn).not.toHaveBeenCalled();
-
-    vi.advanceTimersByTime(500);
-    expect(fn).toHaveBeenCalledOnce();
-  });
-
-  it('advanceTimersToNextTimer — saute au prochain timer', () => {
-    const fn1 = vi.fn();
-    const fn2 = vi.fn();
-
-    setTimeout(fn1, 100);
-    setTimeout(fn2, 200);
-
-    vi.advanceTimersToNextTimer();
-    expect(fn1).toHaveBeenCalled();
-    expect(fn2).not.toHaveBeenCalled();
-
-    vi.advanceTimersToNextTimer();
-    expect(fn2).toHaveBeenCalled();
-  });
-
-  it('runAllTimers — execute tous les timers en attente', () => {
-    const fn1 = vi.fn();
-    const fn2 = vi.fn();
-    const fn3 = vi.fn();
-
-    setTimeout(fn1, 100);
-    setTimeout(fn2, 500);
-    setTimeout(fn3, 1000);
-
-    vi.runAllTimers();
-
-    expect(fn1).toHaveBeenCalled();
-    expect(fn2).toHaveBeenCalled();
-    expect(fn3).toHaveBeenCalled();
-  });
-
-  it('getTimerCount — nombre de timers en attente', () => {
-    setTimeout(() => {}, 100);
-    setTimeout(() => {}, 200);
-    setInterval(() => {}, 300);
-
-    expect(vi.getTimerCount()).toBe(3);
-
-    vi.advanceTimersByTime(100);
-    expect(vi.getTimerCount()).toBe(2); // le premier setTimeout a fire
-  });
-});
+const fetchMock = vi.fn();
+vi.stubGlobal('fetch', fetchMock);
+// vi.unstubAllGlobals() pour rétablir
 ```
 
----
+### Quand mocker / quand ne pas
 
-## Date mocking
+- **Mocker** : I/O externe (réseau, DB, fichiers), non-déterminisme (`Date`, `Math.random`, crypto), lenteur, effets de bord (email, paiement).
+- **Ne PAS mocker** : logique pure (calculs, validation, transformations), utils internes simples, DTO/POJO. Mocker le cœur de la logique métier vide le test de sens.
 
-### vi.setSystemTime
+## 3. Worked examples
 
-```typescript
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+### Exemple A — spy + stub injectés via DI (notre cas TribuZen)
 
-function formatRelativeTime(date: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMinutes = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMinutes < 1) return 'just now';
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${diffDays}d ago`;
-}
-
-describe('formatRelativeTime', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2025-06-15T12:00:00Z'));
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('should return "just now" for recent dates', () => {
-    const date = new Date('2025-06-15T11:59:45Z'); // 15 secondes avant
-    expect(formatRelativeTime(date)).toBe('just now');
-  });
-
-  it('should return minutes ago', () => {
-    const date = new Date('2025-06-15T11:30:00Z'); // 30 minutes avant
-    expect(formatRelativeTime(date)).toBe('30m ago');
-  });
-
-  it('should return hours ago', () => {
-    const date = new Date('2025-06-15T09:00:00Z'); // 3 heures avant
-    expect(formatRelativeTime(date)).toBe('3h ago');
-  });
-
-  it('should return days ago', () => {
-    const date = new Date('2025-06-12T12:00:00Z'); // 3 jours avant
-    expect(formatRelativeTime(date)).toBe('3d ago');
-  });
-});
-```
-
-### Tester du code qui depend de la date courante
+Objectif : prouver que `invite()` persiste l'invitation puis envoie **une seule** notification, et qu'un doublon lève `ALREADY_INVITED`. Aucune base, aucun email réel : on injecte un **stub** repo et un **spy** notifier.
 
 ```typescript
-function isWeekend(): boolean {
-  const day = new Date().getDay();
-  return day === 0 || day === 6;
-}
-
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
-}
-
-describe('Date-dependent functions', () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('isWeekend returns true on Saturday', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2025-06-14T10:00:00Z')); // samedi
-    expect(isWeekend()).toBe(true);
-  });
-
-  it('isWeekend returns false on Monday', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2025-06-16T10:00:00Z')); // lundi
-    expect(isWeekend()).toBe(false);
-  });
-
-  it.each([
-    ['2025-06-15T08:00:00Z', 'Good morning'],
-    ['2025-06-15T14:00:00Z', 'Good afternoon'],
-    ['2025-06-15T20:00:00Z', 'Good evening'],
-  ])('at %s should greet "%s"', (dateStr, expected) => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(dateStr));
-    expect(getGreeting()).toBe(expected);
-  });
-});
-```
-
----
-
-## Exemple complet : mocker fetch
-
-```typescript
-// src/services/api-client.ts
-interface ApiResponse<T> {
-  data: T;
-  status: number;
-}
-
-export async function fetchJSON<T>(url: string): Promise<ApiResponse<T>> {
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  return { data: data as T, status: response.status };
-}
-```
-
-```typescript
-// src/services/api-client.test.ts
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchJSON } from './api-client';
-
-// Mock global fetch
-const mockFetch = vi.fn();
-vi.stubGlobal('fetch', mockFetch);
-
-describe('fetchJSON', () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('should return parsed JSON data on success', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ id: 1, name: 'Alice' }),
-    });
-
-    const result = await fetchJSON<{ id: number; name: string }>('/api/users/1');
-
-    expect(result).toEqual({
-      data: { id: 1, name: 'Alice' },
-      status: 200,
-    });
-    expect(mockFetch).toHaveBeenCalledWith('/api/users/1');
-  });
-
-  it('should throw on HTTP error', async () => {
-    mockFetch.mockResolvedValue({
-      ok: false,
-      status: 404,
-      statusText: 'Not Found',
-    });
-
-    await expect(fetchJSON('/api/users/999')).rejects.toThrow('HTTP 404: Not Found');
-  });
-
-  it('should throw on network error', async () => {
-    mockFetch.mockRejectedValue(new TypeError('Failed to fetch'));
-
-    await expect(fetchJSON('/api/users/1')).rejects.toThrow('Failed to fetch');
-  });
-});
-```
-
----
-
-## Exemple complet : mocker un module de base de donnees
-
-```typescript
-// src/repositories/user-repository.ts
-import { db } from '../database/connection';
-
-export interface User {
-  id: number;
-  name: string;
-  email: string;
-  createdAt: Date;
-}
-
-export async function findUserById(id: number): Promise<User | null> {
-  const row = await db.query('SELECT * FROM users WHERE id = $1', [id]);
-  return row.rows[0] ?? null;
-}
-
-export async function createUser(name: string, email: string): Promise<User> {
-  const result = await db.query(
-    'INSERT INTO users (name, email, created_at) VALUES ($1, $2, NOW()) RETURNING *',
-    [name, email]
-  );
-  return result.rows[0];
-}
-```
-
-```typescript
-// src/repositories/user-repository.test.ts
+// src/invitation/invitation-service.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { InvitationService, type InvitationRepo, type Notifier } from './invitation-service';
 
-// Mock le module database
-const { mockQuery } = vi.hoisted(() => ({
-  mockQuery: vi.fn(),
-}));
+describe('InvitationService.invite', () => {
+  let repo: InvitationRepo;
+  let notifier: Notifier;
+  let service: InvitationService;
 
-vi.mock('../database/connection', () => ({
-  db: {
-    query: mockQuery,
-  },
-}));
-
-import { findUserById, createUser } from './user-repository';
-
-describe('UserRepository', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // STUB : réponses figées, on contrôle les ENTRÉES du service
+    repo = {
+      existsPending: vi.fn().mockResolvedValue(false),
+      save: vi.fn().mockResolvedValue({ id: 'inv-1' }),
+    };
+    // SPY/MOCK : on vérifiera COMMENT il est appelé
+    notifier = { sendInvitationEmail: vi.fn().mockResolvedValue(undefined) };
+    service = new InvitationService(repo, notifier);
   });
 
-  describe('findUserById', () => {
-    it('should return user when found', async () => {
-      const mockUser = { id: 1, name: 'Alice', email: 'alice@test.com', createdAt: new Date() };
-      mockQuery.mockResolvedValue({ rows: [mockUser] });
+  it('persiste puis notifie exactement une fois', async () => {
+    const result = await service.invite('fam-1', 'bob@tribu.fr');
 
-      const user = await findUserById(1);
-
-      expect(user).toEqual(mockUser);
-      expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT * FROM users WHERE id = $1',
-        [1]
-      );
-    });
-
-    it('should return null when not found', async () => {
-      mockQuery.mockResolvedValue({ rows: [] });
-
-      const user = await findUserById(999);
-
-      expect(user).toBeNull();
-    });
+    expect(result).toEqual({ id: 'inv-1' });                       // state verification (stub)
+    expect(repo.save).toHaveBeenCalledWith('fam-1', 'bob@tribu.fr');
+    // behavior verification (mock) : protocole de la notif
+    expect(notifier.sendInvitationEmail).toHaveBeenCalledOnce();
+    expect(notifier.sendInvitationEmail).toHaveBeenCalledWith('bob@tribu.fr', 'fam-1');
   });
 
-  describe('createUser', () => {
-    it('should insert and return the new user', async () => {
-      const newUser = { id: 42, name: 'Bob', email: 'bob@test.com', createdAt: new Date() };
-      mockQuery.mockResolvedValue({ rows: [newUser] });
+  it('rejette un doublon SANS notifier ni persister', async () => {
+    // on REconfigure le stub pour ce cas : email déjà invité
+    vi.mocked(repo.existsPending).mockResolvedValue(true);
 
-      const user = await createUser('Bob', 'bob@test.com');
+    await expect(service.invite('fam-1', 'bob@tribu.fr')).rejects.toThrow('ALREADY_INVITED');
 
-      expect(user).toEqual(newUser);
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO users'),
-        ['Bob', 'bob@test.com']
-      );
-    });
+    expect(repo.save).not.toHaveBeenCalled();
+    expect(notifier.sendInvitationEmail).not.toHaveBeenCalled();
   });
 });
 ```
 
----
+Pas-à-pas : (1) `beforeEach` reconstruit des doubles frais → isolation entre tests ; (2) `existsPending` est un **stub** qui pilote la branche prise ; (3) on assert sur le **résultat** (stub) ET sur les **appels** (mock) ; (4) le cas doublon prouve l'absence d'effet de bord via `not.toHaveBeenCalled()`. Zéro `vi.mock` : la DI a suffi.
 
-## Quand mocker vs utiliser les vrais composants
+### Exemple B — mocker un module + fake timers (fading)
 
-### Mocker quand :
-
-1. **I/O externe** : réseau, base de donnees, système de fichiers
-2. **Non-determinisme** : Date.now(), Math.random(), crypto
-3. **Lenteur** : appels API, timers longs
-4. **Effets de bord** : envoi d'email, paiement, logs
-
-### Ne PAS mocker quand :
-
-1. **Logique pure** : calculs, transformations, validations
-2. **Modules internes simples** : utils, helpers
-3. **Types de donnees** : classes POJO, DTO
+Variante plus dure : un `ReminderService` importe en dur un module `./email` (pas injectable) et programme un rappel d'invitation après 24 h via `setTimeout`. On mocke le module avec `vi.hoisted` + `vi.mock`, et on contrôle le temps.
 
 ```typescript
-// MAUVAIS : mocker ce qui devrait etre teste directement
-vi.mock('./price-calculator'); // Pourquoi mocker le coeur de la logique ?
-
-// BON : tester la logique pure sans mock
-import { calculatePrice } from './price-calculator';
-
-it('should calculate discounted price', () => {
-  expect(calculatePrice(100, { discount: 0.2 })).toBe(80);
-});
+// src/invitation/reminder-service.ts
+import { sendEmail } from './email';
+export function scheduleReminder(email: string, delayMs: number) {
+  setTimeout(() => { void sendEmail(email, 'Rappel : invitation en attente'); }, delayMs);
+}
 ```
-
----
-
-## Anti-pattern : over-mocking
 
 ```typescript
-// MAUVAIS : tout est mocke, le test ne verifie rien de reel
-vi.mock('./validator');
-vi.mock('./formatter');
-vi.mock('./repository');
-vi.mock('./emailer');
-vi.mock('./logger');
+// src/invitation/reminder-service.test.ts
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-it('should create order', async () => {
-  vi.mocked(validator.validate).mockReturnValue(true);
-  vi.mocked(formatter.format).mockReturnValue('formatted');
-  vi.mocked(repository.save).mockResolvedValue({ id: 1 });
-  vi.mocked(emailer.send).mockResolvedValue(undefined);
+// 1. hoisted : la variable existe AVANT vi.mock (lui-même hoisté)
+const { sendEmailMock } = vi.hoisted(() => ({ sendEmailMock: vi.fn() }));
+// 2. mock du module : sendEmail === sendEmailMock
+vi.mock('./email', () => ({ sendEmail: sendEmailMock }));
 
-  await createOrder(data);
+import { scheduleReminder } from './reminder-service';
 
-  // On teste juste que les mocks sont appeles dans le bon ordre
-  // Mais on ne teste PAS le comportement reel !
-  expect(validator.validate).toHaveBeenCalled();
-  expect(repository.save).toHaveBeenCalled();
-  expect(emailer.send).toHaveBeenCalled();
-});
+describe('scheduleReminder', () => {
+  beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks(); });
+  afterEach(() => { vi.useRealTimers(); });
 
-// BON : ne mocker que l'infrastructure, garder la logique reelle
-vi.mock('./repository');   // I/O
-vi.mock('./emailer');      // I/O
-
-it('should create order with correct total', async () => {
-  vi.mocked(repository.save).mockResolvedValue({ id: 1 });
-  vi.mocked(emailer.send).mockResolvedValue(undefined);
-
-  const order = await createOrder({
-    items: [{ price: 100, qty: 2 }, { price: 50, qty: 1 }],
-    discount: 0.1,
+  it("n'envoie rien avant l'échéance", () => {
+    scheduleReminder('bob@tribu.fr', 24 * 3600_000);
+    vi.advanceTimersByTime(23 * 3600_000); // 23 h
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
-  // On verifie la LOGIQUE reelle (calcul du total)
-  expect(repository.save).toHaveBeenCalledWith(
-    expect.objectContaining({ total: 225 }) // (200 + 50) * 0.9
-  );
+  it('envoie le rappel à 24 h', () => {
+    scheduleReminder('bob@tribu.fr', 24 * 3600_000);
+    vi.advanceTimersByTime(24 * 3600_000); // 24 h
+    expect(sendEmailMock).toHaveBeenCalledWith('bob@tribu.fr', 'Rappel : invitation en attente');
+  });
 });
 ```
 
----
+Pas-à-pas : (1) `vi.hoisted` résout le piège du hoisting ; (2) `vi.mock` neutralise l'envoi réel ; (3) `useFakeTimers` rend le test instantané et déterministe ; (4) on prouve les deux frontières temporelles (avant/après échéance) sans attendre 24 h.
 
-## L'injection de dépendances comme alternative
+## 4. Pièges & misconceptions
 
-Au lieu de mocker des modules avec `vi.mock()`, on peut injecter les dépendances :
+- **Sur-mock (over-mocking).** Tout mocker (validator, formatter, repo, emailer, logger) → le test ne vérifie plus que « les mocks s'appellent », pas le comportement réel. *Correct* : ne mocker que l'**infrastructure** (I/O), garder la logique métier réelle et asserter dessus (ex. le total calculé passé à `save`).
+- **Tester l'implémentation au lieu du comportement.** Asserter sur des détails internes (« la méthode privée `_format` a été appelée ») couple le test au code ; un refactor sans changement de comportement casse le test. *Correct* : asserter sur les **sorties observables** et les **interactions de bord** (ce qui est persisté, envoyé, retourné). Les `toHaveBeenCalledWith` sur les **collaborateurs externes** (`notifier`) sont légitimes ; sur les **détails internes**, non.
+- **Mocker ce qu'on ne possède pas (« don't mock what you don't own »).** Mocker directement `fetch`, le SDK Stripe ou le client `pg` rend le test fragile : si l'API tierce change, le mock ment et le test reste vert. *Correct* : envelopper le tiers dans un **adapter** que tu possèdes (`Notifier`, `PaymentGateway`) et mocker **ton** interface ; tester l'intégration réelle du tiers à part (contract test / MSW).
+- **Oublier de réinitialiser les mocks.** Sans `clearAllMocks`/`restoreAllMocks` en `afterEach`, l'historique d'appels et les `spyOn` fuient → tests qui passent/échouent selon l'ordre d'exécution. *Correct* : reset systématique, et `useRealTimers()` après tout `useFakeTimers()`.
+- **Confondre `mockReset` et `mockClear`.** `mockReset` efface aussi l'implémentation → la fonction renvoie `undefined` et casse les tests suivants qui supposaient un retour. *Correct* : `mockClear` si tu veux garder le retour configuré, `mockReset` seulement pour repartir de zéro.
+- **Stub là où il faut un mock (et l'inverse).** Vérifier l'envoi d'email via l'état final (impossible) au lieu d'un mock d'appel ; ou imposer un protocole d'appel strict sur une pure source de données (stub suffirait) → test rigide. *Correct* : mock = vérifier une **interaction** attendue ; stub = juste **fournir** une donnée d'entrée.
 
-```typescript
-// SANS injection (difficile a tester)
-import { db } from './database';
-import { sendEmail } from './email-service';
+## 5. Ancrage TribuZen
 
-export async function registerUser(name: string, email: string): Promise<User> {
-  const user = await db.insert('users', { name, email });
-  await sendEmail(email, 'Welcome!');
-  return user;
-}
+Couche fil-rouge : **tests logique domaine (invitation, RBAC) — Vitest réel** (`smaurier/tribuzen`). Le module se branche directement sur le produit :
 
-// AVEC injection (facile a tester)
-interface Dependencies {
-  db: Database;
-  emailService: EmailService;
-}
+- `InvitationService` ci-dessus = la vraie logique d'invitation famille. En session, on écrit `invitation-service.test.ts` dans le repo TribuZen avec un **stub repo** + **spy notifier** injectés (DI), sans Postgres ni email réel.
+- RBAC : `can(user, 'post:delete', resource)` se teste avec un **stub** de rôles et des assertions d'état (autorisé/refusé) — pas de mock, logique pure.
+- Le `Notifier` est l'**adapter qu'on possède** : on mocke `Notifier`, jamais le SDK email directement (piège « mock what you don't own »).
+- L'envoi réel d'email et la vraie persistance Prisma seront couverts plus tard en tests d'intégration (module 09) et MSW (module 08) — ici on reste sur la **logique**.
 
-export function createRegistrationService(deps: Dependencies) {
-  return {
-    async registerUser(name: string, email: string): Promise<User> {
-      const user = await deps.db.insert('users', { name, email });
-      await deps.emailService.send(email, 'Welcome!');
-      return user;
-    },
-  };
-}
+## 6. Points clés
 
-// Dans le test : pas besoin de vi.mock()
-it('should register user and send email', async () => {
-  const mockDb = { insert: vi.fn().mockResolvedValue({ id: 1, name: 'Alice', email: 'alice@test.com' }) };
-  const mockEmail = { send: vi.fn().mockResolvedValue(undefined) };
+1. Un test double remplace une dépendance ; 5 types selon comportement + ce qu'on vérifie : dummy, stub, spy, mock, fake.
+2. Stub = state verification (assert sur l'état) ; mock = behavior verification (assert sur les appels) ; spy = mock qui garde le vrai comportement.
+3. L'injection de dépendances rend le code testable sans mock de module : on passe les doubles en argument.
+4. `vi.fn()` enregistre les appels (`mock.calls`) et pilote le retour (`mockReturnValue`/`mockResolvedValue`/`mockImplementation`).
+5. `vi.spyOn` enveloppe une méthode réelle (spy), `.mockReturnValue` la remplace (mock) ; restaurer avec `restoreAllMocks`.
+6. `vi.mock` est hoisté : utiliser `vi.hoisted` pour les variables, `importOriginal` pour un mock partiel.
+7. Fake timers (`useFakeTimers`/`advanceTimersByTime`/`setSystemTime`) rendent le code temporel déterministe et instantané.
+8. Pièges majeurs : sur-mock, tester l'implémentation, mocker ce qu'on ne possède pas, oublier le reset, confondre `mockReset`/`mockClear`.
 
-  const service = createRegistrationService({
-    db: mockDb as unknown as Database,
-    emailService: mockEmail as unknown as EmailService,
-  });
+## 7. Seeds Anki
 
-  const user = await service.registerUser('Alice', 'alice@test.com');
-
-  expect(user.name).toBe('Alice');
-  expect(mockEmail.send).toHaveBeenCalledWith('alice@test.com', 'Welcome!');
-});
+```
+Quels sont les 5 types de test doubles ?|Dummy, Stub, Spy, Mock, Fake
+Différence stub vs mock ?|Stub = state verification (on assert sur l'état/le résultat) ; Mock = behavior verification (on assert sur les appels eux-mêmes)
+Qu'est-ce qu'un spy en Vitest ?|Un double qui enregistre les appels tout en laissant s'exécuter le vrai comportement (vi.spyOn sans .mockImplementation)
+Pourquoi l'injection de dépendances facilite le test ?|Elle permet de substituer une dépendance par un double passé en argument, sans recourir à vi.mock au niveau module
+À quoi sert vi.hoisted() ?|À déclarer une variable de mock AVANT le hoisting de vi.mock, pour pouvoir la référencer dans la factory sans ReferenceError
+Différence mockClear vs mockReset ?|mockClear efface l'historique des appels en gardant l'implémentation ; mockReset efface appels ET implémentation (retour undefined)
+Que signifie « ne pas mocker ce qu'on ne possède pas » ?|Ne pas mocker un SDK/API tiers directement ; l'envelopper dans un adapter qu'on possède et mocker cette interface
+Anti-pattern over-mocking : pourquoi est-ce mauvais ?|En mockant aussi la logique métier, le test ne vérifie plus que « les mocks s'appellent » et plus aucun comportement réel
+Comment tester du code basé sur setTimeout sans attendre ?|vi.useFakeTimers() puis vi.advanceTimersByTime(ms), et vi.useRealTimers() en afterEach
 ```
 
-L'injection de dépendances sera approfondie dans le Module 06.
+## Pont vers le lab
 
----
-
-## Navigation
-
-| Précédent | Suivant |
-|-----------|---------|
-| [03 - Vitest fondamentaux](./03-vitest-fondamentaux) | [05 - Tests asynchrones](./05-tests-asynchrones) |
-
----
-
-## Ressources
-
-- [Quiz 04 : Testez vos connaissances](../quizzes/quiz-04-mocking.html)
-- [Lab 04 : Mocking](../labs/lab-04-mocking/)
-- Martin Fowler — [Mocks Aren't Stubs](https://martinfowler.com/articles/mocksArentStubs.html)
-- Gerard Meszaros — [Test Double](http://xunitpatterns.com/Test%20Double.html)
-- [Documentation Vitest : vi](https://vitest.dev/api/vi.html)
-- [Documentation Vitest : Mock Functions](https://vitest.dev/api/mock.html)
-
----
-
-<!-- parcours-recommande -->
-
-::: tip Parcours recommandé
-1. **Screencast** : [screencast 04 mocking](../screencasts/screencast-04-mocking.md)
-2. **Lab** : [lab-04-mocking](../labs/lab-04-mocking/README)
-3. **Visualisation** : [Stratégies de mocking](../visualizations/mocking-strategies.html)
-4. **Quiz** : [quiz 04 mocking](../quizzes/quiz-04-mocking.html)
-:::
+> Lab associé : `06-testing/labs/lab-04-mocking/`. Tu y écris, en **Vitest réel**, les doubles d'un `InvitationService` TribuZen (stub repo + spy notifier injectés), un mock de module avec `vi.hoisted`, et un test à fake timers. Corrigé complet commenté + variante J+30 dans le README du lab.
