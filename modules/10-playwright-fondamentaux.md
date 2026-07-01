@@ -1,1111 +1,473 @@
-# Module 10 — Playwright : fondamentaux
-
-| Difficulte | Duree estimee | Lab | Quiz |
-|------------|---------------|-----|------|
-| 3/5        | 90 min        | [Lab 10](../labs/lab-10-playwright-fondamentaux/) | [Quiz 10](../quizzes/quiz-10-playwright.html) |
-
-## Objectifs
-
-- Comprendre les avantages de Playwright (cross-browser, auto-wait, codegen, trace)
-- Installer et configurer un projet Playwright
-- Écrire des tests E2E avec la syntaxe `test` / `expect`
-- Maîtriser la navigation, les selecteurs et les actions
-- Utiliser les assertions spécifiques a Playwright
-- Comprendre le mécanisme d'auto-wait
-- Générer des tests avec Codegen et debugger avec Trace Viewer
-- Mettre en place les hooks de test
-
+---
+titre: Playwright fondamentaux
+cours: 06-testing
+notions: [configuration Playwright, locators et rôles accessibles getByRole getByLabel, actions click fill press, assertions web-first, auto-waiting vs sleep, isolation et fixtures page context, trace viewer et debug, intégration CI]
+outcomes: [écrire un test E2E pilotant un vrai navigateur, cibler par rôle accessible, utiliser les assertions web-first et l'auto-waiting, déboguer avec la trace]
+prerequis: [09-tests-integration]
+next: 11-playwright-avance
+libs: [{ name: "@playwright/test", version: ^1 }]
+tribuzen: test E2E du parcours d'invitation TribuZen (ouvrir le formulaire, saisir un email, valider, voir le membre apparaître)
+last-reviewed: 2026-07
 ---
 
-## Pourquoi Playwright ?
+# Playwright fondamentaux
 
-### Le paysage des outils E2E
+> **Outcomes — tu sauras FAIRE :** écrire un test E2E qui pilote un vrai navigateur, cibler les éléments par rôle accessible (`getByRole`, `getByLabel`), utiliser les assertions web-first et l'auto-waiting de Playwright, et déboguer un test en échec avec le Trace Viewer.
+> **Difficulté :** :star::star::star:
 
-| Fonctionnalite | Playwright | Cypress | Selenium |
-|----------------|-----------|---------|----------|
-| Multi-navigateur | Chromium, Firefox, WebKit | Chromium (+ Firefox beta) | Tous |
-| Auto-wait | Natif | Natif | Manuel |
-| Langage | JS/TS, Python, Java, C# | JS/TS uniquement | Multi-langage |
-| Iframes | Support natif | Limite | Support natif |
-| Multi-onglets | Oui | Non | Oui |
-| Parallelisme | Natif (workers) | Via CI splitting | Grid |
-| Trace viewer | Integre | Dashboard (payant) | Non |
-| Codegen | Oui | Non (Cypress Studio deprecie) | IDE plugins |
-| API testing | Natif (request fixture) | Via cy.request() | Non |
-| Vitesse | Très rapide | Rapide | Lent |
+## 1. Cas concret d'abord
 
-### Les avantages clés
+Dans TribuZen, le parcours d'invitation est critique : un membre saisit l'email d'un proche, valide le formulaire, et voit le nouveau membre apparaître dans sa liste de famille. Tu dois pouvoir détecter une régression sur ce flux **avant la mise en production** — pas en testant la logique isolée (module 04 a couvert ça avec Vitest), mais en pilotant un **vrai navigateur** sur l'application réelle.
 
-1. **Cross-browser** : tester sur Chromium, Firefox et WebKit avec la même syntaxe
-2. **Auto-wait** : Playwright attend automatiquement que les éléments soient prets
-3. **Codegen** : générer du code de test en enregistrant vos actions dans le navigateur
-4. **Trace Viewer** : debugger visuellement avec screenshots, DOM, réseau, console
-5. **Isolation** : chaque test s'exécuté dans un contexte de navigateur isole
-6. **API testing** : tester les API REST directement sans navigateur
+Voici le test qu'on veut écrire avant de lire la théorie :
 
----
+```ts
+import { test, expect } from '@playwright/test';
 
-## Installation
+test('parcours invitation — le membre apparaît dans la liste', async ({ page }) => {
+  await page.goto('/invitations/new');
 
-```bash
-# Creer un nouveau projet Playwright
-npm init playwright@latest
+  await page.getByLabel('Adresse email').fill('sophie@tribu.fr');
+  await page.getByRole('button', { name: /inviter/i }).click();
 
-# Ou dans un projet existant
-pnpm add -D @playwright/test
-
-# Installer les navigateurs
-npx playwright install
+  await expect(page.getByRole('listitem', { name: /sophie@tribu\.fr/i })).toBeVisible();
+});
 ```
 
-### Structure du projet
+Questions que ce test soulève : comment Playwright sait-il qu'attendre avant de chercher le `listitem` ? Que signifie `getByRole` et `getByLabel` ? Comment le projet est-il configuré pour démarrer l'app ? La théorie répond à tout ça.
 
-```
-project/
-  e2e/                        # Dossier des tests E2E
-    fixtures/                  # Fixtures personnalisees
-    pages/                     # Page Object Models
-    tests/
-      auth.spec.ts
-      products.spec.ts
-      checkout.spec.ts
-  playwright.config.ts         # Configuration
-  playwright-report/           # Rapports generes (gitignore)
-  test-results/                # Resultats (gitignore)
-```
+## 2. Théorie complète, concise
 
----
+### Configuration — `playwright.config.ts`
 
-## Configuration : `playwright.config.ts`
+`defineConfig` est le point d'entrée. Les clés essentielles :
 
-```typescript
+```ts
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  // Dossier contenant les fichiers de test
-  testDir: './e2e/tests',
-
-  // Pattern de fichiers de test
-  testMatch: '**/*.spec.ts',
-
-  // Timeout global par test (30 secondes)
+  testDir: './e2e',
   timeout: 30_000,
+  expect: { timeout: 5_000 },
 
-  // Timeout pour les expect (5 secondes)
-  expect: {
-    timeout: 5_000,
-  },
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : undefined,
 
-  // Comportement en cas de test echoue
-  retries: process.env.CI ? 2 : 0, // Retry en CI uniquement
+  reporter: [['html', { open: 'never' }], ['list']],
 
-  // Nombre de workers (parallelisme)
-  workers: process.env.CI ? 1 : undefined, // Sequential en CI, parallel en local
-
-  // Reporter
-  reporter: [
-    ['html', { open: 'never' }],   // Rapport HTML
-    ['list'],                       // Sortie console
-  ],
-
-  // Options partagees par tous les projets
   use: {
-    // URL de base de l'application
     baseURL: process.env.BASE_URL ?? 'http://localhost:3000',
-
-    // Collecter la trace en cas d'echec
-    trace: 'on-first-retry',
-
-    // Screenshot en cas d'echec
+    trace: 'on-first-retry',   // trace en cas d'échec — voir §Trace Viewer
     screenshot: 'only-on-failure',
-
-    // Video en cas d'echec
     video: 'retain-on-failure',
-
-    // Taille de la fenetre
-    viewport: { width: 1280, height: 720 },
-
-    // Locale et timezone
     locale: 'fr-FR',
-    timezoneId: 'Europe/Paris',
   },
 
-  // Projets : un par navigateur
   projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-
-    // Test mobile
-    {
-      name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-    {
-      name: 'mobile-safari',
-      use: { ...devices['iPhone 13'] },
-    },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox',  use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit',   use: { ...devices['Desktop Safari'] } },
   ],
 
-  // Demarrer le serveur de dev automatiquement
+  // Démarre l'app avant les tests, la réutilise en local
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000, // 2 minutes pour demarrer
+    timeout: 120_000,
   },
 });
 ```
 
----
+Points clés : `baseURL` permet d'écrire `page.goto('/invitations/new')` partout ; `webServer` démarre l'app automatiquement ; `retries: 2` en CI absorbe les flakiness réseaux.
 
-## Écrire un premier test
+### Locators — cibler par rôle accessible (`getByRole`, `getByLabel`)
 
-### Syntaxe de base
+Un locator est une **recette de sélection** différée : il ne cherche pas l'élément tout de suite, seulement au moment de l'action ou de l'assertion. Playwright recommande de cibler par sémantique ARIA plutôt que par CSS — les mêmes critères que les lecteurs d'écran.
 
-```typescript
-// e2e/tests/home.spec.ts
-import { test, expect } from '@playwright/test';
+**`getByRole(role, { name })`** — le locator prioritaire :
 
-test('should display the home page title', async ({ page }) => {
-  // Naviguer vers la page d'accueil
-  await page.goto('/');
-
-  // Verifier le titre de la page
-  await expect(page).toHaveTitle(/mon application/i);
-
-  // Verifier qu'un element est visible
-  await expect(page.getByRole('heading', { name: /bienvenue/i })).toBeVisible();
-});
-```
-
-### Grouper les tests avec `test.describe`
-
-```typescript
-test.describe('Page d\'accueil', () => {
-  test('should display navigation links', async ({ page }) => {
-    await page.goto('/');
-
-    await expect(page.getByRole('link', { name: /produits/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /a propos/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /contact/i })).toBeVisible();
-  });
-
-  test('should display hero section', async ({ page }) => {
-    await page.goto('/');
-
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/bienvenue/i);
-    await expect(page.getByRole('link', { name: /decouvrir/i })).toBeVisible();
-  });
-
-  test('should display footer with copyright', async ({ page }) => {
-    await page.goto('/');
-
-    await expect(page.getByRole('contentinfo')).toContainText('2025');
-  });
-});
-```
-
----
-
-## Navigation
-
-### `page.goto()`
-
-```typescript
-// Navigation absolue (utilise baseURL de la config)
-await page.goto('/');
-await page.goto('/products');
-await page.goto('/products/123');
-
-// Navigation avec URL complete
-await page.goto('https://example.com');
-
-// Options de navigation
-await page.goto('/products', {
-  waitUntil: 'domcontentloaded', // ou 'load', 'networkidle', 'commit'
-  timeout: 10_000,
-});
-```
-
-### `page.waitForURL()`
-
-```typescript
-// Attendre une redirection
-await page.getByRole('link', { name: /mon profil/i }).click();
-await page.waitForURL('/profile');
-
-// Avec un pattern glob
-await page.waitForURL('**/profile/**');
-
-// Avec une regex
-await page.waitForURL(/\/products\/\d+/);
-```
-
-### Autres méthodes de navigation
-
-```typescript
-// Recharger la page
-await page.reload();
-
-// Precedent / suivant
-await page.goBack();
-await page.goForward();
-
-// Attendre un evenement de navigation
-await Promise.all([
-  page.waitForNavigation(),
-  page.getByRole('button', { name: /soumettre/i }).click(),
-]);
-```
-
----
-
-## Selecteurs
-
-### Priorite recommandee (identique aux tests de composants)
-
-#### 1. `getByRole` — meilleur choix
-
-```typescript
-// Bouton
-page.getByRole('button', { name: /ajouter au panier/i });
+```ts
+// Bouton identifié par son texte accessible
+page.getByRole('button', { name: /inviter/i })
 
 // Lien
-page.getByRole('link', { name: /voir les details/i });
+page.getByRole('link', { name: /mes invitations/i })
 
-// Champ de saisie
-page.getByRole('textbox', { name: /rechercher/i });
+// Champ texte (role=textbox)
+page.getByRole('textbox', { name: /email/i })
 
-// Case a cocher
-page.getByRole('checkbox', { name: /se souvenir de moi/i });
+// Heading de niveau 1
+page.getByRole('heading', { level: 1 })
 
-// Menu deroulant
-page.getByRole('combobox', { name: /trier par/i });
+// Item de liste avec nom accessible
+page.getByRole('listitem', { name: /sophie@tribu\.fr/i })
 
-// Heading avec niveau
-page.getByRole('heading', { name: /produits populaires/i, level: 2 });
+// Case à cocher
+page.getByRole('checkbox', { name: /confirmer/i })
+```
+
+**`getByLabel(text)`** — pour les champs de formulaire avec `<label>` associé :
+
+```ts
+// Cible l'<input> associé au <label>Adresse email</label>
+page.getByLabel('Adresse email')
+page.getByLabel(/mot de passe/i)
+```
+
+**Atout RGAA :** cibler par `getByRole` et `getByLabel` force l'app à avoir une sémantique HTML correcte (`role`, `aria-label`, associations `for`/`id`). Un test qui passe via `getByRole` est une preuve d'accessibilité partielle — directement utile pour la certification RGAA 4.1.
+
+Autres locators, par ordre de priorité décroissante :
+
+| Locator | Usage |
+|---------|-------|
+| `getByRole` | premier choix — rôle ARIA + nom accessible |
+| `getByLabel` | champs formulaire |
+| `getByPlaceholder` | champs sans label visible |
+| `getByText` | contenu textuel visible |
+| `getByTestId` | dernier recours — `data-testid` |
+| `locator('.css')` | éviter sauf pour filtres `filter({ has })` |
+
+**Filtres et chaînage :**
+
+```ts
+// Filtrer une liste
+page.getByRole('listitem').filter({ hasText: 'sophie@tribu.fr' })
+
+// Scope : chercher dans un composant parent
+page.getByRole('region', { name: /famille/i })
+    .getByRole('button', { name: /supprimer/i })
+```
+
+### Actions — `click`, `fill`, `press`
+
+Toutes les actions attendent automatiquement que l'élément soit **attaché, visible, stable, activé et réceptif aux événements** avant d'agir (voir §Auto-waiting).
+
+```ts
+// Clic simple
+await page.getByRole('button', { name: /inviter/i }).click()
+
+// fill : vide le champ puis écrit (recommandé pour les formulaires)
+await page.getByLabel('Adresse email').fill('sophie@tribu.fr')
+
+// press : touche clavier sur un élément
+await page.getByLabel('Adresse email').press('Enter')
 
 // Navigation
-page.getByRole('navigation');
+await page.goto('/invitations/new')
 
-// Cellule de tableau
-page.getByRole('cell', { name: /129,99/i });
+// Attendre une URL après action
+await page.waitForURL('/invitations')
 ```
 
-#### 2. `getByLabel` — pour les formulaires
+### Assertions web-first — `expect(locator).toBeVisible()`
 
-```typescript
-// Input avec label explicite
-page.getByLabel('Adresse email');
-page.getByLabel(/mot de passe/i);
-page.getByLabel('Pays');
+Les assertions Playwright sont **web-first** : `expect(locator).toBeVisible()` attend activement (jusqu'à `expect.timeout`, défaut 5 s) que la condition soit vraie. Ce n'est pas un snapshot immédiat.
+
+```ts
+// Visibilité
+await expect(page.getByRole('heading', { name: /invitations/i })).toBeVisible()
+await expect(page.getByText('Erreur réseau')).toBeHidden()
+
+// Texte et contenu
+await expect(page.getByRole('heading')).toHaveText('Nouvelle invitation')
+await expect(page.getByRole('alert')).toContainText(/email invalide/i)
+
+// URL et titre
+await expect(page).toHaveURL('/invitations')
+await expect(page).toHaveTitle(/TribuZen/i)
+
+// Valeur d'input
+await expect(page.getByLabel('Adresse email')).toHaveValue('sophie@tribu.fr')
+await expect(page.getByLabel('Adresse email')).toBeEmpty()
+
+// État
+await expect(page.getByRole('button', { name: /inviter/i })).toBeEnabled()
+await expect(page.getByRole('button', { name: /inviter/i })).toBeDisabled()
+await expect(page.getByRole('checkbox')).toBeChecked()
+
+// Nombre d'éléments
+await expect(page.getByRole('listitem')).toHaveCount(3)
+
+// Assertion négative
+await expect(page.getByRole('alert')).not.toBeVisible()
 ```
 
-#### 3. `getByText` — contenu textuel
+**Différence fondamentale avec Vitest :** en Vitest, `expect(val).toBe(x)` est synchrone et immédiat. En Playwright, `await expect(locator).toBeVisible()` est asynchrone et réessaie jusqu'au timeout — c'est le mécanisme d'auto-waiting des assertions.
 
-```typescript
-// Texte exact ou partiel
-page.getByText('Aucun resultat');
-page.getByText(/article\(s\) dans votre panier/i);
+### Auto-waiting vs `waitForTimeout`
+
+Playwright attend **automatiquement** l'actionabilité avant chaque action (`click`, `fill`, etc.) et avant chaque assertion web-first. Il n'est presque jamais nécessaire d'attendre manuellement.
+
+```ts
+// MAUVAIS — style Selenium : sleeps manuels
+await page.goto('/invitations')
+await page.waitForTimeout(2000)          // ne jamais faire ça
+await page.waitForSelector('.invitation-list') // inutile ici
+await page.click('.invite-btn')
+
+// BON — style Playwright : auto-waiting intégré
+await page.goto('/invitations/new')
+await page.getByRole('button', { name: /inviter/i }).click()
+// Playwright attend que le bouton soit visible + activé avant de cliquer
 ```
 
-#### 4. `getByPlaceholder`
+Quand l'auto-wait ne suffit pas — cas légitimes :
 
-```typescript
-page.getByPlaceholder('Rechercher un produit...');
-page.getByPlaceholder(/entrez votre email/i);
+```ts
+// Attendre explicitement un état réseau (ex : AJAX qui charge la liste)
+await page.waitForResponse('**/api/invitations')
+
+// Attendre qu'un loader disparaisse avant de continuer
+await page.getByRole('progressbar').waitFor({ state: 'hidden' })
+
+// Attendre une URL de redirection après soumission
+await page.waitForURL('/invitations')
 ```
 
-#### 5. `getByTestId` — dernier recours
+Règle : si tu écris `waitForTimeout`, c'est un signal que quelque chose cloche — cherche l'assertion web-first ou le `waitFor` sémantique qui correspond.
 
-```typescript
-page.getByTestId('product-card-123');
-page.getByTestId('loading-skeleton');
-```
+### Isolation et fixtures — `page`, `context`
 
-#### 6. `locator` — selecteurs CSS ou XPath
+Chaque test reçoit une **fixture `page`** appartenant à un `BrowserContext` isolé, créé spécifiquement pour ce test. Les cookies, localStorage, sessions ne fuient pas d'un test à l'autre.
 
-```typescript
-// CSS selector (quand les methodes semantiques ne suffisent pas)
-page.locator('.product-card:first-child');
-page.locator('[data-status="active"]');
-page.locator('form >> input[type="email"]');
+```ts
+import { test } from '@playwright/test';
 
-// Combiner locators
-page.locator('.product-card').filter({ hasText: 'Clavier' });
-page.locator('.product-card').filter({ has: page.getByRole('button', { name: /acheter/i }) });
+test('test A', async ({ page }) => {
+  // "page" est dans un BrowserContext isolé
+  // Session, cookies, storage = vierges
+});
 
-// nth element
-page.locator('.product-card').nth(0);
-page.locator('.product-card').first();
-page.locator('.product-card').last();
-```
-
----
-
-## Actions
-
-### Clic
-
-```typescript
-// Clic simple
-await page.getByRole('button', { name: /connexion/i }).click();
-
-// Double-clic
-await page.getByText('Mot a selectionner').dblclick();
-
-// Clic droit
-await page.getByText('Element').click({ button: 'right' });
-
-// Clic avec modification (Ctrl+Click pour nouvel onglet)
-await page.getByRole('link', { name: /ouvrir/i }).click({ modifiers: ['Control'] });
-
-// Clic a une position precise
-await page.locator('canvas').click({ position: { x: 100, y: 200 } });
-
-// Force click (ignorer les overlays)
-await page.getByRole('button', { name: /fermer/i }).click({ force: true });
-```
-
-### Saisie de texte
-
-```typescript
-// fill : vide le champ puis ecrit (recommande pour les formulaires)
-await page.getByLabel('Email').fill('alice@example.com');
-
-// type : tape caractere par caractere (simule la frappe reelle)
-await page.getByLabel('Rechercher').type('clavier mecanique', { delay: 50 });
-
-// Vider un champ
-await page.getByLabel('Email').clear();
-
-// Remplir et valider
-await page.getByLabel('Email').fill('alice@example.com');
-await page.getByLabel('Email').press('Enter');
-```
-
-### Cases a cocher et boutons radio
-
-```typescript
-// Cocher
-await page.getByRole('checkbox', { name: /conditions generales/i }).check();
-
-// Decocher
-await page.getByRole('checkbox', { name: /newsletter/i }).uncheck();
-
-// Bouton radio
-await page.getByRole('radio', { name: /livraison express/i }).check();
-```
-
-### Select / dropdown
-
-```typescript
-// Par la valeur visible
-await page.getByLabel('Pays').selectOption('France');
-
-// Par la valeur de l'attribut value
-await page.getByLabel('Pays').selectOption({ value: 'fr' });
-
-// Multi-select
-await page.getByLabel('Categories').selectOption(['electronics', 'books']);
-```
-
-### Clavier
-
-```typescript
-// Touche unique
-await page.keyboard.press('Escape');
-await page.keyboard.press('Tab');
-await page.keyboard.press('Enter');
-
-// Combinaison de touches
-await page.keyboard.press('Control+a');
-await page.keyboard.press('Control+c');
-await page.keyboard.press('Control+v');
-
-// Sur un element specifique
-await page.getByRole('textbox').press('ArrowDown');
-```
-
-### Upload de fichier
-
-```typescript
-// Upload simple
-await page.getByLabel('Photo de profil').setInputFiles('test-data/avatar.jpg');
-
-// Upload multiple
-await page.getByLabel('Documents').setInputFiles([
-  'test-data/doc1.pdf',
-  'test-data/doc2.pdf',
-]);
-
-// Supprimer la selection
-await page.getByLabel('Photo de profil').setInputFiles([]);
-```
-
-### Drag and drop
-
-```typescript
-// Drag and drop
-await page.getByText('Element a deplacer').dragTo(page.getByText('Zone de depot'));
-
-// Ou manuellement
-const source = page.locator('#draggable');
-const target = page.locator('#droppable');
-await source.hover();
-await page.mouse.down();
-await target.hover();
-await page.mouse.up();
-```
-
----
-
-## Assertions
-
-### Assertions sur la page
-
-```typescript
-// Titre de la page
-await expect(page).toHaveTitle('Mon Application — Accueil');
-await expect(page).toHaveTitle(/accueil/i);
-
-// URL
-await expect(page).toHaveURL('/products');
-await expect(page).toHaveURL(/\/products\?page=2/);
-```
-
-### Assertions sur les éléments
-
-```typescript
-// Visibilite
-await expect(page.getByText('Bienvenue')).toBeVisible();
-await expect(page.getByText('Element cache')).toBeHidden();
-await expect(page.getByText('Element cache')).not.toBeVisible();
-
-// Contenu textuel
-await expect(page.getByRole('heading')).toHaveText('Mon titre');
-await expect(page.getByRole('heading')).toHaveText(/mon titre/i);
-await expect(page.getByRole('alert')).toContainText('erreur');
-
-// Valeur d'un input
-await expect(page.getByLabel('Email')).toHaveValue('alice@example.com');
-await expect(page.getByLabel('Email')).toHaveValue(/alice/);
-await expect(page.getByLabel('Email')).toBeEmpty();
-
-// Attributs
-await expect(page.getByRole('link')).toHaveAttribute('href', '/products');
-await expect(page.getByRole('img')).toHaveAttribute('alt', /photo de profil/i);
-
-// Classes CSS
-await expect(page.locator('.alert')).toHaveClass(/alert--error/);
-
-// Etat
-await expect(page.getByRole('button', { name: /envoyer/i })).toBeEnabled();
-await expect(page.getByRole('button', { name: /envoyer/i })).toBeDisabled();
-await expect(page.getByRole('checkbox')).toBeChecked();
-await expect(page.getByRole('textbox')).toBeEditable();
-
-// Nombre d'elements
-await expect(page.getByRole('listitem')).toHaveCount(5);
-
-// Focus
-await expect(page.getByLabel('Email')).toBeFocused();
-```
-
-### Assertions negatives
-
-```typescript
-// Verifier qu'un element n'est PAS visible
-await expect(page.getByText('Message d\'erreur')).not.toBeVisible();
-
-// Verifier qu'un element n'existe pas (count = 0)
-await expect(page.getByRole('alert')).toHaveCount(0);
-
-// Verifier que le bouton n'est pas desactive
-await expect(page.getByRole('button', { name: /envoyer/i })).not.toBeDisabled();
-```
-
----
-
-## Auto-wait : le mécanisme clé
-
-Playwright attend automatiquement que les éléments soient prets avant d'interagir avec eux. C'est un avantage majeur par rapport a Selenium.
-
-### Ce que Playwright attend avant un clic
-
-```
-1. L'element est attache au DOM            ✓ (attached)
-2. L'element est visible                   ✓ (visible)
-3. L'element est stable (pas d'animation)  ✓ (stable)
-4. L'element recoit les events             ✓ (receives events)
-5. L'element est active (enabled)          ✓ (enabled)
-```
-
-### Illustration
-
-```typescript
-// PAS BESOIN de sleep ou waitFor avant un clic !
-// Playwright attend automatiquement
-
-// MAUVAIS (style Selenium)
-await page.goto('/products');
-await page.waitForSelector('.product-list'); // Inutile !
-await page.waitForTimeout(1000);             // Encore pire !
-await page.click('.product-card');
-
-// BON (style Playwright)
-await page.goto('/products');
-await page.getByRole('link', { name: /premier produit/i }).click();
-// Playwright attend que le lien soit visible et cliquable
-```
-
-### Quand l'auto-wait ne suffit pas
-
-```typescript
-// Attendre un element specifique (par exemple apres un chargement AJAX)
-await page.getByRole('heading', { name: /resultats/i }).waitFor();
-
-// Attendre qu'un element disparaisse
-await page.getByRole('progressbar').waitFor({ state: 'hidden' });
-
-// Attendre une reponse reseau
-await page.waitForResponse('**/api/products');
-
-// Attendre que la page soit completement chargee
-await page.waitForLoadState('networkidle');
-
-// Attendre une condition personnalisee
-await page.waitForFunction(() => {
-  return document.querySelectorAll('.product-card').length > 0;
+test('test B', async ({ page }) => {
+  // BrowserContext complètement séparé de test A
+  // Même si test A a créé une session, ici elle n'existe pas
 });
 ```
 
----
+**Context fixture** — pour des opérations de bas niveau (`route`, interception réseau) :
 
-## Screenshots et videos
+```ts
+test('avec interception réseau', async ({ page, context }) => {
+  // Bloquer toutes les images
+  await context.route('**/*.{jpg,png,webp}', route => route.abort())
+  await page.goto('/invitations')
+})
+```
 
-### Configuration
+**Fixture personnalisée** (patterns avancés) — extend pour pré-authentifier :
 
-```typescript
-// playwright.config.ts
-export default defineConfig({
-  use: {
-    // Screenshots
-    screenshot: 'only-on-failure', // 'on', 'off', 'only-on-failure'
+```ts
+import { test as base } from '@playwright/test'
 
-    // Videos
-    video: 'retain-on-failure', // 'on', 'off', 'on-first-retry', 'retain-on-failure'
+export const test = base.extend({
+  page: async ({ baseURL, page }, use) => {
+    // Navigation automatique avant chaque test
+    await page.goto(baseURL ?? '/')
+    await use(page)
   },
-});
+})
 ```
 
-### Screenshots manuels dans les tests
+### Trace Viewer et debug
 
-```typescript
-test('visual check of product page', async ({ page }) => {
-  await page.goto('/products/1');
+Le Trace Viewer est un outil de débogage visuel : timeline des actions, screenshots avant/après chaque étape, snapshot DOM, logs réseau, erreurs console.
 
-  // Screenshot de la page entiere
-  await page.screenshot({ path: 'screenshots/product-page.png' });
+**Activer :**
 
-  // Screenshot d'un element specifique
-  await page.getByTestId('product-gallery').screenshot({
-    path: 'screenshots/product-gallery.png',
-  });
-
-  // Screenshot pleine page (avec scroll)
-  await page.screenshot({
-    path: 'screenshots/full-page.png',
-    fullPage: true,
-  });
-});
+```ts
+// playwright.config.ts
+use: {
+  trace: 'on-first-retry',  // recommandé CI : trace seulement sur l'échec
+  // trace: 'on',           // toujours (ralentit)
+}
 ```
 
----
-
-## Codegen : générer du code de test
-
-Playwright Codegen enregistre vos actions dans le navigateur et généré le code correspondant.
+**Visualiser :**
 
 ```bash
-# Lancer Codegen
-npx playwright codegen http://localhost:3000
-
-# Avec un viewport specifique
-npx playwright codegen --viewport-size=1280,720 http://localhost:3000
-
-# Avec un device simule
-npx playwright codegen --device="iPhone 13" http://localhost:3000
-
-# Sauvegarder dans un fichier
-npx playwright codegen --output=e2e/tests/generated.spec.ts http://localhost:3000
-```
-
-### Workflow recommande
-
-1. Lancer Codegen pour enregistrer le scenario de base
-2. Copier le code généré dans votre fichier de test
-3. **Ameliorer les selecteurs** : remplacer les selecteurs CSS par `getByRole`, `getByLabel`, etc.
-4. **Ajouter les assertions** : Codegen généré les actions mais pas toujours les verifications
-5. **Refactorer** : extraire les helpers, créer des Page Objects
-
-### Exemple : code généré vs code ameliore
-
-```typescript
-// Code genere par Codegen (brut)
-test('test', async ({ page }) => {
-  await page.goto('http://localhost:3000/login');
-  await page.locator('input[name="email"]').click();
-  await page.locator('input[name="email"]').fill('alice@example.com');
-  await page.locator('input[name="password"]').click();
-  await page.locator('input[name="password"]').fill('secret123');
-  await page.getByRole('button', { name: 'Se connecter' }).click();
-  await page.waitForURL('http://localhost:3000/dashboard');
-});
-
-// Code ameliore manuellement
-test('should login with valid credentials', async ({ page }) => {
-  await page.goto('/login');
-
-  await page.getByLabel('Adresse email').fill('alice@example.com');
-  await page.getByLabel('Mot de passe').fill('secret123');
-  await page.getByRole('button', { name: /se connecter/i }).click();
-
-  await expect(page).toHaveURL('/dashboard');
-  await expect(page.getByRole('heading', { name: /bienvenue alice/i })).toBeVisible();
-});
-```
-
----
-
-## Trace Viewer
-
-Le Trace Viewer est un outil de debugging visuel qui montre chaque action, screenshot, log réseau et erreur console.
-
-### Activer la trace
-
-```typescript
-// playwright.config.ts
-export default defineConfig({
-  use: {
-    trace: 'on-first-retry', // Recommande : trace seulement en cas d'echec
-    // trace: 'on',          // Toujours (plus lent)
-    // trace: 'off',         // Jamais
-  },
-});
-```
-
-### Visualiser une trace
-
-```bash
-# Ouvrir le rapport HTML (contient les traces)
+# Ouvrir le rapport HTML (contient les traces des tests en échec)
 npx playwright show-report
 
-# Ouvrir une trace specifique
-npx playwright show-trace test-results/tests-login-chromium/trace.zip
+# Ouvrir une trace spécifique
+npx playwright show-trace test-results/e2e-invitation-chromium/trace.zip
 ```
 
-### Ce que le Trace Viewer montre
-
-- Timeline de chaque action (goto, click, fill, etc.)
-- Screenshot avant et après chaque action
-- Snapshot du DOM à chaque étape
-- Requetes réseau (URL, status, duree)
-- Logs console (errors, warnings)
-- Source du test avec la ligne en cours
-
----
-
-## Test hooks
-
-### `test.beforeAll` / `test.afterAll`
-
-Executes une fois par worker, avant/après tous les tests du fichier.
-
-```typescript
-import { test, expect } from '@playwright/test';
-
-test.beforeAll(async () => {
-  // Setup global : seeder la base de donnees, etc.
-  console.log('Setup avant tous les tests');
-});
-
-test.afterAll(async () => {
-  // Cleanup global
-  console.log('Cleanup apres tous les tests');
-});
-```
-
-### `test.beforeEach` / `test.afterEach`
-
-Executes avant/après chaque test.
-
-```typescript
-test.beforeEach(async ({ page }) => {
-  // Naviguer vers la page avant chaque test
-  await page.goto('/');
-});
-
-test.afterEach(async ({ page }) => {
-  // Verifier qu'il n'y a pas d'erreur console
-  const logs = await page.evaluate(() => {
-    // Recuperer les erreurs console stockees
-    return (window as any).__consoleErrors ?? [];
-  });
-  expect(logs).toHaveLength(0);
-});
-```
-
-### Hooks dans un `describe`
-
-```typescript
-test.describe('Tableau de bord', () => {
-  test.beforeEach(async ({ page }) => {
-    // Se connecter avant chaque test de cette section
-    await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@example.com');
-    await page.getByLabel('Mot de passe').fill('admin123');
-    await page.getByRole('button', { name: /connexion/i }).click();
-    await page.waitForURL('/dashboard');
-  });
-
-  test('should display recent activity', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: /activite recente/i })).toBeVisible();
-  });
-
-  test('should display statistics cards', async ({ page }) => {
-    await expect(page.getByTestId('stats-users')).toBeVisible();
-    await expect(page.getByTestId('stats-revenue')).toBeVisible();
-  });
-});
-```
-
----
-
-## Exemples complets
-
-### Exemple 1 : flux de login
-
-```typescript
-// e2e/tests/auth/login.spec.ts
-import { test, expect } from '@playwright/test';
-
-test.describe('Login', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-  });
-
-  test('should login successfully with valid credentials', async ({ page }) => {
-    await page.getByLabel('Adresse email').fill('alice@example.com');
-    await page.getByLabel('Mot de passe').fill('SecurePass123!');
-    await page.getByRole('button', { name: /se connecter/i }).click();
-
-    // Verification : redirection vers le dashboard
-    await expect(page).toHaveURL('/dashboard');
-
-    // Verification : le nom de l'utilisateur est affiche
-    await expect(page.getByRole('button', { name: /alice/i })).toBeVisible();
-
-    // Verification : le lien "Se connecter" a disparu
-    await expect(page.getByRole('link', { name: /se connecter/i })).not.toBeVisible();
-  });
-
-  test('should display error for invalid credentials', async ({ page }) => {
-    await page.getByLabel('Adresse email').fill('alice@example.com');
-    await page.getByLabel('Mot de passe').fill('wrong-password');
-    await page.getByRole('button', { name: /se connecter/i }).click();
-
-    // Verification : message d'erreur
-    await expect(page.getByRole('alert')).toHaveText(/identifiants invalides/i);
-
-    // Verification : on reste sur la page de login
-    await expect(page).toHaveURL('/login');
-
-    // Verification : le champ mot de passe est vide
-    await expect(page.getByLabel('Mot de passe')).toBeEmpty();
-  });
-
-  test('should show validation errors for empty fields', async ({ page }) => {
-    await page.getByRole('button', { name: /se connecter/i }).click();
-
-    await expect(page.getByText(/l'email est requis/i)).toBeVisible();
-    await expect(page.getByText(/le mot de passe est requis/i)).toBeVisible();
-  });
-
-  test('should redirect to requested page after login', async ({ page }) => {
-    // Tenter d'acceder a une page protegee
-    await page.goto('/settings');
-
-    // Redirige vers login
-    await expect(page).toHaveURL(/\/login\?redirect=/);
-
-    // Se connecter
-    await page.getByLabel('Adresse email').fill('alice@example.com');
-    await page.getByLabel('Mot de passe').fill('SecurePass123!');
-    await page.getByRole('button', { name: /se connecter/i }).click();
-
-    // Redirige vers la page demandee initialement
-    await expect(page).toHaveURL('/settings');
-  });
-});
-```
-
-### Exemple 2 : CRUD de produits
-
-```typescript
-// e2e/tests/products/product-crud.spec.ts
-import { test, expect } from '@playwright/test';
-
-test.describe('Product CRUD', () => {
-  test.beforeEach(async ({ page }) => {
-    // Login en tant qu'admin
-    await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@example.com');
-    await page.getByLabel('Mot de passe').fill('admin123');
-    await page.getByRole('button', { name: /connexion/i }).click();
-    await page.waitForURL('/dashboard');
-  });
-
-  test('should display product list', async ({ page }) => {
-    await page.goto('/admin/products');
-
-    // Verifier le titre
-    await expect(page.getByRole('heading', { name: /gestion des produits/i })).toBeVisible();
-
-    // Verifier que des produits sont affiches
-    const rows = page.getByRole('row');
-    await expect(rows).toHaveCount(6); // 5 produits + header row
-  });
-
-  test('should create a new product', async ({ page }) => {
-    await page.goto('/admin/products');
-
-    // Cliquer sur "Nouveau produit"
-    await page.getByRole('link', { name: /nouveau produit/i }).click();
-    await expect(page).toHaveURL('/admin/products/new');
-
-    // Remplir le formulaire
-    await page.getByLabel('Nom du produit').fill('Casque Audio Premium');
-    await page.getByLabel('Prix').fill('199.99');
-    await page.getByLabel('Description').fill('Casque audio sans fil avec reduction de bruit active.');
-    await page.getByLabel('Categorie').selectOption('audio');
-    await page.getByLabel('Stock').fill('50');
-    await page.getByLabel('Publie').check();
-
-    // Soumettre
-    await page.getByRole('button', { name: /creer le produit/i }).click();
-
-    // Verification : redirection vers la liste avec notification
-    await expect(page).toHaveURL('/admin/products');
-    await expect(page.getByText(/produit cree avec succes/i)).toBeVisible();
-
-    // Verification : le nouveau produit est dans la liste
-    await expect(page.getByRole('cell', { name: 'Casque Audio Premium' })).toBeVisible();
-  });
-
-  test('should edit an existing product', async ({ page }) => {
-    await page.goto('/admin/products');
-
-    // Cliquer sur "Modifier" pour le premier produit
-    await page.getByRole('row', { name: /clavier mecanique/i })
-      .getByRole('link', { name: /modifier/i })
-      .click();
-
-    // Modifier le prix
-    await page.getByLabel('Prix').clear();
-    await page.getByLabel('Prix').fill('149.99');
-
-    // Sauvegarder
-    await page.getByRole('button', { name: /sauvegarder/i }).click();
-
-    // Verification
-    await expect(page).toHaveURL('/admin/products');
-    await expect(page.getByText(/modifications enregistrees/i)).toBeVisible();
-  });
-
-  test('should delete a product with confirmation', async ({ page }) => {
-    await page.goto('/admin/products');
-
-    // Compter les produits avant suppression
-    const rowsBefore = await page.getByRole('row').count();
-
-    // Cliquer sur "Supprimer"
-    await page.getByRole('row', { name: /webcam hd/i })
-      .getByRole('button', { name: /supprimer/i })
-      .click();
-
-    // Dialogue de confirmation
-    await expect(page.getByRole('dialog')).toBeVisible();
-    await expect(page.getByRole('dialog')).toContainText(/etes-vous sur/i);
-
-    // Confirmer
-    await page.getByRole('button', { name: /confirmer la suppression/i }).click();
-
-    // Verification : le produit a disparu
-    await expect(page.getByRole('row', { name: /webcam hd/i })).not.toBeVisible();
-
-    // Un produit de moins
-    const rowsAfter = await page.getByRole('row').count();
-    expect(rowsAfter).toBe(rowsBefore - 1);
-  });
-});
-```
-
-### Exemple 3 : formulaire complexe
-
-```typescript
-// e2e/tests/checkout/checkout-form.spec.ts
-import { test, expect } from '@playwright/test';
-
-test.describe('Checkout form', () => {
-  test.beforeEach(async ({ page }) => {
-    // Ajouter un produit au panier avant d'acceder au checkout
-    await page.goto('/products');
-    await page.getByRole('button', { name: /ajouter au panier/i }).first().click();
-    await page.goto('/checkout');
-  });
-
-  test('should complete checkout with all required fields', async ({ page }) => {
-    // Etape 1 : Informations personnelles
-    await page.getByLabel('Prenom').fill('Alice');
-    await page.getByLabel('Nom').fill('Martin');
-    await page.getByLabel('Email').fill('alice@example.com');
-    await page.getByLabel('Telephone').fill('+33 6 12 34 56 78');
-    await page.getByRole('button', { name: /continuer/i }).click();
-
-    // Etape 2 : Adresse de livraison
-    await expect(page.getByRole('heading', { name: /adresse de livraison/i })).toBeVisible();
-    await page.getByLabel('Adresse').fill('123 Rue de Paris');
-    await page.getByLabel('Code postal').fill('75001');
-    await page.getByLabel('Ville').fill('Paris');
-    await page.getByLabel('Pays').selectOption('France');
-    await page.getByRole('button', { name: /continuer/i }).click();
-
-    // Etape 3 : Mode de livraison
-    await expect(page.getByRole('heading', { name: /livraison/i })).toBeVisible();
-    await page.getByRole('radio', { name: /express/i }).check();
-    await page.getByRole('button', { name: /continuer/i }).click();
-
-    // Etape 4 : Recapitulatif
-    await expect(page.getByRole('heading', { name: /recapitulatif/i })).toBeVisible();
-    await expect(page.getByText('Alice Martin')).toBeVisible();
-    await expect(page.getByText('123 Rue de Paris')).toBeVisible();
-    await expect(page.getByText(/express/i)).toBeVisible();
-
-    // Confirmer la commande
-    await page.getByRole('button', { name: /confirmer la commande/i }).click();
-
-    // Page de confirmation
-    await expect(page).toHaveURL(/\/order-confirmation/);
-    await expect(page.getByRole('heading', { name: /merci/i })).toBeVisible();
-    await expect(page.getByText(/numero de commande/i)).toBeVisible();
-  });
-
-  test('should validate required fields', async ({ page }) => {
-    // Cliquer sur "Continuer" sans remplir les champs
-    await page.getByRole('button', { name: /continuer/i }).click();
-
-    // Verifier les erreurs de validation
-    await expect(page.getByText(/le prenom est requis/i)).toBeVisible();
-    await expect(page.getByText(/le nom est requis/i)).toBeVisible();
-    await expect(page.getByText(/l'email est requis/i)).toBeVisible();
-  });
-
-  test('should validate email format', async ({ page }) => {
-    await page.getByLabel('Prenom').fill('Alice');
-    await page.getByLabel('Nom').fill('Martin');
-    await page.getByLabel('Email').fill('not-an-email');
-    await page.getByRole('button', { name: /continuer/i }).click();
-
-    await expect(page.getByText(/format d'email invalide/i)).toBeVisible();
-  });
-});
-```
-
----
-
-## Commandes CLI utiles
+**Mode debug interactif :**
 
 ```bash
-# Executer tous les tests
-npx playwright test
-
-# Executer un fichier specifique
-npx playwright test e2e/tests/auth/login.spec.ts
-
-# Executer un test par nom
-npx playwright test -g "should login successfully"
-
-# Executer sur un navigateur specifique
-npx playwright test --project=chromium
-
-# Mode debug (pas a pas)
+# Pas à pas dans le terminal + Playwright Inspector
 npx playwright test --debug
 
-# Mode UI (interface graphique)
+# Interface UI complète (watch + traces en direct)
 npx playwright test --ui
-
-# Afficher le rapport
-npx playwright show-report
-
-# Lancer Codegen
-npx playwright codegen http://localhost:3000
-
-# Mettre a jour les navigateurs
-npx playwright install
 ```
 
----
+### Intégration CI
 
-## Exercice pratique
+```yaml
+# .github/workflows/e2e.yml
+- name: Install Playwright browsers
+  run: npx playwright install --with-deps
 
-Ecrivez les tests E2E Playwright pour une application de gestion de contacts :
-1. Login avec identifiants valides / invalides
-2. Lister les contacts avec recherche et filtres
-3. Créer un nouveau contact (formulaire multi-étapes)
-4. Modifier un contact existant
-5. Supprimer un contact avec confirmation
-6. Tester la navigation au clavier (accessibilité)
+- name: Run E2E tests
+  run: npx playwright test
+  env:
+    CI: true
+    BASE_URL: http://localhost:3000
 
-> Solution dans le [Lab 10](../labs/lab-10-playwright-fondamentaux/)
+- name: Upload Playwright report
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: playwright-report
+    path: playwright-report/
+```
 
----
+Avec `CI=true`, la config active `retries: 2` et `workers: 1` (séquentiel). L'artifact `playwright-report` contient les traces des tests en échec — téléchargeable depuis l'interface GitHub Actions.
 
-## Navigation
+## 3. Worked examples
 
-| Précédent | Suivant |
-|-----------|---------|
-| [09 - Tests d'intégration](./09-tests-integration) | [11 - Playwright avance](./11-playwright-avance) |
+### Exemple A — parcours invitation complet
 
----
+Objectif : vérifier que le flux nominale d'invitation fonctionne de bout en bout. On ouvre le formulaire, on saisit un email, on soumet, et on vérifie que le nouveau membre apparaît dans la liste.
 
-## Ressources
+```ts
+// e2e/invitation.spec.ts
+import { test, expect } from '@playwright/test'
 
-- [Quiz 10 : Testez vos connaissances](../quizzes/quiz-10-playwright.html)
-- [Lab 10 : Playwright fondamentaux](../labs/lab-10-playwright-fondamentaux/)
-- Playwright — [Documentation officielle](https://playwright.dev/docs/intro)
-- Playwright — [Best Practices](https://playwright.dev/docs/best-practices)
-- Playwright — [Locators](https://playwright.dev/docs/locators)
-- Playwright — [Auto-waiting](https://playwright.dev/docs/actionability)
-- Playwright — [Trace Viewer](https://playwright.dev/docs/trace-viewer)
+test.describe('Parcours invitation TribuZen', () => {
 
----
+  test('invite un membre — il apparaît dans la liste', async ({ page }) => {
+    // 1. Naviguer vers le formulaire d'invitation
+    await page.goto('/invitations/new')
 
-<!-- parcours-recommande -->
+    // 2. Vérifier que le formulaire est affiché (assertion web-first)
+    await expect(page.getByRole('heading', { name: /inviter un membre/i })).toBeVisible()
 
-::: tip Parcours recommandé
-1. **Screencast** : [screencast 10 playwright](../screencasts/screencast-10-playwright.md)
-2. **Lab** : [lab-10-playwright-fondamentaux](../labs/lab-10-playwright-fondamentaux/README)
-3. **Visualisation** : [Page Object Pattern](../visualizations/page-object.html)
-4. **Quiz** : [quiz 10 playwright](../quizzes/quiz-10-playwright.html)
-:::
+    // 3. Remplir l'email via getByLabel (force l'accessibilité du label)
+    await page.getByLabel('Adresse email').fill('sophie@tribu.fr')
+
+    // 4. Soumettre via getByRole (force un bouton sémantique)
+    await page.getByRole('button', { name: /inviter/i }).click()
+
+    // 5. Playwright attend automatiquement la mise à jour de la liste
+    //    toBeVisible() réessaie jusqu'à 5 s — aucun sleep nécessaire
+    await expect(
+      page.getByRole('listitem', { name: /sophie@tribu\.fr/i })
+    ).toBeVisible()
+  })
+
+  test('rejette un email invalide — affiche une erreur', async ({ page }) => {
+    await page.goto('/invitations/new')
+
+    // Saisir un email malformé
+    await page.getByLabel('Adresse email').fill('pas-un-email')
+    await page.getByRole('button', { name: /inviter/i }).click()
+
+    // L'erreur s'affiche — l'utilisateur reste sur le formulaire
+    await expect(page.getByRole('alert')).toContainText(/email invalide/i)
+    await expect(page).toHaveURL('/invitations/new')
+
+    // Le champ conserve la valeur saisie (UX)
+    await expect(page.getByLabel('Adresse email')).toHaveValue('pas-un-email')
+  })
+
+  test('rejette un doublon — affiche un message spécifique', async ({ page }) => {
+    await page.goto('/invitations/new')
+
+    // Premier envoi (nominal)
+    await page.getByLabel('Adresse email').fill('alice@tribu.fr')
+    await page.getByRole('button', { name: /inviter/i }).click()
+    await expect(page.getByRole('listitem', { name: /alice@tribu\.fr/i })).toBeVisible()
+
+    // Deuxième envoi (doublon)
+    await page.getByRole('link', { name: /inviter un autre/i }).click()
+    await page.getByLabel('Adresse email').fill('alice@tribu.fr')
+    await page.getByRole('button', { name: /inviter/i }).click()
+
+    await expect(page.getByRole('alert')).toContainText(/déjà invité/i)
+  })
+})
+```
+
+Pas-à-pas : (1) `getByLabel` garantit que l'`<input>` a un `<label>` associé — test + RGAA ; (2) `getByRole('button', { name: /inviter/i })` garantit que le bouton a un texte accessible ; (3) `toBeVisible()` sur le `listitem` réessaie automatiquement pendant 5 s — aucun `waitForTimeout` ; (4) chaque test est isolé (BrowserContext neuf) — l'invitation du test 3 ne pollue pas le test 2.
+
+### Exemple B — isolation vérifiée + interception réseau (fading)
+
+Objectif : vérifier que l'app gère l'erreur réseau correctement, sans dépendre d'un backend en panne. On intercepte la requête avec `context.route`.
+
+```ts
+test('gère une erreur API 500 — affiche un message d'erreur réseau', async ({ page, context }) => {
+  // Intercepter la route POST /api/invitations et répondre 500
+  await context.route('**/api/invitations', route =>
+    route.fulfill({ status: 500, body: JSON.stringify({ error: 'INTERNAL' }) })
+  )
+
+  await page.goto('/invitations/new')
+  await page.getByLabel('Adresse email').fill('bob@tribu.fr')
+  await page.getByRole('button', { name: /inviter/i }).click()
+
+  // L'app doit afficher une erreur compréhensible
+  await expect(page.getByRole('alert')).toContainText(/erreur serveur/i)
+
+  // Le bouton est à nouveau actif (pas de loading infini)
+  await expect(page.getByRole('button', { name: /inviter/i })).toBeEnabled()
+})
+```
+
+Pas-à-pas : (1) `context.route` intercepte au niveau du `BrowserContext` de ce test uniquement — isolation totale ; (2) `route.fulfill` simule la réponse serveur sans démarrer un vrai backend en erreur ; (3) on vérifie deux invariants UX : message d'erreur + bouton réactivé.
+
+## 4. Pièges & misconceptions
+
+- **Sélecteurs CSS fragiles.** Écrire `page.locator('.invitation-item:nth-child(2)')` couple le test à l'implémentation CSS. Un refactor du markup (div → li, ajout d'une classe) casse le test sans régression réelle. *Correct* : `page.getByRole('listitem', { name: /sophie/ })` cible la sémantique, pas la structure.
+
+- **`waitForTimeout` comme béquille.** `await page.waitForTimeout(2000)` est un sleep aveugle : trop court sur une machine lente = flaky ; trop long = tests qui traînent. *Correct* : identifier l'état observable attendu et l'exprimer avec une assertion web-first (`toBeVisible`, `toHaveCount`) ou un `waitFor({ state: 'hidden' })`.
+
+- **Tests dépendants (state partagé).** Si le test B suppose que le test A a créé un utilisateur, et que A est sauté ou exécuté en parallèle, B échoue aléatoirement. *Correct* : chaque test est autosuffisant (crée ses données en `beforeEach` ou via API), grâce à l'isolation des fixtures `page`/`context`.
+
+- **Confondre locator et snapshot.** `const el = page.getByRole('button', { name: /inviter/i })` ne cherche pas l'élément — c'est une recette différée. L'élément est recherché seulement lors de `.click()` ou `expect(el).toBeVisible()`. Écrire `expect(el).toBeTruthy()` est inutile et ne prouve rien (el est toujours un objet Locator).
+
+- **`getByText` pour cibler les boutons.** `page.getByText('Inviter')` sélectionne n'importe quel élément portant ce texte (span, div, p…). Un bouton trouvé par `getByText` n'est pas prouvé être un `<button>` cliquable. *Correct* : `getByRole('button', { name: /inviter/i })` cible un élément avec `role=button`, ce qui garantit l'actionabilité ARIA.
+
+- **`trace: 'on'` en local dans la config.** Activer la trace en permanence ralentit chaque test de 10-30 %. *Correct* : `'on-first-retry'` en CI (trace uniquement sur l'échec) et `--trace on` ponctuellement en local pour déboguer.
+
+## 5. Ancrage TribuZen
+
+Couche fil-rouge : **test E2E du parcours d'invitation TribuZen** (`smaurier/tribuzen`). Ce module couvre exactement le flux critique du produit :
+
+- Le formulaire `/invitations/new` (champ email + bouton "Inviter") doit avoir des labels accessibles — `getByLabel` et `getByRole` valident cela automatiquement. C'est un point de contrôle RGAA 4.1 (formulaires).
+- L'assertion `toBeVisible()` sur le `listitem` avec le nom de l'invité prouve que la réponse API est traitée et le composant réactif mis à jour — sans jamais consulter la base de données directement dans le test.
+- L'interception `context.route('**/api/invitations', ...)` permet de tester les cas d'erreur (500, timeout) sans polluer la base de données de test ou dépendre d'un serveur instable.
+- Ces tests E2E complètent les tests Vitest du module 04 (logique domaine, isolation) et les tests d'intégration du module 09 (API + base) : la pyramide est complète.
+
+En session TribuZen, on écrit `e2e/invitation.spec.ts` dans le vrai repo, on configure `playwright.config.ts` avec `webServer: { command: 'npm run dev', ... }`, et on valide avec `npx playwright test --project=chromium`.
+
+## 6. Points clés
+
+1. `playwright.config.ts` centralise `baseURL`, `webServer`, `retries`, `trace` et les `projects` (navigateurs).
+2. Les locators (`getByRole`, `getByLabel`) sont des recettes différées — l'élément est cherché à l'action ou à l'assertion, pas à la déclaration.
+3. `getByRole` est le locator prioritaire : il cible la sémantique ARIA, force l'accessibilité, et double comme contrôle RGAA partiel.
+4. `getByLabel` cible les champs formulaire via leur `<label>` — garantit que le label existe et est correctement associé.
+5. Les assertions web-first (`expect(locator).toBeVisible()`) réessaient jusqu'au timeout (5 s par défaut) — elles remplacent les `waitForTimeout`.
+6. L'auto-waiting s'applique aux actions (`click`, `fill`) : Playwright vérifie attached + visible + stable + enabled + receives-events avant d'agir.
+7. Chaque test reçoit un `page` dans un `BrowserContext` isolé — cookies, sessions et storage ne fuient pas.
+8. `trace: 'on-first-retry'` active la trace en CI ; `npx playwright show-report` ouvre le Trace Viewer.
+9. `context.route` intercepte les requêtes réseau dans l'isolation du test — utile pour simuler erreurs 500 sans changer le backend.
+
+## 7. Seeds Anki
+
+```
+Pourquoi préférer getByRole à un sélecteur CSS ?|getByRole cible la sémantique ARIA (role + nom accessible) — résistant aux refactors CSS, et double comme contrôle d'accessibilité RGAA partiel
+Que fait expect(locator).toBeVisible() que expect(val).toBe(true) ne fait pas ?|C'est une assertion web-first : elle réessaie activement jusqu'au timeout (5 s par défaut) au lieu d'échouer immédiatement — remplace les waitForTimeout
+Qu'est-ce qu'un locator Playwright ?|Une recette de sélection différée — l'élément est cherché seulement lors de l'action ou de l'assertion, pas à la déclaration
+Comment isoler deux tests E2E qui ne doivent pas partager de session ?|Chaque test reçoit automatiquement un BrowserContext isolé via la fixture page — cookies, localStorage et sessions sont vierges pour chaque test
+Pourquoi ne pas écrire waitForTimeout dans un test Playwright ?|C'est un sleep aveugle (trop court = flaky, trop long = lent) — identifier l'état observable et l'exprimer avec une assertion web-first ou waitFor({ state })
+Quelle config trace recommander en CI ?|trace: 'on-first-retry' — enregistre la trace seulement sur le premier retry d'un test en échec, sans coût permanent
+Comment simuler une erreur 500 d'API dans un test sans toucher le backend ?|context.route('**/api/endpoint', route => route.fulfill({ status: 500, body: '...' })) — l'interception est isolée au BrowserContext du test
+À quoi sert getByLabel pour le RGAA ?|Il cible l'input via son <label> associé — si le test passe, le label existe et est correctement lié à son champ (critère d'accessibilité formulaires)
+```
+
+## Pont vers le lab
+
+> Lab associé : `06-testing/labs/lab-10-playwright-fondamentaux/`. Tu y écris les tests E2E du parcours d'invitation TribuZen en **`@playwright/test` réel** — formulaire, soumission, vérification de la liste, cas d'erreur et interception réseau. Corrigé complet commenté + variante J+30 dans le README du lab.

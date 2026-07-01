@@ -1,754 +1,447 @@
-# Module 12b — Tests d'accessibilité
-
-| Difficulte | Duree estimee | Lab | Quiz |
-|------------|---------------|-----|------|
-| 3/5        | 90 min        | — | — |
-
-## Objectifs
-
-- Comprendre pourquoi l'accessibilité doit etre testee automatiquement
-- Connaître les obligations legales (EAA 2025, RGAA) et le référentiel WCAG 2.1 AA
-- Detecter les violations a11y des le linting avec ESLint
-- Écrire des tests unitaires avec jest-axe / vitest-axe
-- Automatiser les tests E2E d'accessibilité avec Playwright et axe-core
-- Intégrer les verifications a11y dans une pipeline CI/CD
-
+---
+titre: Tests d'accessibilité
+cours: 06-testing
+notions: [axe-core et automatisation, vitest-axe et jest-axe, limites de l'audit automatique 30-40 pourcent, tests clavier et lecteur d'écran, addon a11y et Playwright axe, intégration CI, lien avec RGAA et WCAG]
+outcomes: [automatiser des tests d'accessibilité avec axe-core dans Vitest, connaître les limites de l'audit automatique, compléter par des tests clavier manuels, intégrer les tests a11y en CI]
+prerequis: [12-couverture-et-mutation-testing]
+next: 13-tests-en-ci-cd
+libs: [{ name: vitest, version: ^4.1.9 }, { name: axe-core, version: ^4 }]
+tribuzen: tester l'accessibilité des composants TribuZen (vitest-axe) + audit manuel des parcours clés
+last-reviewed: 2026-07
 ---
 
-## 1. Pourquoi tester l'accessibilité
+# Tests d'accessibilité
 
-### Le contexte legal
+> **Outcomes — tu sauras FAIRE :** automatiser des tests d'accessibilité avec axe-core dans Vitest, connaître les limites réelles de l'audit automatique (~30-40 %), compléter par des tests clavier ciblés, intégrer les vérifications a11y en CI sans faux positifs.
+> **Difficulté :** :star::star::star:
 
-Depuis juin 2025, l'**European Accessibility Act (EAA)** impose aux services numériques commercialises dans l'UE de respecter le niveau **WCAG 2.1 AA**. En France, le **RGAA** (Referentiel General d'Amelioration de l'Accessibilité) traduit ces exigences en criteres concrets.
+## 1. Cas concret d'abord
 
-Ne pas respecter ces obligations expose a :
+TribuZen comporte un formulaire d'invitation qui demande un prénom et un email. Un membre de l'équipe le livre rapidement :
 
-- Des sanctions financieres (jusqu'a 50 000 EUR par manquement en France)
-- Des poursuites civiles (discrimination)
-- Une exclusion de marches publics
-
-### Les tests manuels ne suffisent pas
-
-L'audit manuel (navigation clavier, lecteur d'ecran) est indispensable mais :
-
-- Il est **lent** : un audit complet prend plusieurs jours
-- Il est **non reproductible** : les résultats varient selon l'auditeur
-- Il ne **previent pas les regressions** : une PR peut casser l'accessibilité sans que personne ne s'en apercoive
-
-La solution : **automatiser tout ce qui peut l'etre** et reserver l'audit manuel aux aspects subjectifs (comprehension, parcours utilisateur).
-
-### La pyramide de tests a11y
-
-```
-            /  Audit manuel  \        <- Lent, couteux, indispensable
-           /   Tests E2E      \       <- Playwright + axe-core
-          / Tests d'integration \     <- Composants assembles + axe
-         /   Tests unitaires     \    <- jest-axe sur composants isoles
-        /   Analyse statique      \   <- ESLint plugins a11y
-       ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-```
-
-Chaque niveau attrape des categories de bugs différentes :
-
-| Niveau | Exemples de bugs detectes |
-|--------|--------------------------|
-| **Lint** | `<img>` sans `alt`, `<div onClick>` sans `onKeyDown` |
-| **Unit** | Formulaire sans labels, roles ARIA invalides |
-| **E2E** | Ordre de focus incoherent, contrastes insuffisants |
-| **Manuel** | Texte alternatif non pertinent, parcours confus |
-
----
-
-## 2. ESLint : detection statique
-
-L'analyse statique est le premier filet de sécurité. Elle s'exécuté dans l'editeur et bloque les PRs avant même que les tests tournent.
-
-### Pour React : `eslint-plugin-jsx-a11y`
-
-```bash
-pnpm add -D eslint-plugin-jsx-a11y
-```
-
-Configuration dans `eslint.config.js` (flat config) :
-
-```typescript
-import jsxA11y from 'eslint-plugin-jsx-a11y';
-
-export default [
-  jsxA11y.flatConfigs.recommended,
-  {
-    rules: {
-      // Exiger un attribut alt sur toutes les images
-      'jsx-a11y/alt-text': 'error',
-
-      // Un element cliquable doit aussi reagir au clavier
-      'jsx-a11y/click-events-have-key-events': 'error',
-
-      // Pas d'autofocus automatique (desoriente les utilisateurs de lecteurs d'ecran)
-      'jsx-a11y/no-autofocus': 'error',
-
-      // Chaque champ de formulaire doit avoir un label associe
-      'jsx-a11y/label-has-associated-control': ['error', {
-        required: { some: ['nesting', 'id'] },
-      }],
-
-      // Les elements interactifs doivent avoir un role accessible
-      'jsx-a11y/no-static-element-interactions': 'error',
-    },
-  },
-];
-```
-
-### Pour Angular : `@angular-eslint`
-
-```bash
-pnpm add -D @angular-eslint/eslint-plugin-template
-```
-
-```typescript
-// eslint.config.js (extrait)
-{
-  files: ['**/*.html'],
-  rules: {
-    '@angular-eslint/template/accessibility-alt-text': 'error',
-    '@angular-eslint/template/accessibility-elements-content': 'error',
-    '@angular-eslint/template/accessibility-label-has-associated-control': 'error',
-    '@angular-eslint/template/accessibility-valid-aria': 'error',
-    '@angular-eslint/template/click-events-have-key-events': 'error',
-    '@angular-eslint/template/no-autofocus': 'error',
-  },
+```tsx
+// src/components/InvitationForm.tsx — tel que livré (INACCESSIBLE)
+export function InvitationForm({ onInvite }: { onInvite: (email: string) => void }) {
+  return (
+    <div>
+      <input type="text" placeholder="Prénom" />
+      <input type="email" placeholder="Email" />
+      <div onClick={() => onInvite('...')}>Envoyer l'invitation</div>
+    </div>
+  );
 }
 ```
 
-### Regles clés a activer en priorite
+Trois violations immédiates : pas de `<label>` associé aux champs, un `<div onClick>` non accessible au clavier, pas de rôle sémantique sur la zone. Un utilisateur naviguant au clavier ou sous NVDA ne peut pas remplir ce formulaire.
 
-| Regle | Raison |
-|-------|--------|
-| `alt-text` | Les images sans texte alternatif sont invisibles pour les lecteurs d'ecran |
-| `click-events-have-key-events` | Les utilisateurs clavier ne peuvent pas interagir avec un `onClick` seul |
-| `no-autofocus` | L'autofocus deplace le curseur de manière inattendue |
-| `label-has-associated-control` | Un champ sans label est inutilisable avec un lecteur d'ecran |
-| `no-static-element-interactions` | Un `<div>` avec un handler n'est pas un bouton |
+Question centrale : comment **détecter automatiquement** ces violations dès la PR, **quantifier ce que l'outil ne peut pas voir**, et organiser les tests clavier qu'aucun outil ne remplacera ?
 
-> **Astuce** : ces plugins ne detectent qu'environ **30% des violations WCAG**. Le linting est nécessaire mais jamais suffisant.
+## 2. Théorie complète, concise
 
----
+### axe-core — le moteur
 
-## 3. jest-axe / vitest-axe : tests unitaires
+**axe-core** (Deque Labs, open source) est le moteur de règles d'accessibilité le plus utilisé dans l'écosystème. Il analyse le DOM et retourne des violations classées par `impact` : `critical`, `serious`, `moderate`, `minor`. Chaque violation pointe les nœuds incriminés, la règle violée (ex. `label`, `button-name`), et une description.
 
-[axe-core](https://github.com/dequelabs/axe-core) est le moteur de regles d'accessibilité le plus utilise. La librairie `jest-axe` l'intégré dans les tests unitaires via un matcher custom.
+axe-core teste un **sous-ensemble des critères WCAG** — uniquement ceux vérifiables algorithmiquement sur le DOM. Il ne "passe pas un audit RGAA" et ne "vérifie pas WCAG" au sens complet. Voir la distinction WCAG/RGAA ci-dessous.
 
-### Installation
+```ts
+import axe from 'axe-core';
+
+// API bas niveau (rarement utilisée directement)
+const results = await axe.run(containerElement);
+// results.violations : tableau de violations avec impact, id, nodes
+```
+
+### vitest-axe et jest-axe — l'intégration dans les tests unitaires
+
+**vitest-axe** et **jest-axe** exposent tous les deux le matcher `toHaveNoViolations` et la fonction `axe()` wrappée pour fonctionner dans JSDOM (l'environnement de Vitest/Jest). La différence est mineure : `vitest-axe` est conçu pour Vitest natif, `jest-axe` fonctionne aussi avec Vitest via `expect.extend`.
+
+Installation (Vitest) :
 
 ```bash
-pnpm add -D jest-axe @types/jest-axe
+pnpm add -D vitest-axe axe-core
 ```
 
-> `jest-axe` fonctionne aussi avec Vitest sans modification.
+Setup global dans `vitest.config.ts` :
 
-### Setup global (Vitest)
-
-Créer un fichier `tests/setup-a11y.ts` :
-
-```typescript
-import { expect } from 'vitest';
-import { toHaveNoViolations } from 'jest-axe';
-
-expect.extend(toHaveNoViolations);
-```
-
-Puis dans `vitest.config.ts` :
-
-```typescript
+```ts
 export default defineConfig({
   test: {
     setupFiles: ['./tests/setup-a11y.ts'],
+    environment: 'jsdom',
   },
 });
 ```
 
-### Tester un composant React
+```ts
+// tests/setup-a11y.ts
+import { expect } from 'vitest';
+import { toHaveNoViolations } from 'vitest-axe';
 
-```typescript
+expect.extend({ toHaveNoViolations });
+```
+
+Utilisation dans un test :
+
+```ts
 import { render } from '@testing-library/react';
-import { axe, toHaveNoViolations } from 'jest-axe';
+import { axe } from 'vitest-axe';
 import { describe, it, expect } from 'vitest';
-import { LoginForm } from './LoginForm';
+import { InvitationForm } from './InvitationForm';
 
-expect.extend(toHaveNoViolations);
-
-describe('LoginForm', () => {
-  it('ne contient aucune violation a11y', async () => {
-    const { container } = render(<LoginForm />);
+describe('InvitationForm a11y', () => {
+  it('ne doit avoir aucune violation axe détectable', async () => {
+    const { container } = render(<InvitationForm onInvite={() => {}} />);
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
+});
+```
 
-  it('associe chaque champ a son label', async () => {
-    const { container } = render(<LoginForm />);
+`toHaveNoViolations` produit un message d'erreur lisible qui liste les violations, leur impact, et les sélecteurs CSS des nœuds incriminés.
+
+### Limites de l'audit automatique — ~30-40 %
+
+C'est le chiffre à **retenir et à répéter** : les outils automatiques (axe-core, Lighthouse, IBM Equal Access…) détectent environ **30 à 40 % des violations WCAG réelles** d'une interface. Ce consensus vient de plusieurs études convergentes (WebAIM, Deque, GDS UK). Il varie selon la complexité de l'application, mais l'ordre de grandeur est stable.
+
+Ce que l'automatisation détecte fiablement :
+- Absence de `<label>` ou `aria-labelledby`
+- `<img>` sans `alt`
+- Hiérarchie de titres sautée (`h1` → `h3`)
+- Rôles ARIA invalides ou attributs manquants (`aria-*` non supportés)
+- Éléments interactifs sans nom accessible
+- Contrastes de couleur insuffisants (seulement avec vrai CSS — pas en JSDOM)
+
+Ce que l'automatisation **ne peut pas détecter** :
+- La pertinence d'un texte alternatif (`alt="image"` = présent mais inutile)
+- L'ordre logique de lecture (séquence de focus cohérente avec la lecture)
+- Le comportement d'une modale sous lecteur d'écran (annonces, piège de focus)
+- La compréhension d'un parcours multi-étapes sous NVDA/VoiceOver
+- Les animations et réduction de mouvement perçues
+
+Ces 60-70 % restants nécessitent des **tests clavier manuels** et un **audit sous lecteur d'écran**.
+
+### Tests clavier — la couche manuelle incontournable
+
+Un test clavier vérifie la navigabilité sans souris. Les interactions fondamentales à couvrir :
+
+| Touche | Comportement attendu |
+|--------|---------------------|
+| `Tab` | Avance vers le prochain élément focusable, ordre logique |
+| `Shift+Tab` | Recule vers l'élément précédent |
+| `Enter` / `Space` | Active le bouton ou le lien focalisé |
+| `Escape` | Ferme une modale, abandonne une action |
+| `Flèches` | Navigation dans les composants riches (menu, slider, tabs) |
+
+Points à vérifier manuellement :
+- Le focus est **visible** (outline CSS présent, non supprimé globalement)
+- Le **skip link** ("Aller au contenu") est le premier élément tabulable
+- Une **modale ouverte piège le focus** (Tab ne sort pas) et le restaure à la fermeture
+- Aucun élément interactif n'est skippé ou inatteignable
+
+Playwright permet d'**automatiser une partie** de ces vérifications :
+
+```ts
+import { test, expect } from '@playwright/test';
+
+test('le formulaire d\'invitation est navigable au clavier', async ({ page }) => {
+  await page.goto('/invite');
+
+  // Premier Tab : le premier champ doit recevoir le focus
+  await page.keyboard.press('Tab');
+  const firstFocused = page.locator(':focus');
+  await expect(firstFocused).toHaveRole('textbox');
+  await expect(firstFocused).toHaveAccessibleName('Prénom');
+
+  // Remplissage clavier
+  await firstFocused.fill('Alice');
+  await page.keyboard.press('Tab');
+  await page.locator(':focus').fill('alice@tribu.fr');
+
+  // Tab vers le bouton et activation
+  await page.keyboard.press('Tab');
+  await expect(page.locator(':focus')).toHaveRole('button');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('alert')).toHaveText('Invitation envoyée');
+});
+```
+
+### Lecteur d'écran — non automatisable en CI
+
+Les lecteurs d'écran (NVDA/Windows, VoiceOver/macOS, TalkBack/Android) interagissent avec l'**arbre d'accessibilité** du navigateur, pas directement le DOM. Leurs comportements varient selon la combinaison SR+navigateur. Il n'existe pas de lecteur d'écran headless fiable pour la CI.
+
+En pratique : tester les parcours critiques (connexion, invitation, messagerie) sous NVDA+Firefox ou VoiceOver+Safari lors des jalons de livraison, pas à chaque PR.
+
+### `@axe-core/playwright` — axe dans un vrai navigateur
+
+En JSDOM, le CSS n'est pas rendu — axe-core ne peut donc pas vérifier les contrastes. `@axe-core/playwright` exécute axe-core dans un vrai navigateur Chromium/Firefox, avec le CSS réel.
+
+```bash
+pnpm add -D @axe-core/playwright
+```
+
+```ts
+import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+
+test.describe('Accessibilité TribuZen', () => {
+  test('page d\'invitation — WCAG 2.1 AA', async ({ page }) => {
+    await page.goto('/invite');
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+
+    expect(results.violations).toEqual([]);
+  });
+
+  test('scanner seulement le formulaire d\'invitation', async ({ page }) => {
+    await page.goto('/invite');
+
+    const results = await new AxeBuilder({ page })
+      .include('#invitation-form')
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+
+    expect(results.violations).toEqual([]);
+  });
+});
+```
+
+Storybook propose son propre `@storybook/addon-a11y` — même moteur axe-core, mais dans l'environnement Storybook. Utile pour un audit composant par composant en développement, pas pour la CI de production.
+
+### Intégration CI
+
+Stratégie en deux niveaux : les tests vitest-axe (JSDOM, rapides) bloquent la PR ; les tests Playwright axe (navigateur réel) tournent en post-merge ou sur une branche dédiée.
+
+```yaml
+# .github/workflows/a11y.yml
+name: Tests a11y
+
+on: [push, pull_request]
+
+jobs:
+  unit-a11y:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install
+      - run: pnpm vitest run --reporter=verbose
+
+  e2e-a11y:
+    runs-on: ubuntu-latest
+    needs: unit-a11y
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install
+      - run: pnpm playwright install --with-deps chromium
+      - run: pnpm build && pnpm preview &
+      - run: npx wait-on http://localhost:4173
+      - run: pnpm playwright test tests/e2e/a11y/
+```
+
+Filtrer par sévérité pour éviter de bloquer sur du `minor` :
+
+```ts
+const results = await new AxeBuilder({ page })
+  .withTags(['wcag2a', 'wcag2aa'])
+  .analyze();
+
+// Seulement critical et serious bloquent la CI
+const blocking = results.violations.filter(
+  (v) => v.impact === 'critical' || v.impact === 'serious',
+);
+expect(blocking).toHaveLength(0);
+```
+
+### WCAG, RGAA, axe-core — trois choses distinctes
+
+C'est le point d'exactitude le plus important de ce module. Ne jamais les confondre :
+
+| | Qu'est-ce que c'est ? | Qui le produit ? | Ce que ça fait |
+|---|---|---|---|
+| **WCAG** | Norme internationale (Web Content Accessibility Guidelines) | W3C | Définit des critères de succès organisés en niveaux A / AA / AAA |
+| **RGAA** | Référentiel Général d'Amélioration de l'Accessibilité | DINUM (France) | Traduit WCAG 2.1 en 106 critères + tests concrets. Un audit RGAA est **manuel et méthodologique** |
+| **axe-core** | Outil logiciel open source | Deque Labs | Exécute des règles automatiques sur le DOM. Couvre un **sous-ensemble de critères WCAG** détectables algorithmiquement |
+
+axe-core détecte des **violations de critères WCAG** (pas "des critères RGAA"). Un audit RGAA complet reste une démarche manuelle encadrée par la méthode DINUM — passer axe-core à zéro violation ne signifie pas qu'une application est conforme RGAA.
+
+Le tag `wcag2aa` dans axe-core sélectionne les règles taggées par axe selon leur correspondance WCAG 2.0 AA — pas la totalité des critères WCAG 2.0 AA (seulement ceux qu'axe peut vérifier).
+
+## 3. Worked examples
+
+### Exemple A — vitest-axe sur InvitationForm TribuZen (détecter puis corriger)
+
+Objectif : prouver que le formulaire livré viole des règles axe, puis vérifier que la version corrigée les passe.
+
+```ts
+// src/components/InvitationForm.test.tsx
+import { render } from '@testing-library/react';
+import { axe } from 'vitest-axe';
+import { describe, it, expect } from 'vitest';
+import { InvitationFormBroken } from './InvitationFormBroken';
+import { InvitationForm } from './InvitationForm';
+
+describe('InvitationForm — accessibilité axe', () => {
+  it('DÉTECTE des violations sur la version inaccessible', async () => {
+    const { container } = render(<InvitationFormBroken onInvite={() => {}} />);
+    const results = await axe(container);
+    // On s'attend à des violations : labels manquants, div cliquable
+    expect(results.violations.length).toBeGreaterThan(0);
+    // On peut inspecter ce qu'axe a trouvé :
+    const ids = results.violations.map((v) => v.id);
+    expect(ids).toContain('label'); // champ sans label associé
+  });
+
+  it('PASSE sans violation sur la version corrigée', async () => {
+    const { container } = render(<InvitationForm onInvite={() => {}} />);
+    // En JSDOM, color-contrast ne peut pas être calculé (pas de CSS rendu)
     const results = await axe(container, {
-      runOnly: ['label'],
+      rules: { 'color-contrast': { enabled: false } },
     });
     expect(results).toHaveNoViolations();
   });
 });
 ```
 
-### Tester un composant Vue
+```tsx
+// src/components/InvitationForm.tsx — VERSION CORRIGÉE
+export function InvitationForm({ onInvite }: { onInvite: (email: string) => void }) {
+  const [prenom, setPrenom] = useState('');
+  const [email, setEmail] = useState('');
 
-```typescript
-import { mount } from '@vue/test-utils';
-import { axe, toHaveNoViolations } from 'jest-axe';
-import { describe, it, expect } from 'vitest';
-import ContactForm from './ContactForm.vue';
+  return (
+    <form
+      id="invitation-form"
+      aria-label="Inviter un membre"
+      onSubmit={(e) => { e.preventDefault(); onInvite(email); }}
+    >
+      {/* label explicitement lié par htmlFor ↔ id */}
+      <label htmlFor="invite-prenom">Prénom</label>
+      <input
+        id="invite-prenom"
+        type="text"
+        value={prenom}
+        onChange={(e) => setPrenom(e.target.value)}
+      />
 
-expect.extend(toHaveNoViolations);
+      <label htmlFor="invite-email">Adresse email</label>
+      <input
+        id="invite-email"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        aria-describedby="invite-email-hint"
+      />
+      <span id="invite-email-hint">Format attendu : prénom@domaine.fr</span>
 
-describe('ContactForm', () => {
-  it('est accessible', async () => {
-    const wrapper = mount(ContactForm);
-    const results = await axe(wrapper.element as HTMLElement);
-    expect(results).toHaveNoViolations();
-  });
-});
-```
-
-### Filtrer les regles
-
-Certaines regles ne sont pas pertinentes dans le contexte d'un test unitaire (ex. : les contrastes de couleur dependent du CSS qui n'est pas charge en JSDOM).
-
-```typescript
-it('est accessible (hors contrastes)', async () => {
-  const { container } = render(<DataTable data={mockData} />);
-  const results = await axe(container, {
-    rules: {
-      'color-contrast': { enabled: false },
-      'document-title': { enabled: false },
-      'html-has-lang': { enabled: false },
-      'landmark-one-main': { enabled: false },
-    },
-  });
-  expect(results).toHaveNoViolations();
-});
-```
-
-### Helper réutilisable
-
-Pour éviter de repeter la configuration de filtrage dans chaque test :
-
-```typescript
-// tests/helpers/a11y.ts
-import { axe, type AxeResults } from 'jest-axe';
-
-const IGNORED_RULES_UNIT = [
-  'color-contrast',
-  'document-title',
-  'html-has-lang',
-  'landmark-one-main',
-  'page-has-heading-one',
-];
-
-export async function checkA11y(container: Element): Promise<AxeResults> {
-  return axe(container, {
-    rules: Object.fromEntries(
-      IGNORED_RULES_UNIT.map((rule) => [rule, { enabled: false }]),
-    ),
-  });
+      {/* <button type="submit"> = interactif au clavier nativement */}
+      <button type="submit">Envoyer l'invitation</button>
+    </form>
+  );
 }
 ```
 
-Utilisation simplifiee :
+Pas-à-pas : (1) le test "broken" prouve que l'outil détecte bien la violation `label` — il ne faut pas supprimer ce test, il sert de régression-inverse ; (2) `color-contrast: { enabled: false }` est justifié en JSDOM où le CSS n'est jamais rendu — on le note explicitement pour ne pas laisser croire qu'on ignore les contrastes ; (3) la correction utilise uniquement du HTML sémantique natif (`<label htmlFor>`, `<button type="submit">`) sans ARIA superflu — la première règle ARIA est « ne pas l'utiliser si le HTML natif suffit ».
 
-```typescript
-import { checkA11y } from '../helpers/a11y';
+### Exemple B — `@axe-core/playwright` sur la page d'invitation (vrai navigateur)
 
-it('est accessible', async () => {
-  const { container } = render(<SearchBar />);
-  expect(await checkA11y(container)).toHaveNoViolations();
-});
-```
-
----
-
-## 4. Playwright : tests E2E d'accessibilité
-
-Les tests E2E operent sur un vrai navigateur avec le CSS réel. Ils detectent des violations impossibles a trouver en JSDOM : contrastes, ordre de focus, comportement des roles ARIA.
-
-### Installation
-
-```bash
-pnpm add -D @axe-core/playwright
-```
-
-### Scanner une page entière
-
-```typescript
+```ts
+// tests/e2e/a11y/invitation.spec.ts
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-test.describe('Accessibilite', () => {
-  test('la page d\'accueil respecte WCAG 2.1 AA', async ({ page }) => {
-    await page.goto('/');
+test.describe('Page d\'invitation TribuZen — a11y E2E', () => {
+  test('aucune violation WCAG 2.1 AA (critical + serious)', async ({ page }) => {
+    await page.goto('/invite');
+    // Attendre que le composant soit interactif
+    await page.waitForSelector('#invitation-form');
 
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa'])
+      .include('#invitation-form')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze();
 
-    expect(results.violations).toEqual([]);
-  });
-
-  test('la page de connexion respecte WCAG 2.1 AA', async ({ page }) => {
-    await page.goto('/login');
-
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa'])
-      .analyze();
-
-    expect(results.violations).toEqual([]);
-  });
-});
-```
-
-### Scanner une section spécifique
-
-```typescript
-test('le formulaire de recherche est accessible', async ({ page }) => {
-  await page.goto('/products');
-
-  const results = await new AxeBuilder({ page })
-    .include('#search-form')
-    .withTags(['wcag2a', 'wcag2aa'])
-    .analyze();
-
-  expect(results.violations).toEqual([]);
-});
-```
-
-### Exclure des éléments connus (dette technique)
-
-```typescript
-test('page accessible sauf banniere tierce', async ({ page }) => {
-  await page.goto('/');
-
-  const results = await new AxeBuilder({ page })
-    .exclude('.third-party-banner')
-    .withTags(['wcag2a', 'wcag2aa'])
-    .analyze();
-
-  expect(results.violations).toEqual([]);
-});
-```
-
-### Tester la navigation clavier
-
-```typescript
-test('le menu principal est navigable au clavier', async ({ page }) => {
-  await page.goto('/');
-
-  // Premiere tabulation : on arrive sur le lien "Aller au contenu"
-  await page.keyboard.press('Tab');
-  const skipLink = page.locator(':focus');
-  await expect(skipLink).toHaveText('Aller au contenu principal');
-
-  // Tabulations suivantes : on parcourt le menu
-  await page.keyboard.press('Tab');
-  const firstMenuItem = page.locator(':focus');
-  await expect(firstMenuItem).toHaveRole('link');
-  await expect(firstMenuItem).toHaveAttribute('href', '/');
-
-  // Echap ferme un menu ouvert
-  await page.keyboard.press('Enter');
-  await page.keyboard.press('Escape');
-  await expect(page.locator('[role="menu"]')).not.toBeVisible();
-});
-```
-
-### Tester les roles ARIA
-
-Playwright propose des selecteurs semantiques qui refletent la façon dont les technologies d'assistance voient la page :
-
-```typescript
-test('les elements interactifs ont les bons roles', async ({ page }) => {
-  await page.goto('/dashboard');
-
-  // Verifier la presence d'un bouton avec un nom accessible
-  const submitBtn = page.getByRole('button', { name: 'Soumettre' });
-  await expect(submitBtn).toBeVisible();
-  await expect(submitBtn).toBeEnabled();
-
-  // Verifier qu'un dialog s'ouvre avec le bon titre
-  await submitBtn.click();
-  const dialog = page.getByRole('dialog', { name: 'Confirmer l\'envoi' });
-  await expect(dialog).toBeVisible();
-
-  // Verifier la structure de navigation
-  const nav = page.getByRole('navigation', { name: 'Menu principal' });
-  await expect(nav).toBeVisible();
-
-  // Verifier les landmarks
-  await expect(page.getByRole('main')).toBeVisible();
-  await expect(page.getByRole('banner')).toBeVisible();
-  await expect(page.getByRole('contentinfo')).toBeVisible();
-});
-```
-
-### Screenshot pour audit visuel
-
-```typescript
-test('le focus est visible sur les elements interactifs', async ({ page }) => {
-  await page.goto('/login');
-
-  // Focus sur le premier champ
-  await page.keyboard.press('Tab');
-  await expect(page.locator(':focus')).toHaveCSS('outline-style', /.+/);
-
-  // Capture d'ecran pour validation visuelle
-  await page.screenshot({
-    path: 'screenshots/a11y-focus-login.png',
-    fullPage: true,
-  });
-});
-```
-
-### Helper Playwright réutilisable
-
-```typescript
-// tests/helpers/a11y-e2e.ts
-import AxeBuilder from '@axe-core/playwright';
-import type { Page } from '@playwright/test';
-
-export async function expectPageAccessible(
-  page: Page,
-  options?: { exclude?: string[]; include?: string },
-): Promise<void> {
-  let builder = new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa']);
-
-  if (options?.include) {
-    builder = builder.include(options.include);
-  }
-
-  for (const selector of options?.exclude ?? []) {
-    builder = builder.exclude(selector);
-  }
-
-  const results = await builder.analyze();
-
-  if (results.violations.length > 0) {
-    const summary = results.violations.map((v) =>
-      `[${v.impact}] ${v.id}: ${v.description} (${v.nodes.length} elements)`
-    ).join('\n');
-    throw new Error(`Violations a11y detectees :\n${summary}`);
-  }
-}
-```
-
-Utilisation :
-
-```typescript
-import { expectPageAccessible } from '../helpers/a11y-e2e';
-
-test('page produits accessible', async ({ page }) => {
-  await page.goto('/products');
-  await expectPageAccessible(page, {
-    exclude: ['.cookie-banner'],
-  });
-});
-```
-
----
-
-## 5. CI/CD : automatiser
-
-### Lighthouse CI avec assertions a11y
-
-Lighthouse CI permet de définir des seuils d'accessibilité dans la pipeline :
-
-```bash
-pnpm add -D @lhci/cli
-```
-
-Fichier `lighthouserc.json` :
-
-```json
-{
-  "ci": {
-    "collect": {
-      "url": ["http://localhost:3000/", "http://localhost:3000/login"],
-      "numberOfRuns": 3
-    },
-    "assert": {
-      "assertions": {
-        "categories:accessibility": ["error", { "minScore": 0.9 }],
-        "categories:best-practices": ["warn", { "minScore": 0.8 }]
-      }
-    },
-    "upload": {
-      "target": "filesystem",
-      "outputDir": "./lighthouse-reports"
+    // On bloque sur critical/serious, on log les moderate/minor sans bloquer
+    const blocking = results.violations.filter(
+      (v) => v.impact === 'critical' || v.impact === 'serious',
+    );
+    if (blocking.length > 0) {
+      const detail = blocking
+        .map((v) => `[${v.impact}] ${v.id} — ${v.description} (${v.nodes.length} nœud(s))`)
+        .join('\n');
+      throw new Error(`Violations bloquantes :\n${detail}`);
     }
-  }
-}
-```
-
-Script dans `package.json` :
-
-```json
-{
-  "scripts": {
-    "lhci": "lhci autorun"
-  }
-}
-```
-
-### axe dans la pipeline GitHub Actions
-
-```yaml
-# .github/workflows/a11y.yml
-name: Tests accessibilite
-
-on: [push, pull_request]
-
-jobs:
-  a11y:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-
-      - run: pnpm install
-
-      - name: Tests unitaires a11y
-        run: pnpm vitest run --reporter=verbose tests/a11y/
-
-      - name: Build et demarrer le serveur
-        run: |
-          pnpm build
-          pnpm preview &
-          npx wait-on http://localhost:3000
-
-      - name: Tests E2E a11y (Playwright + axe)
-        run: pnpm playwright test tests/e2e/a11y/
-
-      - name: Lighthouse CI
-        run: pnpm lhci
-
-      - name: Upload des rapports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: a11y-reports
-          path: |
-            lighthouse-reports/
-            playwright-report/
-```
-
-### Rapport HTML des violations
-
-axe-core généré des résultats JSON structurees. Un script simple peut les convertir en HTML :
-
-```typescript
-// scripts/a11y-report.ts
-import { writeFileSync } from 'node:fs';
-import type { AxeResults } from 'axe-core';
-
-export function generateA11yReport(
-  results: AxeResults,
-  outputPath: string,
-): void {
-  const html = `<!DOCTYPE html>
-<html lang="fr">
-<head><meta charset="UTF-8"><title>Rapport a11y</title></head>
-<body>
-  <h1>Rapport d'accessibilite</h1>
-  <p>URL: ${results.url}</p>
-  <p>Violations: ${results.violations.length}</p>
-  <table border="1">
-    <thead>
-      <tr><th>Severite</th><th>Regle</th><th>Description</th><th>Elements</th></tr>
-    </thead>
-    <tbody>
-      ${results.violations.map((v) => `
-        <tr>
-          <td>${v.impact}</td>
-          <td>${v.id}</td>
-          <td>${v.description}</td>
-          <td>${v.nodes.length}</td>
-        </tr>
-      `).join('')}
-    </tbody>
-  </table>
-</body>
-</html>`;
-
-  writeFileSync(outputPath, html, 'utf-8');
-}
-```
-
-### Stratégie de severite
-
-Ne bloquez pas la pipeline pour toutes les violations. Adoptez une approche progressive :
-
-| Impact axe-core | Action CI |
-|-----------------|-----------|
-| **critical** | Fail la pipeline (bloquant) |
-| **serious** | Fail la pipeline (bloquant) |
-| **moderate** | Warning (non bloquant) |
-| **minor** | Warning (non bloquant) |
-
-```typescript
-// Dans un test Playwright
-const results = await new AxeBuilder({ page })
-  .withTags(['wcag2a', 'wcag2aa'])
-  .analyze();
-
-const blocking = results.violations.filter(
-  (v) => v.impact === 'critical' || v.impact === 'serious',
-);
-
-expect(blocking).toEqual([]);
-```
-
----
-
-## 6. Exercices
-
-### Exercice 1 — Auditer un formulaire avec jest-axe
-
-**Consigne** : le composant `RegistrationForm` ci-dessous contient 3 violations d'accessibilité. Ecrivez un test qui les détecté, puis corrigez le composant.
-
-```typescript
-// RegistrationForm.tsx (avec violations)
-export function RegistrationForm() {
-  return (
-    <form>
-      <div>
-        <input type="text" placeholder="Nom" />
-      </div>
-      <div>
-        <input type="email" placeholder="Email" />
-      </div>
-      <div onClick={() => console.log('submit')}>Envoyer</div>
-    </form>
-  );
-}
-```
-
-**Solution** :
-
-```typescript
-// RegistrationForm.test.tsx
-import { render } from '@testing-library/react';
-import { axe, toHaveNoViolations } from 'jest-axe';
-import { describe, it, expect } from 'vitest';
-import { RegistrationForm } from './RegistrationForm';
-
-expect.extend(toHaveNoViolations);
-
-describe('RegistrationForm', () => {
-  it('detecte les violations a11y', async () => {
-    const { container } = render(<RegistrationForm />);
-    const results = await axe(container);
-    // On s'attend a des violations tant que le composant n'est pas corrige
-    expect(results.violations.length).toBeGreaterThan(0);
-  });
-});
-
-// RegistrationForm.tsx (corrige)
-export function RegistrationForm() {
-  return (
-    <form aria-label="Inscription">
-      <div>
-        <label htmlFor="name">Nom</label>
-        <input id="name" type="text" />
-      </div>
-      <div>
-        <label htmlFor="email">Email</label>
-        <input id="email" type="email" />
-      </div>
-      <button type="submit">Envoyer</button>
-    </form>
-  );
-}
-```
-
----
-
-### Exercice 2 — Test E2E de navigation clavier avec Playwright
-
-**Consigne** : ecrivez un test Playwright qui vérifié que la modale de confirmation de votre application :
-
-1. Recoit le focus automatiquement a l'ouverture
-2. Piege le focus (Tab ne sort pas de la modale)
-3. Se ferme avec Echap
-4. Restore le focus sur l'élément declencheur après fermeture
-
-**Solution** :
-
-```typescript
-import { test, expect } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
-
-test.describe('Modale de confirmation', () => {
-  test('gestion du focus conforme WCAG', async ({ page }) => {
-    await page.goto('/dashboard');
-
-    // Ouvrir la modale
-    const trigger = page.getByRole('button', { name: 'Supprimer' });
-    await trigger.click();
-
-    // 1. La modale recoit le focus
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible();
-    const focusedElement = page.locator(':focus');
-    await expect(focusedElement).toHaveAttribute('role', 'dialog');
-
-    // 2. Le focus est piege dans la modale
-    const confirmBtn = page.getByRole('button', { name: 'Confirmer' });
-    const cancelBtn = page.getByRole('button', { name: 'Annuler' });
-    await page.keyboard.press('Tab');
-    await expect(confirmBtn).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(cancelBtn).toBeFocused();
-    await page.keyboard.press('Tab');
-    // Le focus revient au premier element focusable de la modale
-    await expect(dialog.locator(':focus')).toBeVisible();
-
-    // 3. Echap ferme la modale
-    await page.keyboard.press('Escape');
-    await expect(dialog).not.toBeVisible();
-
-    // 4. Le focus revient sur le bouton declencheur
-    await expect(trigger).toBeFocused();
   });
 
-  test('la modale est accessible (axe)', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.getByRole('button', { name: 'Supprimer' }).click();
-
-    const results = await new AxeBuilder({ page })
-      .include('[role="dialog"]')
-      .withTags(['wcag2a', 'wcag2aa'])
-      .analyze();
-
-    expect(results.violations).toEqual([]);
+  test('le champ email a un nom accessible et un hint', async ({ page }) => {
+    await page.goto('/invite');
+    const emailField = page.getByRole('textbox', { name: 'Adresse email' });
+    await expect(emailField).toBeVisible();
+    // Playwright vérifie le nom accessible calculé (pas juste l'attribut aria-label)
+    await expect(emailField).toHaveAccessibleName('Adresse email');
   });
 });
 ```
 
----
+Différence clé avec l'exemple A : ici le CSS est chargé, donc axe-core vérifie aussi les contrastes — aucune règle désactivée par défaut.
 
-## Ressources
+## 4. Pièges & misconceptions
 
-- [axe-core rules](https://github.com/dequelabs/axe-core/blob/develop/doc/rule-descriptions.md) — liste complete des regles
-- [WCAG 2.1 Quick Référence](https://www.w3.org/WAI/WCAG21/quickref/) — criteres filtrable par niveau
-- [Playwright accessibility](https://playwright.dev/docs/accessibility-testing) — documentation officielle
-- [RGAA 4.1](https://accessibilite.numerique.gouv.fr/methode/criteres-et-tests/) — référentiel français
+- **Croire que zéro violation axe = composant accessible.** axe-core ne détecte que ~30-40 % des violations WCAG réelles. Un formulaire peut passer axe à 100 % et rester illisible sous NVDA parce que les annonces live region sont absentes ou que l'ordre de lecture est incohérent. Correct : traiter l'auto comme le premier filet, pas le seul.
+
+- **Tester le composant dans son état initial seulement.** Un champ de saisie vide avec validation peut passer axe. Le même champ en erreur (`aria-invalid="true"` sans `aria-describedby` pointant le message d'erreur) viole les critères WCAG 1.3.1 et 3.3.1. Correct : tester aussi les états — erreur, désactivé, chargement, modale ouverte.
+
+- **Désactiver `color-contrast` en JSDOM et l'oublier.** Justifié techniquement (pas de CSS), mais si on ne le couvre jamais en E2E Playwright (vrai navigateur), les contrastes insuffisants ne seront jamais détectés. Correct : désactiver en unit/JSDOM, activer en E2E.
+
+- **Ignorer le clavier au profit de l'auto seul.** axe-core ne navigue pas au clavier : il ne peut pas détecter qu'un `<div tabindex="0">` ne répond pas à `Enter`, qu'un trap de focus est cassé, ou que l'ordre de Tab est illogique. Correct : compléter par des tests Playwright clavier sur les parcours critiques.
+
+- **Confondre « conforme RGAA » et « zéro violation axe ».** Dire qu'une application "est RGAA" parce qu'axe-core renvoie zero violations est une erreur de communication grave (surtout vis-à-vis d'un client public). Correct : axe-core réduit la surface de risque sur les critères WCAG vérifiables automatiquement ; la conformité RGAA requiert un audit méthodologique complet selon la grille DINUM.
+
+- **Utiliser `results.violations` sans lire les `incomplete`.** axe-core retourne aussi `results.incomplete` — les règles qu'il n'a pas pu trancher (résultat indéterminé). En ignorer le contenu revient à ignorer des avertissements potentiellement critiques. Correct : logguer `incomplete` en mode verbose et investiguer les cas ambigus manuellement.
+
+## 5. Ancrage TribuZen
+
+Couche fil-rouge : **tester l'accessibilité des composants TribuZen (vitest-axe) + audit manuel des parcours clés** (`smaurier/tribuzen`).
+
+- **`InvitationForm`** : premier composant à couvrir avec vitest-axe. Test double : broken vs corrected. Le lab reproduit exactement ce flux.
+- **`FamilyMemberCard`** (carte d'un membre) : composant riche avec menu contextuel — tester les états fermé et ouvert séparément, vérifier que l'état ouvert piège le focus.
+- **Parcours clé #1 — invitation** : test Playwright clavier complet (Tab sur les champs, Enter sur le bouton, feedback de confirmation audible via `role="alert"`).
+- **Parcours clé #2 — connexion** : même stratégie. La modale de 2FA doit piéger le focus, s'annoncer comme `role="dialog"` avec `aria-labelledby`.
+- **CI TribuZen** : vitest-axe dans `pnpm test` (déjà configuré) ; Playwright axe dans un job séparé déclenché sur push main.
+
+## 6. Points clés
+
+1. axe-core est un **outil** qui teste un sous-ensemble de critères WCAG automatisables — ne pas le confondre avec WCAG (norme W3C) ni RGAA (méthodologie française basée sur WCAG).
+2. Les outils automatiques détectent **~30-40 % des violations WCAG** réelles — ce chiffre est une borne haute et non un plancher.
+3. `vitest-axe` expose `toHaveNoViolations()` ; s'installer avec `axe-core` en dépendance pair ; désactiver `color-contrast` en JSDOM (pas de CSS rendu).
+4. Tester tous les **états** du composant — initial, erreur, désactivé, chargement — pas seulement l'état vide.
+5. `@axe-core/playwright` exécute axe dans un vrai navigateur avec CSS réel — contrastes inclus ; filtrer par `impact` pour ne bloquer la CI que sur `critical` et `serious`.
+6. Les **tests clavier** (Tab, Enter, Escape, piège de focus des modales) couvrent des violations que l'automatisation ne peut pas détecter — Playwright les automatise partiellement.
+7. Les **lecteurs d'écran** (NVDA, VoiceOver) ne sont pas automatisables en CI ; tester sur les jalons de livraison des parcours critiques.
+8. En CI : vitest-axe en job PR (rapide, bloquant) ; Playwright axe en job post-merge ou nightly (navigateur réel, plus lent).
+
+## 7. Seeds Anki
+
+```
+Que détecte axe-core et que ne détecte-t-il pas ?|Il détecte les violations WCAG vérifiables algorithmiquement sur le DOM (labels manquants, rôles ARIA invalides, contrastes insuffisants avec CSS). Il ne détecte pas la pertinence d'un alt, l'ordre de lecture logique, le comportement sous lecteur d'écran.
+Quel pourcentage des violations WCAG est détectable automatiquement ?|Environ 30 à 40 % — les 60-70 % restants nécessitent des tests clavier et un audit sous lecteur d'écran.
+Différence entre axe-core, WCAG et RGAA ?|axe-core = outil Deque Labs qui exécute des règles automatiques sur le DOM. WCAG = norme W3C internationale. RGAA = méthodologie française (DINUM) de mise en œuvre de WCAG, avec audit complet manuel.
+Pourquoi désactiver color-contrast en JSDOM ?|JSDOM ne rend pas le CSS ; axe-core ne peut pas calculer les contrastes réels. La règle doit être couverte en tests E2E Playwright avec un vrai navigateur.
+Comment tester l'accessibilité avec vitest-axe ?|pnpm add -D vitest-axe axe-core ; dans setup : expect.extend({ toHaveNoViolations }) ; dans le test : const results = await axe(container) ; expect(results).toHaveNoViolations()
+À quoi sert @axe-core/playwright ?|Exécuter axe-core dans un vrai navigateur (Chromium/Firefox) via Playwright — avec CSS réel, contrastes inclus. new AxeBuilder({ page }).withTags(['wcag2a','wcag2aa']).analyze()
+Pourquoi tester les états erreur et désactivé séparément ?|Un composant accessible à l'état initial peut violer WCAG en état erreur (aria-invalid sans aria-describedby) ou désactivé (focus perdu). L'auto ne teste que ce qu'il voit au moment du rendu.
+Quel est le piège de dire qu'une app est conforme RGAA parce qu'axe renvoie zéro violation ?|axe-core ne couvre que les critères WCAG automatisables (~30-40 %). La conformité RGAA est un audit méthodologique complet (106 critères DINUM). C'est une affirmation fausse et potentiellement engageante contractuellement.
+```
+
+## Pont vers le lab
+
+> Lab associé : `06-testing/labs/lab-12b-tests-accessibilite/`. Tu y écris en **vitest-axe réel** les tests sur l'`InvitationForm` TribuZen (version cassée → correction → passage), puis un test Playwright clavier sur le parcours d'invitation. Corrigé complet commenté + variante J+30 dans le README.

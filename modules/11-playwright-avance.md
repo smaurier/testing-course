@@ -1,1416 +1,563 @@
-# Module 11 — Playwright avance
-
-| Difficulte | Duree estimee | Lab | Quiz |
-|------------|---------------|-----|------|
-| 4/5        | 90 min        | [Lab 11](../labs/lab-11-playwright-avance/) | [Quiz 11](../quizzes/quiz-11-playwright-avance.html) |
-
-## Objectifs
-
-- Implementer le pattern Page Object Model (POM) avec TypeScript
-- Créer des fixtures personnalisees (auth, database, API)
-- Reutiliser l'état d'authentification avec `storageState`
-- Intercepter le réseau avec `page.route()`
-- Mettre en place la regression visuelle avec `toHaveScreenshot()`
-- Tester l'accessibilité avec axe-core
-- Tester les API REST directement avec la fixture `request`
-- Configurer le parallelisme, le sharding et la CI
-- Organiser les tests avec des tags et des reporters
-
+---
+titre: Playwright avancé
+cours: 06-testing
+notions: [Page Object Model, storageState et auth persistée, interception réseau et mock de route, fixtures custom, tests visuels screenshot, parallélisme et sharding, retries et gestion de la flakiness, tests d'API avec request]
+outcomes: [structurer une suite E2E avec le Page Object Model, réutiliser une session authentifiée via storageState, intercepter le réseau, gérer parallélisme et flakiness]
+prerequis: [10-playwright-fondamentaux]
+next: 12-couverture-et-mutation-testing
+libs: [{ name: "@playwright/test", version: ^1 }]
+tribuzen: suite E2E TribuZen structurée (POM des pages famille, auth réutilisée via storageState, mock réseau)
+last-reviewed: 2026-07
 ---
 
-## Page Object Model (POM)
+# Playwright avancé
 
-Le Page Object Model est un pattern de design qui encapsule l'interaction avec une page dans une classe dediee. Chaque page (où composant significatif) de l'application a sa propre classe.
+> **Outcomes — tu sauras FAIRE :** structurer une suite E2E avec le Page Object Model, réutiliser une session authentifiée via `storageState`, intercepter le réseau avec `page.route()`, créer des fixtures custom avec `test.extend`, configurer parallélisme et sharding, et gérer la flakiness avec retries.
+> **Difficulté :** :star::star::star::star:
 
-### Pourquoi le POM ?
+## 1. Cas concret d'abord
 
-| Sans POM | Avec POM |
+La suite E2E de TribuZen commence petit : deux tests qui vérifient la page login et la liste des membres de la famille. Au bout de deux semaines, la suite atteint 30 tests. Trois problèmes apparaissent :
+
+```
+// Fichier membres.spec.ts
+await page.getByRole('button', { name: /inviter/i }).click(); // copié 8 fois
+
+// Fichier famille.spec.ts
+await page.getByRole('button', { name: /inviter/i }).click(); // même sélecteur
+
+// Fichier profil.spec.ts — beforeEach qui se répète partout
+await page.goto('/login');
+await page.getByLabel(/email/i).fill('alice@tribu.fr');
+await page.getByLabel(/mot de passe/i).fill('secret42');
+await page.getByRole('button', { name: /connexion/i }).click(); // 30 tests × 5 s = 150 s perdues
+```
+
+Le sélecteur du bouton change de `/inviter/i` à `/ajouter un membre/i` : 12 fichiers à corriger. L'API `/notifications` est instable en CI : 3 tests flaky par semaine.
+
+Trois problèmes, trois solutions :
+
+| Problème | Solution |
 |----------|----------|
-| Selecteurs dupliques dans chaque test | Selecteurs centralises dans un seul fichier |
-| Si un selecteur change → modifier N tests | Si un selecteur change → modifier 1 fichier |
-| Tests verbeux et difficiles a lire | Tests lisibles, orientes metier |
-| Pas de reutilisation | Méthodes réutilisables |
+| Sélecteurs dupliqués dans N fichiers | **Page Object Model** — 1 classe TypeScript par page |
+| Re-login avant chaque test (150 s perdues) | **`storageState`** — 1 login en global setup, session rechargée |
+| API externe instable | **`page.route()`** — mock réseau déterministe |
 
-### BasePage : classe de base
+## 2. Théorie complète, concise
 
-```typescript
+### Page Object Model (POM)
+
+Le **Page Object Model** encapsule dans une classe TypeScript tout ce qui touche à une page UI : locators, actions, assertions. Les tests deviennent des séquences d'appels métier (`membresPage.inviterMembre('alice@tribu.fr')`) plutôt que des séquences de `page.getByRole(...)`.
+
+**BasePage — classe abstraite partagée :**
+
+```ts
 // e2e/pages/BasePage.ts
-import { type Page, type Locator, expect } from '@playwright/test';
+import { type Page, type Locator } from '@playwright/test';
 
 export abstract class BasePage {
   constructor(protected readonly page: Page) {}
 
-  // --- Navigation commune ---
-
-  async navigateTo(path: string): Promise<void> {
-    await this.page.goto(path);
-  }
-
-  // --- Elements communs (header, footer, etc.) ---
-
-  get header(): Locator {
-    return this.page.getByRole('banner');
-  }
-
-  get footer(): Locator {
-    return this.page.getByRole('contentinfo');
-  }
-
-  get mainNavigation(): Locator {
+  protected get nav(): Locator {
     return this.page.getByRole('navigation', { name: /principale/i });
   }
 
-  get userMenu(): Locator {
-    return this.page.getByTestId('user-menu');
-  }
-
-  // --- Actions communes ---
-
-  async clickNavLink(name: string | RegExp): Promise<void> {
-    await this.mainNavigation.getByRole('link', { name }).click();
-  }
-
-  async getPageTitle(): Promise<string> {
-    return this.page.title();
-  }
-
-  async waitForPageLoad(): Promise<void> {
-    await this.page.waitForLoadState('networkidle');
-  }
-
-  // --- Notifications ---
-
-  get successToast(): Locator {
-    return this.page.getByRole('status').filter({ hasText: /succes/i });
-  }
-
-  get errorToast(): Locator {
-    return this.page.getByRole('alert');
-  }
-
-  async expectSuccessMessage(message: string | RegExp): Promise<void> {
-    await expect(this.page.getByRole('status')).toContainText(message);
-  }
-
-  async expectErrorMessage(message: string | RegExp): Promise<void> {
-    await expect(this.page.getByRole('alert')).toContainText(message);
+  async allerVers(chemin: string): Promise<void> {
+    await this.page.goto(chemin);
   }
 }
 ```
 
-### LoginPage
+**PageMembres — Page Object concret :**
 
-```typescript
-// e2e/pages/LoginPage.ts
+```ts
+// e2e/pages/PageMembres.ts
 import { type Page, type Locator, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
 
-export class LoginPage extends BasePage {
-  // URL de la page
-  readonly url = '/login';
+export class PageMembres extends BasePage {
+  readonly url = '/famille/membres';
 
   constructor(page: Page) {
     super(page);
   }
 
-  // --- Locators ---
-
-  get emailInput(): Locator {
-    return this.page.getByLabel('Adresse email');
+  // --- Locators (get = ré-évalués à chaque accès, jamais cachés) ---
+  get boutonInviter(): Locator {
+    return this.page.getByRole('button', { name: /inviter/i });
   }
 
-  get passwordInput(): Locator {
-    return this.page.getByLabel('Mot de passe');
+  get champEmail(): Locator {
+    return this.page.getByLabel(/adresse email/i);
   }
 
-  get submitButton(): Locator {
-    return this.page.getByRole('button', { name: /se connecter/i });
+  get listeMembres(): Locator {
+    return this.page.getByRole('list', { name: /membres de la famille/i });
   }
 
-  get forgotPasswordLink(): Locator {
-    return this.page.getByRole('link', { name: /mot de passe oublie/i });
-  }
-
-  get rememberMeCheckbox(): Locator {
-    return this.page.getByRole('checkbox', { name: /se souvenir de moi/i });
-  }
-
-  get errorAlert(): Locator {
-    return this.page.getByRole('alert');
+  ligneMembre(nom: string): Locator {
+    return this.listeMembres.getByRole('listitem').filter({ hasText: nom });
   }
 
   // --- Actions ---
-
   async goto(): Promise<void> {
     await this.page.goto(this.url);
   }
 
-  async login(email: string, password: string): Promise<void> {
-    await this.emailInput.fill(email);
-    await this.passwordInput.fill(password);
-    await this.submitButton.click();
-  }
-
-  async loginWithRemember(email: string, password: string): Promise<void> {
-    await this.emailInput.fill(email);
-    await this.passwordInput.fill(password);
-    await this.rememberMeCheckbox.check();
-    await this.submitButton.click();
+  async inviterMembre(email: string): Promise<void> {
+    await this.boutonInviter.click();
+    await this.champEmail.fill(email);
+    await this.page.getByRole('button', { name: /envoyer l'invitation/i }).click();
   }
 
   // --- Assertions ---
-
-  async expectToBeOnLoginPage(): Promise<void> {
-    await expect(this.page).toHaveURL(this.url);
-    await expect(this.page.getByRole('heading', { name: /connexion/i })).toBeVisible();
+  async verifierMembreVisible(texte: string): Promise<void> {
+    await expect(this.ligneMembre(texte)).toBeVisible();
   }
 
-  async expectLoginError(message: string | RegExp): Promise<void> {
-    await expect(this.errorAlert).toBeVisible();
-    await expect(this.errorAlert).toContainText(message);
-  }
-
-  async expectEmailValidationError(): Promise<void> {
-    await expect(this.page.getByText(/email.*requis|format.*invalide/i)).toBeVisible();
+  async verifierNombreMembres(n: number): Promise<void> {
+    await expect(this.listeMembres.getByRole('listitem')).toHaveCount(n);
   }
 }
 ```
 
-### DashboardPage
+Règles POM :
+- **1 classe par page** (ou composant significatif). Pas de dieu-objet qui couvre tout le site.
+- Les **locators** sont des propriétés `get` (ré-évalués à chaque accès — un `Locator` Playwright est un pointeur vivant, pas un nœud DOM figé).
+- Les **actions** retournent `Promise<void>` ; les **assertions** contiennent le `expect`.
+- Les **tests** restent courts : intention métier, pas détails DOM.
 
-```typescript
-// e2e/pages/DashboardPage.ts
-import { type Page, type Locator, expect } from '@playwright/test';
-import { BasePage } from './BasePage';
+### `storageState` et auth persistée
 
-export class DashboardPage extends BasePage {
-  readonly url = '/dashboard';
+`storageState` sauvegarde cookies + `localStorage` d'un contexte browser dans un fichier JSON. Ce fichier est rechargé en début de chaque test via `use.storageState` — le test démarre déjà authentifié.
 
-  constructor(page: Page) {
-    super(page);
-  }
+**Sauvegarder l'état (global setup — s'exécute une fois) :**
 
-  // --- Locators ---
-
-  get welcomeHeading(): Locator {
-    return this.page.getByRole('heading', { name: /bienvenue/i });
-  }
-
-  get statsCards(): Locator {
-    return this.page.locator('[data-testid^="stat-card-"]');
-  }
-
-  get recentActivity(): Locator {
-    return this.page.getByRole('region', { name: /activite recente/i });
-  }
-
-  get quickActions(): Locator {
-    return this.page.getByRole('region', { name: /actions rapides/i });
-  }
-
-  // --- Stat cards ---
-
-  getStatCard(name: string): Locator {
-    return this.page.getByTestId(`stat-card-${name}`);
-  }
-
-  async getStatValue(name: string): Promise<string> {
-    const card = this.getStatCard(name);
-    const value = card.locator('.stat-value');
-    return value.textContent() as Promise<string>;
-  }
-
-  // --- Actions ---
-
-  async goto(): Promise<void> {
-    await this.page.goto(this.url);
-  }
-
-  async clickQuickAction(name: string | RegExp): Promise<void> {
-    await this.quickActions.getByRole('link', { name }).click();
-  }
-
-  // --- Assertions ---
-
-  async expectToBeOnDashboard(): Promise<void> {
-    await expect(this.page).toHaveURL(this.url);
-    await expect(this.welcomeHeading).toBeVisible();
-  }
-
-  async expectStatsLoaded(): Promise<void> {
-    await expect(this.statsCards).toHaveCount(4); // 4 cartes de stats
-  }
-});
-```
-
-### ProductListPage — exemple complet avec tableau
-
-```typescript
-// e2e/pages/ProductListPage.ts
-import { type Page, type Locator, expect } from '@playwright/test';
-import { BasePage } from './BasePage';
-
-export class ProductListPage extends BasePage {
-  readonly url = '/admin/products';
-
-  constructor(page: Page) {
-    super(page);
-  }
-
-  // --- Locators ---
-
-  get searchInput(): Locator {
-    return this.page.getByRole('searchbox', { name: /rechercher/i });
-  }
-
-  get categoryFilter(): Locator {
-    return this.page.getByRole('combobox', { name: /categorie/i });
-  }
-
-  get createButton(): Locator {
-    return this.page.getByRole('link', { name: /nouveau produit/i });
-  }
-
-  get productRows(): Locator {
-    return this.page.getByRole('row').filter({ has: this.page.getByRole('cell') });
-  }
-
-  get emptyState(): Locator {
-    return this.page.getByText(/aucun produit/i);
-  }
-
-  get deleteDialog(): Locator {
-    return this.page.getByRole('dialog');
-  }
-
-  // --- Actions ---
-
-  async goto(): Promise<void> {
-    await this.page.goto(this.url);
-  }
-
-  async search(query: string): Promise<void> {
-    await this.searchInput.fill(query);
-    // Attendre le debounce
-    await this.page.waitForResponse('**/api/products**');
-  }
-
-  async filterByCategory(category: string): Promise<void> {
-    await this.categoryFilter.selectOption(category);
-    await this.page.waitForResponse('**/api/products**');
-  }
-
-  async clickCreateProduct(): Promise<void> {
-    await this.createButton.click();
-  }
-
-  async editProduct(name: string): Promise<void> {
-    await this.getProductRow(name).getByRole('link', { name: /modifier/i }).click();
-  }
-
-  async deleteProduct(name: string): Promise<void> {
-    await this.getProductRow(name).getByRole('button', { name: /supprimer/i }).click();
-  }
-
-  async confirmDelete(): Promise<void> {
-    await this.deleteDialog.getByRole('button', { name: /confirmer/i }).click();
-  }
-
-  async cancelDelete(): Promise<void> {
-    await this.deleteDialog.getByRole('button', { name: /annuler/i }).click();
-  }
-
-  // --- Helpers ---
-
-  getProductRow(name: string): Locator {
-    return this.page.getByRole('row', { name: new RegExp(name, 'i') });
-  }
-
-  async getProductCount(): Promise<number> {
-    return this.productRows.count();
-  }
-
-  // --- Assertions ---
-
-  async expectProductVisible(name: string): Promise<void> {
-    await expect(this.getProductRow(name)).toBeVisible();
-  }
-
-  async expectProductNotVisible(name: string): Promise<void> {
-    await expect(this.getProductRow(name)).not.toBeVisible();
-  }
-
-  async expectProductCount(count: number): Promise<void> {
-    await expect(this.productRows).toHaveCount(count);
-  }
-
-  async expectEmptyState(): Promise<void> {
-    await expect(this.emptyState).toBeVisible();
-  }
-}
-```
-
-### Utilisation dans les tests
-
-```typescript
-// e2e/tests/products/product-management.spec.ts
-import { test, expect } from '@playwright/test';
-import { LoginPage } from '../../pages/LoginPage';
-import { ProductListPage } from '../../pages/ProductListPage';
-
-test.describe('Product management', () => {
-  let loginPage: LoginPage;
-  let productList: ProductListPage;
-
-  test.beforeEach(async ({ page }) => {
-    loginPage = new LoginPage(page);
-    productList = new ProductListPage(page);
-
-    // Login
-    await loginPage.goto();
-    await loginPage.login('admin@example.com', 'admin123');
-
-    // Naviguer vers la liste des produits
-    await productList.goto();
-  });
-
-  test('should search products', async () => {
-    await productList.search('clavier');
-    await productList.expectProductVisible('Clavier mecanique');
-    await productList.expectProductNotVisible('Souris');
-  });
-
-  test('should delete a product', async () => {
-    const initialCount = await productList.getProductCount();
-
-    await productList.deleteProduct('Webcam HD');
-    await productList.confirmDelete();
-
-    await productList.expectProductCount(initialCount - 1);
-    await productList.expectProductNotVisible('Webcam HD');
-    await productList.expectSuccessMessage(/produit supprime/i);
-  });
-
-  test('should cancel delete', async () => {
-    const initialCount = await productList.getProductCount();
-
-    await productList.deleteProduct('Clavier mecanique');
-    await productList.cancelDelete();
-
-    await productList.expectProductCount(initialCount);
-    await productList.expectProductVisible('Clavier mecanique');
-  });
-});
-```
-
----
-
-## Fixtures personnalisees
-
-Les fixtures Playwright permettent d'injecter des dépendances dans les tests.
-
-### Fixture d'authentification
-
-```typescript
-// e2e/fixtures/auth.ts
-import { test as base, type Page } from '@playwright/test';
-
-// Types pour les fixtures
-interface AuthFixtures {
-  authenticatedPage: Page;
-  adminPage: Page;
-}
-
-export const test = base.extend<AuthFixtures>({
-  authenticatedPage: async ({ page }, use) => {
-    // Setup : se connecter
-    await page.goto('/login');
-    await page.getByLabel('Email').fill('user@example.com');
-    await page.getByLabel('Mot de passe').fill('user123');
-    await page.getByRole('button', { name: /connexion/i }).click();
-    await page.waitForURL('/dashboard');
-
-    // Fournir la page authentifiee au test
-    await use(page);
-
-    // Teardown : se deconnecter
-    await page.goto('/logout');
-  },
-
-  adminPage: async ({ page }, use) => {
-    await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@example.com');
-    await page.getByLabel('Mot de passe').fill('admin123');
-    await page.getByRole('button', { name: /connexion/i }).click();
-    await page.waitForURL('/dashboard');
-
-    await use(page);
-
-    await page.goto('/logout');
-  },
-});
-
-export { expect } from '@playwright/test';
-```
-
-```typescript
-// Usage dans les tests
-import { test, expect } from '../fixtures/auth';
-
-test('should access profile page', async ({ authenticatedPage: page }) => {
-  await page.goto('/profile');
-  await expect(page.getByRole('heading', { name: /mon profil/i })).toBeVisible();
-});
-
-test('should access admin panel', async ({ adminPage: page }) => {
-  await page.goto('/admin');
-  await expect(page.getByRole('heading', { name: /administration/i })).toBeVisible();
-});
-```
-
-### Fixture de base de donnees
-
-```typescript
-// e2e/fixtures/database.ts
-import { test as base } from '@playwright/test';
-import { Pool } from 'pg';
-
-interface DatabaseFixtures {
-  db: Pool;
-  seedUsers: (users: Array<{ name: string; email: string }>) => Promise<void>;
-  cleanDatabase: () => Promise<void>;
-}
-
-export const test = base.extend<DatabaseFixtures>({
-  db: async ({}, use) => {
-    const pool = new Pool({
-      connectionString: process.env.TEST_DATABASE_URL ?? 'postgres://test:test@localhost:5433/testdb',
-    });
-
-    await use(pool);
-
-    await pool.end();
-  },
-
-  seedUsers: async ({ db }, use) => {
-    const seed = async (users: Array<{ name: string; email: string }>): Promise<void> => {
-      for (const user of users) {
-        await db.query(
-          'INSERT INTO users (name, email) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-          [user.name, user.email],
-        );
-      }
-    };
-
-    await use(seed);
-  },
-
-  cleanDatabase: async ({ db }, use) => {
-    const clean = async (): Promise<void> => {
-      await db.query('TRUNCATE TABLE orders, products, users CASCADE');
-    };
-
-    await use(clean);
-
-    // Nettoyer automatiquement apres chaque test
-    await db.query('TRUNCATE TABLE orders, products, users CASCADE');
-  },
-});
-
-export { expect } from '@playwright/test';
-```
-
-### Fixture API
-
-```typescript
-// e2e/fixtures/api.ts
-import { test as base, type APIRequestContext } from '@playwright/test';
-
-interface ApiFixtures {
-  apiContext: APIRequestContext;
-  createTestProduct: (data: { name: string; price: number }) => Promise<{ id: string }>;
-}
-
-export const test = base.extend<ApiFixtures>({
-  apiContext: async ({ playwright }, use) => {
-    const context = await playwright.request.newContext({
-      baseURL: process.env.API_URL ?? 'http://localhost:3001',
-      extraHTTPHeaders: {
-        'Authorization': 'Bearer test-admin-token',
-        'Content-Type': 'application/json',
-      },
-    });
-
-    await use(context);
-    await context.dispose();
-  },
-
-  createTestProduct: async ({ apiContext }, use) => {
-    const createdIds: string[] = [];
-
-    const create = async (data: { name: string; price: number }): Promise<{ id: string }> => {
-      const response = await apiContext.post('/api/products', { data });
-      const product = await response.json();
-      createdIds.push(product.id);
-      return product;
-    };
-
-    await use(create);
-
-    // Cleanup : supprimer les produits crees
-    for (const id of createdIds) {
-      await apiContext.delete(`/api/products/${id}`);
-    }
-  },
-});
-
-export { expect } from '@playwright/test';
-```
-
-### Combiner plusieurs fixtures
-
-```typescript
-// e2e/fixtures/index.ts
-import { mergeTests } from '@playwright/test';
-import { test as authTest } from './auth';
-import { test as dbTest } from './database';
-import { test as apiTest } from './api';
-
-export const test = mergeTests(authTest, dbTest, apiTest);
-export { expect } from '@playwright/test';
-```
-
----
-
-## Storage state : réutiliser l'authentification
-
-Au lieu de se connecter avant chaque test, on peut sauvegarder l'état de la session et le réutiliser.
-
-### Global setup : créer le storage state
-
-```typescript
+```ts
 // e2e/global-setup.ts
-import { chromium, type FullConfig } from '@playwright/test';
+import { chromium } from '@playwright/test';
 
-async function globalSetup(config: FullConfig): Promise<void> {
-  const { baseURL } = config.projects[0].use;
+export default async function globalSetup(): Promise<void> {
   const browser = await chromium.launch();
+  const page = await browser.newPage();
 
-  // --- Utilisateur standard ---
-  const userPage = await browser.newPage();
-  await userPage.goto(`${baseURL}/login`);
-  await userPage.getByLabel('Email').fill('user@example.com');
-  await userPage.getByLabel('Mot de passe').fill('user123');
-  await userPage.getByRole('button', { name: /connexion/i }).click();
-  await userPage.waitForURL(`${baseURL}/dashboard`);
+  await page.goto('http://localhost:5173/login');
+  await page.getByLabel(/email/i).fill('alice@tribu.fr');
+  await page.getByLabel(/mot de passe/i).fill('secret42');
+  await page.getByRole('button', { name: /connexion/i }).click();
+  await page.waitForURL('/tableau-de-bord');
 
-  // Sauvegarder l'etat (cookies + localStorage)
-  await userPage.context().storageState({ path: 'e2e/.auth/user.json' });
-  await userPage.close();
-
-  // --- Administrateur ---
-  const adminPage = await browser.newPage();
-  await adminPage.goto(`${baseURL}/login`);
-  await adminPage.getByLabel('Email').fill('admin@example.com');
-  await adminPage.getByLabel('Mot de passe').fill('admin123');
-  await adminPage.getByRole('button', { name: /connexion/i }).click();
-  await adminPage.waitForURL(`${baseURL}/dashboard`);
-
-  await adminPage.context().storageState({ path: 'e2e/.auth/admin.json' });
-  await adminPage.close();
-
+  // Persiste cookies + localStorage dans un fichier JSON
+  await page.context().storageState({ path: 'e2e/.auth/alice.json' });
   await browser.close();
 }
-
-export default globalSetup;
 ```
 
-### Configuration avec projets dependants
+**Utiliser l'état sauvegardé dans `playwright.config.ts` :**
 
-```typescript
-// playwright.config.ts
+```ts
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   globalSetup: './e2e/global-setup.ts',
-
+  use: {
+    baseURL: 'http://localhost:5173',
+    storageState: 'e2e/.auth/alice.json', // tous les tests démarrent connectés
+  },
   projects: [
-    // Projet de setup (s'execute en premier)
-    {
-      name: 'setup',
-      testMatch: /global-setup\.ts/,
-    },
-
-    // Tests sans authentification
     {
       name: 'public',
-      testMatch: '**/public/**/*.spec.ts',
-      use: { storageState: { cookies: [], origins: [] } },
+      testMatch: '**/public/**',
+      use: { storageState: { cookies: [], origins: [] } }, // pages publiques = déconnecté
     },
-
-    // Tests utilisateur standard
     {
-      name: 'user',
-      testMatch: '**/user/**/*.spec.ts',
-      dependencies: ['setup'],
-      use: { storageState: 'e2e/.auth/user.json' },
-    },
-
-    // Tests administrateur
-    {
-      name: 'admin',
-      testMatch: '**/admin/**/*.spec.ts',
-      dependencies: ['setup'],
-      use: { storageState: 'e2e/.auth/admin.json' },
+      name: 'authenticated',
+      testMatch: '**/auth/**',
+      // hérite du storageState global (alice.json)
     },
   ],
 });
 ```
 
-### Ignorer le storage state dans git
+Ajouter `e2e/.auth/` dans `.gitignore` — ces fichiers contiennent des tokens de session.
 
-```
-# .gitignore
-e2e/.auth/
-```
+Depuis Playwright v1.31+, l'approche recommandée est le **setup project** avec `dependencies: ['setup']` plutôt que `globalSetup` seul, pour bénéficier du cache entre runs CI et d'un meilleur parallélisme.
 
----
+### `page.route()` — interception réseau et mock de route
 
-## Interception réseau : `page.route()`
+`page.route(pattern, handler)` intercepte toutes les requêtes correspondant au pattern avant qu'elles partent réseau. **Doit être déclaré avant `page.goto()`.**
 
-### Intercepter et modifier des réponses
+Dans le handler, trois choix :
 
-```typescript
-test('should display mock data from intercepted API', async ({ page }) => {
-  // Intercepter l'appel API et retourner des donnees mockees
-  await page.route('**/api/products', (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        products: [
-          { id: 'mock-1', name: 'Produit Mock', price: 42.00 },
-        ],
-      }),
-    });
-  });
+| Méthode | Effet |
+|---------|-------|
+| `route.fulfill({ json, status })` | Court-circuite : renvoie une réponse construite |
+| `route.continue()` | Laisse passer (pass-through) |
+| `route.abort()` | Simule un échec réseau |
 
-  await page.goto('/products');
-  await expect(page.getByText('Produit Mock')).toBeVisible();
-  await expect(page.getByText('42,00')).toBeVisible();
-});
-```
-
-### Simuler des erreurs
-
-```typescript
-test('should display error page on API failure', async ({ page }) => {
-  await page.route('**/api/products', (route) => {
-    route.fulfill({
-      status: 500,
-      contentType: 'application/json',
-      body: JSON.stringify({ error: 'Internal Server Error' }),
-    });
-  });
-
-  await page.goto('/products');
-  await expect(page.getByRole('alert')).toContainText(/erreur/i);
-});
-```
-
-### Modifier une réponse existante
-
-```typescript
-test('should handle slow API response', async ({ page }) => {
-  await page.route('**/api/products', async (route) => {
-    // Laisser la requete passer au serveur reel
-    const response = await route.fetch();
-    const json = await response.json();
-
-    // Modifier la reponse
-    json.products = json.products.map((p: any) => ({
-      ...p,
-      price: p.price * 1.2, // +20%
-    }));
-
-    // Retourner la reponse modifiee avec un delai
-    await new Promise((r) => setTimeout(r, 2000));
-    await route.fulfill({ response, json });
-  });
-
-  await page.goto('/products');
-  // Le loading spinner doit apparaitre pendant le delai
-  await expect(page.getByRole('progressbar')).toBeVisible();
-  // Puis les produits avec les prix modifies
-  await expect(page.getByRole('progressbar')).not.toBeVisible();
-});
-```
-
-### Bloquer des ressources
-
-```typescript
-test('should load page without third-party scripts', async ({ page }) => {
-  // Bloquer les scripts tiers (analytics, ads, etc.)
-  await page.route('**/*', (route) => {
-    const url = route.request().url();
-    if (
-      url.includes('google-analytics') ||
-      url.includes('facebook') ||
-      url.includes('hotjar')
-    ) {
-      return route.abort();
-    }
-    return route.continue();
-  });
-
-  await page.goto('/');
-  // Le test s'execute sans les scripts tiers
-});
-```
-
-### Attendre une requête spécifique
-
-```typescript
-test('should save form and wait for API response', async ({ page }) => {
-  await page.goto('/products/new');
-
-  await page.getByLabel('Nom').fill('Nouveau produit');
-  await page.getByLabel('Prix').fill('99.99');
-
-  // Attendre la reponse API apres le submit
-  const [response] = await Promise.all([
-    page.waitForResponse('**/api/products'),
-    page.getByRole('button', { name: /creer/i }).click(),
-  ]);
-
-  expect(response.status()).toBe(201);
-  const body = await response.json();
-  expect(body.name).toBe('Nouveau produit');
-});
-```
-
----
-
-## Regression visuelle : `toHaveScreenshot()`
-
-### Test de base
-
-```typescript
-test('product card should match visual snapshot', async ({ page }) => {
-  await page.goto('/products');
-
-  // Screenshot de toute la page
-  await expect(page).toHaveScreenshot('product-list.png');
-
-  // Screenshot d'un element specifique
-  const firstCard = page.locator('.product-card').first();
-  await expect(firstCard).toHaveScreenshot('product-card.png');
-});
-```
-
-### Configuration
-
-```typescript
-// playwright.config.ts
-export default defineConfig({
-  expect: {
-    toHaveScreenshot: {
-      // Tolerance : pourcentage de pixels differents accepte
-      maxDiffPixelRatio: 0.01, // 1%
-
-      // Ou en nombre absolu de pixels
-      // maxDiffPixels: 100,
-
-      // Seuil de difference par pixel (0-1)
-      threshold: 0.2,
-
-      // Animations : desactiver pour stabilite
-      animations: 'disabled',
-    },
-  },
-
-  // Dossier de sauvegarde des snapshots
-  snapshotDir: './e2e/snapshots',
-  snapshotPathTemplate: '{snapshotDir}/{testFilePath}/{arg}{ext}',
-});
-```
-
-### Mettre a jour les snapshots
-
-```bash
-# Mettre a jour tous les snapshots
-npx playwright test --update-snapshots
-
-# Mettre a jour un test specifique
-npx playwright test product-card.spec.ts --update-snapshots
-```
-
-### Bonnes pratiques pour la regression visuelle
-
-```typescript
-test('dashboard layout should be stable', async ({ page }) => {
-  await page.goto('/dashboard');
-
-  // Attendre que toutes les donnees soient chargees
-  await page.waitForLoadState('networkidle');
-
-  // Masquer les elements dynamiques (dates, compteurs temps reel)
-  await page.locator('.timestamp').evaluateAll((elements) => {
-    elements.forEach((el) => {
-      (el as HTMLElement).textContent = '01/01/2025 12:00';
-    });
-  });
-
-  // Masquer les avatars (charges depuis un CDN, peuvent varier)
-  await page.locator('.avatar').evaluateAll((elements) => {
-    elements.forEach((el) => {
-      (el as HTMLElement).style.visibility = 'hidden';
-    });
-  });
-
-  await expect(page).toHaveScreenshot('dashboard.png', {
-    fullPage: true,
-    mask: [page.locator('.ad-banner')], // Masquer les publicites
+```ts
+// Mock complet — remplace la réponse réseau
+await page.route('**/api/notifications', async (route) => {
+  await route.fulfill({
+    status: 200,
+    json: { notifications: [{ id: '1', message: 'Alice a accepté l'invitation' }] },
   });
 });
-```
 
----
-
-## Accessibilité avec axe-core
-
-### Installation
-
-```bash
-pnpm add -D @axe-core/playwright
-```
-
-### Test d'accessibilité de base
-
-```typescript
-import { test, expect } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
-
-test.describe('Accessibility', () => {
-  test('home page should have no a11y violations', async ({ page }) => {
-    await page.goto('/');
-
-    const results = await new AxeBuilder({ page }).analyze();
-
-    expect(results.violations).toEqual([]);
-  });
-
-  test('login form should be accessible', async ({ page }) => {
-    await page.goto('/login');
-
-    const results = await new AxeBuilder({ page })
-      .include('form')                    // Scanner uniquement le formulaire
-      .withTags(['wcag2a', 'wcag2aa'])   // Standards WCAG 2 AA
-      .analyze();
-
-    expect(results.violations).toEqual([]);
-  });
-
-  test('product page should be accessible', async ({ page }) => {
-    await page.goto('/products');
-
-    const results = await new AxeBuilder({ page })
-      .exclude('.third-party-widget')    // Exclure les widgets tiers
-      .disableRules(['color-contrast'])  // Desactiver une regle specifique
-      .analyze();
-
-    // Afficher les violations en detail pour le debug
-    if (results.violations.length > 0) {
-      console.log('Accessibility violations:');
-      results.violations.forEach((v) => {
-        console.log(`  [${v.impact}] ${v.id}: ${v.description}`);
-        v.nodes.forEach((n) => {
-          console.log(`    - ${n.html}`);
-          console.log(`      Fix: ${n.failureSummary}`);
-        });
-      });
-    }
-
-    expect(results.violations).toEqual([]);
-  });
+// Pass-through + mutation — la requête part, on modifie la réponse retour
+await page.route('**/api/famille/membres', async (route) => {
+  const response = await route.fetch();
+  const data = await response.json();
+  data.membres.push({ id: 'extra', nom: 'Charlie (injecté)' });
+  await route.fulfill({ response, json: data });
 });
+
+// Erreur réseau — simule une coupure
+await page.route('**/api/invitations', (route) => route.abort('connectionrefused'));
 ```
 
-### Fixture d'accessibilité réutilisable
+Supprimer un handler : `await page.unroute('**/api/notifications')`.
 
-```typescript
-// e2e/fixtures/a11y.ts
+### Fixtures custom — `test.extend`
+
+`test.extend<T>()` crée un nouveau `test` augmenté de fixtures injectées. C'est le mécanisme DI de Playwright : les tests reçoivent des objets préparés sans boilerplate de setup.
+
+```ts
+// e2e/fixtures/index.ts
 import { test as base, expect } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
+import { PageMembres } from '../pages/PageMembres';
+import { PageLogin } from '../pages/PageLogin';
 
-interface A11yFixtures {
-  checkA11y: (selector?: string) => Promise<void>;
+interface TribuZenFixtures {
+  pageMembres: PageMembres;
+  pageLogin: PageLogin;
 }
 
-export const test = base.extend<A11yFixtures>({
-  checkA11y: async ({ page }, use) => {
-    const check = async (selector?: string): Promise<void> => {
-      let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']);
+export const test = base.extend<TribuZenFixtures>({
+  pageMembres: async ({ page }, use) => {
+    // setup
+    const pm = new PageMembres(page);
+    await use(pm);
+    // teardown optionnel ici (ex: nettoyer les données créées)
+  },
 
-      if (selector) {
-        builder = builder.include(selector);
-      }
-
-      const results = await builder.analyze();
-
-      // Formater les violations pour un message d'erreur lisible
-      const violations = results.violations.map((v) => ({
-        id: v.id,
-        impact: v.impact,
-        description: v.description,
-        nodes: v.nodes.length,
-      }));
-
-      expect(violations, `Accessibility violations found`).toEqual([]);
-    };
-
-    await use(check);
+  pageLogin: async ({ page }, use) => {
+    await use(new PageLogin(page));
   },
 });
 
 export { expect };
 ```
 
-```typescript
-// Usage
-import { test, expect } from '../fixtures/a11y';
+Usage dans les tests — un seul import suffit :
 
-test('dashboard should be accessible', async ({ page, checkA11y }) => {
-  await page.goto('/dashboard');
-  await checkA11y();
-});
+```ts
+import { test, expect } from '../fixtures';
 
-test('product form should be accessible', async ({ page, checkA11y }) => {
-  await page.goto('/products/new');
-  await checkA11y('form');
+test('invite un membre', async ({ pageMembres }) => {
+  await pageMembres.goto();
+  await pageMembres.inviterMembre('bob@tribu.fr');
+  await pageMembres.verifierMembreVisible('bob@tribu.fr');
 });
 ```
 
----
+Les fixtures se composent : une fixture peut dépendre d'une autre (ex. `pageMembres` dépend de `page`). Les fixtures de scope `worker` sont partagées entre tous les tests d'un worker — utile pour un contexte DB de test ou une session API.
 
-## API testing avec la fixture `request`
+### Tests visuels — `toHaveScreenshot()`
 
-Playwright permet de tester les API REST directement, sans navigateur.
+`toHaveScreenshot(name)` prend un screenshot et le compare au snapshot de référence (créé au premier run avec `--update-snapshots`). Le test échoue si le diff dépasse le seuil configuré.
 
-```typescript
-import { test, expect } from '@playwright/test';
+```ts
+test('la page membres correspond au snapshot', async ({ page }) => {
+  await page.goto('/famille/membres');
+  await page.waitForLoadState('networkidle');
 
-test.describe('API — Products', () => {
-  test('GET /api/products should return product list', async ({ request }) => {
-    const response = await request.get('/api/products');
-
-    expect(response.status()).toBe(200);
-
-    const body = await response.json();
-    expect(body.products).toBeInstanceOf(Array);
-    expect(body.products.length).toBeGreaterThan(0);
-    expect(body.products[0]).toHaveProperty('id');
-    expect(body.products[0]).toHaveProperty('name');
-    expect(body.products[0]).toHaveProperty('price');
+  // Figer les éléments dynamiques avant capture
+  await page.locator('.horodatage').evaluateAll((els) => {
+    els.forEach((el) => { (el as HTMLElement).textContent = '01/07/2026'; });
   });
 
-  test('POST /api/products should create a product', async ({ request }) => {
-    const response = await request.post('/api/products', {
-      data: {
-        name: 'Test Product',
-        price: 49.99,
-        category: 'electronics',
-      },
-      headers: {
-        'Authorization': 'Bearer admin-token',
-      },
+  await expect(page).toHaveScreenshot('page-membres.png', {
+    fullPage: true,
+    mask: [page.locator('.avatar')], // avatars CDN → instables → masqués
+    maxDiffPixelRatio: 0.01,
+  });
+});
+```
+
+Configuration dans `playwright.config.ts` :
+
+```ts
+expect: {
+  toHaveScreenshot: {
+    animations: 'disabled',  // stop CSS/JS animations avant capture
+    threshold: 0.2,
+    maxDiffPixelRatio: 0.01,
+  },
+},
+```
+
+Mettre à jour les snapshots : `npx playwright test --update-snapshots`.
+
+### Parallélisme et sharding
+
+**Workers** : Playwright lance N workers (processus isolés, chacun avec son propre browser context). Par défaut autant que de CPU logiques.
+
+```ts
+// playwright.config.ts
+export default defineConfig({
+  workers: process.env.CI ? 2 : undefined, // undefined = auto (CPUs)
+  fullyParallel: true, // chaque test dans un fichier tourne en parallèle
+});
+```
+
+`test.describe.configure({ mode: 'serial' })` force l'exécution séquentielle d'un bloc (tests à étapes dépendantes, ex. flux checkout step-by-step).
+
+**Sharding** : découper la suite en N tranches pour paralléliser sur N machines CI.
+
+```bash
+# Chaque job CI reçoit un shard différent (même suite totale, exécution distribuée)
+npx playwright test --shard=1/3
+npx playwright test --shard=2/3
+npx playwright test --shard=3/3
+```
+
+Dans GitHub Actions :
+
+```yaml
+strategy:
+  matrix:
+    shard: [1, 2, 3]
+steps:
+  - run: npx playwright test --shard=${{ matrix.shard }}/3
+```
+
+### Retries et gestion de la flakiness
+
+Un **test flaky** passe parfois et échoue parfois sans changement de code — souvent dû à un timing UI non attendu ou une dépendance réseau non mockée.
+
+```ts
+// playwright.config.ts
+export default defineConfig({
+  retries: process.env.CI ? 2 : 0, // 0 en local (fail vite), 2 en CI (filet de sécurité)
+});
+```
+
+En CI, un test qui échoue au 1ᵉʳ essai est rejoué. S'il passe au 2ᵉ, il est signalé **flaky** dans le rapport HTML (compté comme réussi mais à investiguer). S'il échoue 3 fois, il échoue définitivement.
+
+Stratégies anti-flakiness :
+- **Attendre le bon signal** : `waitForURL`, `waitForResponse`, `expect(locator).toBeVisible()` plutôt que `waitForTimeout` (sleep arbitraire).
+- **Mocker les APIs externes** : `page.route()` supprime l'instabilité réseau.
+- **Désactiver les animations** : `animations: 'disabled'` dans `toHaveScreenshot`, ou `page.emulateMedia({ reducedMotion: 'reduce' })` pour les tests d'interaction.
+- **Isoler les données par test** : chaque test crée ses propres données (email unique, ID unique) — pas de dépendance sur l'ordre d'exécution.
+
+Diagnostiquer un test flaky : relancer avec `--repeat-each=20` pour reproduire, puis inspecter la trace Playwright (`test-results/*.zip`) — elle enregistre chaque action avec captures et réseau.
+
+### Tests d'API avec `request`
+
+La fixture `request` (type `APIRequestContext`) envoie des requêtes HTTP directement, sans ouvrir de navigateur. Idéal pour valider un endpoint avant d'écrire le test UI, ou pour préparer/nettoyer les données de test.
+
+```ts
+import { test, expect } from '@playwright/test';
+
+test.describe('API TribuZen — invitations', () => {
+  test('POST /api/invitations crée une invitation', async ({ request }) => {
+    const response = await request.post('/api/invitations', {
+      data: { familyId: 'fam-1', email: 'bob@tribu.fr' },
+      headers: { Authorization: 'Bearer test-token' },
     });
 
     expect(response.status()).toBe(201);
-
-    const product = await response.json();
-    expect(product.name).toBe('Test Product');
-    expect(product.price).toBe(49.99);
-    expect(product.id).toBeDefined();
-
-    // Cleanup
-    await request.delete(`/api/products/${product.id}`, {
-      headers: { 'Authorization': 'Bearer admin-token' },
-    });
+    const body = await response.json();
+    expect(body.id).toBeDefined();
+    expect(body.email).toBe('bob@tribu.fr');
   });
 
-  test('GET /api/products/:id should return 404 for unknown product', async ({ request }) => {
-    const response = await request.get('/api/products/nonexistent-id');
-
+  test('GET /api/invitations/:id retourne 404 pour un id inconnu', async ({ request }) => {
+    const response = await request.get('/api/invitations/nonexistent');
     expect(response.status()).toBe(404);
     expect(response.ok()).toBeFalsy();
   });
 
-  test('POST /api/products should validate required fields', async ({ request }) => {
-    const response = await request.post('/api/products', {
-      data: { price: 10 }, // Missing name
-      headers: { 'Authorization': 'Bearer admin-token' },
+  test('DELETE /api/invitations/:id annule une invitation', async ({ request }) => {
+    // Préparer la donnée via API (pas besoin d'UI)
+    const created = await request.post('/api/invitations', {
+      data: { familyId: 'fam-1', email: 'tmp@tribu.fr' },
+      headers: { Authorization: 'Bearer test-token' },
     });
+    const { id } = await created.json();
 
-    expect(response.status()).toBe(400);
-    const body = await response.json();
-    expect(body.error).toContain('name');
+    const deleted = await request.delete(`/api/invitations/${id}`, {
+      headers: { Authorization: 'Bearer test-token' },
+    });
+    expect(deleted.status()).toBe(200);
   });
 });
 ```
 
----
+`request` respecte le `baseURL` configuré dans `playwright.config.ts`. On peut créer un contexte HTTP dédié avec `playwright.request.newContext({ extraHTTPHeaders: {...} })` dans une fixture custom.
 
-## Parallelisme et sharding
+## 3. Worked examples
 
-### Configuration des workers
+### Exemple A — POM `PageMembres` + fixture custom
 
-```typescript
-// playwright.config.ts
-export default defineConfig({
-  // Nombre de workers paralleles
-  workers: process.env.CI ? 2 : 4, // Moins de workers en CI
+Objectif : prouver que l'invitation d'un nouveau membre apparaît dans la liste, sans répéter les sélecteurs dans le test.
 
-  // Mode "fully parallel" : chaque test dans un fichier peut s'executer en parallele
-  fullyParallel: true,
+```ts
+// e2e/fixtures/index.ts — test étendu avec les Page Objects TribuZen
+import { test as base, expect } from '@playwright/test';
+import { PageMembres } from '../pages/PageMembres';
 
-  // Ou par fichier de test
-});
-```
-
-### Controler le parallelisme par fichier
-
-```typescript
-// Ce fichier s'execute en serie (tests dependants)
-test.describe.configure({ mode: 'serial' });
-
-test.describe('Checkout flow', () => {
-  test('step 1: add to cart', async ({ page }) => { /* ... */ });
-  test('step 2: fill address', async ({ page }) => { /* ... */ });
-  test('step 3: payment', async ({ page }) => { /* ... */ });
-  test('step 4: confirmation', async ({ page }) => { /* ... */ });
-});
-```
-
-### Sharding pour la CI
-
-```bash
-# Diviser les tests en 4 shards
-npx playwright test --shard=1/4  # Machine/job 1
-npx playwright test --shard=2/4  # Machine/job 2
-npx playwright test --shard=3/4  # Machine/job 3
-npx playwright test --shard=4/4  # Machine/job 4
-```
-
----
-
-## CI : GitHub Actions
-
-```yaml
-# .github/workflows/e2e.yml
-name: E2E Tests
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  e2e:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1/4, 2/4, 3/4, 4/4]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
-
-      - name: Start application
-        run: npm run dev &
-        env:
-          NODE_ENV: test
-
-      - name: Wait for app to be ready
-        run: npx wait-on http://localhost:3000 --timeout 60000
-
-      - name: Run E2E tests
-        run: npx playwright test --shard=${{ matrix.shard }}
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-${{ strategy.job-index }}
-          path: playwright-report/
-          retention-days: 7
-
-      - name: Upload traces
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-traces-${{ strategy.job-index }}
-          path: test-results/
-          retention-days: 7
-```
-
-### Docker pour la CI
-
-```dockerfile
-# Dockerfile.e2e
-FROM mcr.microsoft.com/playwright:v1.48.0-noble
-
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-
-CMD ["npx", "playwright", "test"]
-```
-
----
-
-## Reporters
-
-```typescript
-// playwright.config.ts
-export default defineConfig({
-  reporter: [
-    // Console : liste des tests
-    ['list'],
-
-    // HTML : rapport interactif avec traces
-    ['html', { open: 'never', outputFolder: 'playwright-report' }],
-
-    // JSON : pour l'integration CI
-    ['json', { outputFile: 'test-results/results.json' }],
-
-    // JUnit : pour les systemes CI classiques (Jenkins, etc.)
-    ['junit', { outputFile: 'test-results/junit.xml' }],
-
-    // GitHub Actions : annotations dans les PR
-    ...(process.env.CI ? [['github'] as const] : []),
-  ],
-});
-```
-
----
-
-## Test tagging
-
-### Utiliser des tags pour organiser les tests
-
-```typescript
-// Tag avec @
-test('should login @smoke @auth', async ({ page }) => {
-  // Ce test fait partie des suites "smoke" et "auth"
-});
-
-test('should process checkout @regression @payment', async ({ page }) => {
-  // Ce test fait partie des suites "regression" et "payment"
-});
-
-test('should handle edge case @slow', async ({ page }) => {
-  // Test lent, a executer moins souvent
-});
-```
-
-### Exécuter par tag
-
-```bash
-# Uniquement les tests @smoke
-npx playwright test --grep @smoke
-
-# Exclure les tests @slow
-npx playwright test --grep-invert @slow
-
-# Combinaison
-npx playwright test --grep "@smoke|@critical"
-```
-
-### Tags avec `test.describe`
-
-```typescript
-test.describe('Smoke tests @smoke', () => {
-  test('home page loads', async ({ page }) => { /* ... */ });
-  test('login works', async ({ page }) => { /* ... */ });
-  test('navigation works', async ({ page }) => { /* ... */ });
-});
-
-test.describe('Regression tests @regression', () => {
-  test('complex form validation', async ({ page }) => { /* ... */ });
-  test('concurrent editing', async ({ page }) => { /* ... */ });
-});
-```
-
----
-
-## Global setup et teardown
-
-```typescript
-// e2e/global-setup.ts
-import { type FullConfig } from '@playwright/test';
-
-async function globalSetup(_config: FullConfig): Promise<void> {
-  console.log('Global setup: starting...');
-
-  // 1. Seeder la base de donnees de test
-  const { execSync } = await import('child_process');
-  execSync('npm run db:seed:test', { stdio: 'inherit' });
-
-  // 2. Creer les storage states d'authentification
-  // (voir section Storage State ci-dessus)
-
-  // 3. Verifier que l'application est disponible
-  const maxRetries = 30;
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const response = await fetch('http://localhost:3000/health');
-      if (response.ok) break;
-    } catch {
-      if (i === maxRetries - 1) throw new Error('App not available');
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-  }
-
-  console.log('Global setup: done');
+interface Fixtures {
+  pageMembres: PageMembres;
 }
 
-export default globalSetup;
+export const test = base.extend<Fixtures>({
+  pageMembres: async ({ page }, use) => {
+    await use(new PageMembres(page));
+  },
+});
+
+export { expect };
 ```
 
-```typescript
-// e2e/global-teardown.ts
-import { type FullConfig } from '@playwright/test';
+```ts
+// e2e/tests/auth/membres.spec.ts
+import { test, expect } from '../../fixtures';
 
-async function globalTeardown(_config: FullConfig): Promise<void> {
-  console.log('Global teardown: cleaning up...');
+test.describe('Page Membres TribuZen', () => {
+  test.beforeEach(async ({ pageMembres }) => {
+    // storageState déjà chargé par la config → pas de login ici
+    await pageMembres.goto();
+  });
 
-  // Nettoyer la base de donnees de test
-  const { execSync } = await import('child_process');
-  execSync('npm run db:clean:test', { stdio: 'inherit' });
+  test('affiche les membres existants de la famille', async ({ pageMembres }) => {
+    // Assertion via méthode POM — aucun sélecteur exposé dans le test
+    await pageMembres.verifierNombreMembres(3);
+    await pageMembres.verifierMembreVisible('Alice Martin');
+  });
 
-  console.log('Global teardown: done');
+  test('invite un nouveau membre et le voit apparaître', async ({ pageMembres, page }) => {
+    // Mock de l'appel POST invitations : test déterministe même sans backend
+    // IMPORTANT : page.route() avant page.goto()
+    await page.route('**/api/invitations', async (route) => {
+      await route.fulfill({
+        status: 201,
+        json: { id: 'inv-new', email: 'bob@tribu.fr', statut: 'en_attente' },
+      });
+    });
+
+    await pageMembres.inviterMembre('bob@tribu.fr');
+
+    // L'UI optimiste ajoute bob à la liste sans recharger la page
+    await pageMembres.verifierMembreVisible('bob@tribu.fr');
+  });
+});
+```
+
+Pas-à-pas : (1) `fixtures/index.ts` expose `test` avec `pageMembres` injectée — le test n'instancie jamais `PageMembres` lui-même ; (2) `page.route()` intercepte le POST avant qu'il parte réseau — test stable même sans backend ; (3) les assertions sont des méthodes POM — si le sélecteur de la liste change, on corrige `PageMembres.ts` uniquement.
+
+### Exemple B — `storageState` et auth réutilisée
+
+Objectif : login une seule fois pour 30 tests, économiser 150 s par run.
+
+```ts
+// e2e/global-setup.ts — s'exécute UNE FOIS avant toute la suite
+import { chromium } from '@playwright/test';
+
+export default async function globalSetup(): Promise<void> {
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+
+  await page.goto('http://localhost:5173/login');
+  await page.getByLabel(/email/i).fill('alice@tribu.fr');
+  await page.getByLabel(/mot de passe/i).fill('secret42');
+  await page.getByRole('button', { name: /connexion/i }).click();
+  await page.waitForURL('/tableau-de-bord');
+
+  // Sauvegarder l'état complet (cookies + localStorage + tokens JWT)
+  await page.context().storageState({ path: 'e2e/.auth/alice.json' });
+  await browser.close();
 }
-
-export default globalTeardown;
 ```
 
-```typescript
+```ts
 // playwright.config.ts
+import { defineConfig } from '@playwright/test';
+
 export default defineConfig({
   globalSetup: './e2e/global-setup.ts',
-  globalTeardown: './e2e/global-teardown.ts',
-  // ...
+  use: {
+    baseURL: 'http://localhost:5173',
+    storageState: 'e2e/.auth/alice.json', // chaque test démarre connecté
+  },
 });
 ```
 
----
+```ts
+// e2e/tests/auth/tableau-de-bord.spec.ts
+import { test, expect } from '@playwright/test';
 
-## Architecture complete : e-commerce POM
-
-```
-e2e/
-  .auth/                         # Storage states (gitignore)
-    user.json
-    admin.json
-  fixtures/
-    auth.ts                      # Fixture d'authentification
-    database.ts                  # Fixture de base de donnees
-    api.ts                       # Fixture API
-    index.ts                     # Export combine
-  pages/
-    BasePage.ts                  # Classe de base
-    LoginPage.ts                 # Page de connexion
-    DashboardPage.ts             # Tableau de bord
-    ProductListPage.ts           # Liste des produits
-    ProductDetailPage.ts         # Detail d'un produit
-    CartPage.ts                  # Panier
-    CheckoutPage.ts              # Commande
-    AdminProductsPage.ts         # Administration produits
-  tests/
-    public/                      # Tests sans auth
-      home.spec.ts
-      search.spec.ts
-    user/                        # Tests utilisateur
-      profile.spec.ts
-      orders.spec.ts
-      cart.spec.ts
-      checkout.spec.ts
-    admin/                       # Tests admin
-      products.spec.ts
-      orders.spec.ts
-      users.spec.ts
-    a11y/                        # Tests d'accessibilite
-      pages.spec.ts
-    visual/                      # Regression visuelle
-      screenshots.spec.ts
-    api/                         # Tests API
-      products-api.spec.ts
-      orders-api.spec.ts
-  snapshots/                     # Snapshots visuels
-  global-setup.ts
-  global-teardown.ts
-playwright.config.ts
+// Ce test démarre déjà connecté grâce au storageState — aucun login ici
+test('affiche le tableau de bord de la famille', async ({ page }) => {
+  await page.goto('/tableau-de-bord');
+  await expect(page.getByRole('heading', { name: /tableau de bord/i })).toBeVisible();
+  await expect(page.getByText('Alice Martin')).toBeVisible();
+});
 ```
 
----
+Le gain : 30 tests × 5 s de login = 150 s → 5 s (une fois en global setup). La session est partagée via le fichier JSON — le navigateur de chaque worker la recharge à froid.
 
-## Exercice pratique
+## 4. Pièges & misconceptions
 
-Implementez une suite de tests Playwright avancee pour un e-commerce :
+- **Locators dupliqués sans POM.** Copier-coller `page.getByRole('button', { name: /inviter/i })` dans 12 tests → quand le label change en "Ajouter un membre", 12 tests cassent. *Correct* : centraliser dans `PageMembres.boutonInviter` ; corriger en 1 endroit.
 
-1. **Page Objects** : LoginPage, ProductListPage, CartPage, CheckoutPage
-2. **Fixtures** : authentification (user + admin), création de produit via API
-3. **Storage state** : login une seule fois, réutiliser la session
-4. **Interception réseau** : simuler une erreur de paiement
-5. **Regression visuelle** : page produit, panier vide, page de confirmation
-6. **Accessibilité** : scanner toutes les pages principales
-7. **Tags** : @smoke pour les tests critiques, @regression pour le reste
-8. **CI** : GitHub Actions avec sharding sur 3 runners
+- **Re-login avant chaque test sans `storageState`.** Chaque `beforeEach` qui navigue vers `/login`, remplit le formulaire et attend la redirection ajoute 3-8 s par test. Sur 30 tests, c'est 90-240 s de connexions répétées. *Correct* : `storageState` + global setup → 1 seul login pour toute la suite.
 
-> Solution dans le [Lab 11](../labs/lab-11-playwright-avance/)
+- **Screenshots non déterministes.** `toHaveScreenshot` sur une page avec dates dynamiques, avatars CDN ou animations → le diff ne sera jamais stable. *Correct* : (a) `mask` pour masquer les zones instables, (b) `evaluateAll` pour figer les timestamps, (c) `animations: 'disabled'` dans la config.
 
----
+- **`page.route()` déclaré après `page.goto()`.** Le handler ne s'active que pour les requêtes émises après son enregistrement. Si la page est déjà chargée et a déjà fait l'appel API, le mock arrive trop tard. *Correct* : toujours `page.route(...)` puis `page.goto(...)`.
 
-## Navigation
+- **`fullyParallel: true` avec tests à données partagées.** Si deux tests en parallèle modifient les mêmes lignes en base (ex. tous les deux créent un membre "Alice"), ils interfèrent. *Correct* : isoler les données par test (préfixer les emails avec un identifiant unique `alice-${Date.now()}@tribu.fr`) ou grouper les tests dépendants avec `test.describe.configure({ mode: 'serial' })`.
 
-| Précédent | Suivant |
-|-----------|---------|
-| [10 - Playwright fondamentaux](./10-playwright-fondamentaux) | [12 - Couverture et mutation testing](./12-couverture-et-mutation-testing) |
+- **Confondre `retries` et correction de la flakiness.** Augmenter `retries` masque la cause réelle. Un test qui passe au 3ᵉ essai est un test dont le problème n'est pas résolu. *Correct* : retries = filet de sécurité temporaire en CI ; la cause profonde (timing, mock manquant, état partagé) doit être corrigée.
 
----
+## 5. Ancrage TribuZen
 
-## Ressources
+Couche fil-rouge : **suite E2E TribuZen structurée (POM des pages famille, auth réutilisée via `storageState`, mock réseau)** (`smaurier/tribuzen`).
 
-- [Quiz 11 : Testez vos connaissances](../quizzes/quiz-11-playwright-avance.html)
-- [Lab 11 : Playwright avance](../labs/lab-11-playwright-avance/)
-- Playwright — [Page Object Model](https://playwright.dev/docs/pom)
-- Playwright — [Fixtures](https://playwright.dev/docs/test-fixtures)
-- Playwright — [Authentication](https://playwright.dev/docs/auth)
-- Playwright — [Visual comparisons](https://playwright.dev/docs/test-snapshots)
-- Playwright — [API testing](https://playwright.dev/docs/api-testing)
-- axe-core — [Playwright intégration](https://github.com/dequelabs/axe-core-npm/tree/develop/packages/playwright)
-- Playwright — [CI GitHub Actions](https://playwright.dev/docs/ci-intro)
+- `e2e/pages/PageLogin.ts` + `PageMembres.ts` + `PageFamille.ts` = les trois Page Objects des pages principales de TribuZen. Quand la nav change (renommage d'un lien ou refonte du formulaire), on corrige 1 fichier, pas 15 tests.
+- `e2e/global-setup.ts` + `e2e/.auth/alice.json` = auth persistée pour toute la suite. En session, on écrit ce setup et on vérifie que `tableau-de-bord.spec.ts` démarre sans aucun appel à `/login`.
+- `page.route('**/api/notifications')` = mock du service externe de notifications TribuZen. La suite tourne sans dépendance à l'API tierce — déterminisme garanti en CI.
+- `e2e/fixtures/index.ts` avec `test.extend<{ pageMembres: PageMembres }>` = point d'entrée unique pour tous les tests. Un `import { test } from '../fixtures'` suffit — les Page Objects sont injectés, les tests n'ont pas de boilerplate.
+- Tests `request` sur `/api/invitations` = contrat API validé avant d'écrire les tests UI correspondants.
 
----
+## 6. Points clés
 
-<!-- parcours-recommande -->
+1. Le Page Object Model encapsule locators, actions et assertions dans une classe par page — les tests expriment l'intention métier, pas les sélecteurs DOM.
+2. Les locators POM sont des `get` ré-évalués à chaque accès : un `Locator` Playwright est un pointeur vivant, pas un nœud DOM figé.
+3. `storageState` sauvegarde cookies + `localStorage` ; rechargé via `use.storageState` dans la config, il évite le re-login par test.
+4. `page.route(pattern, handler)` doit être déclaré avant `page.goto()` ; le handler choisit entre `fulfill`, `continue` ou `abort`.
+5. `test.extend<Fixtures>` crée un `test` augmenté avec des objets injectés — chaque fixture peut dépendre d'autres fixtures en paramètre.
+6. `toHaveScreenshot` compare au snapshot de référence ; masquer les zones dynamiques avec `mask` et `evaluateAll`, désactiver les animations.
+7. `workers` + `fullyParallel: true` parallélise au niveau du test ; `--shard=N/M` distribue sur M machines CI.
+8. `retries: 2` en CI rejoue les tests flaky ; les causes profondes sont les timings non attendus, les états partagés et les APIs externes non mockées.
+9. La fixture `request` (type `APIRequestContext`) teste les endpoints HTTP sans ouvrir de navigateur — idéal pour valider le contrat API ou préparer les données de test.
 
-::: tip Parcours recommandé
-1. **Screencast** : [screencast 11 playwright avance](../screencasts/screencast-11-playwright-avance.md)
-2. **Lab** : [lab-11-playwright-avance](../labs/lab-11-playwright-avance/README)
-3. **Visualisation** : [Page Object Pattern](../visualizations/page-object.html)
-4. **Quiz** : [quiz 11 playwright avance](../quizzes/quiz-11-playwright-avance.html)
-:::
+## 7. Seeds Anki
+
+```
+Qu'est-ce que le Page Object Model ?|Un pattern qui encapsule locators, actions et assertions d'une page dans une classe TypeScript dédiée — les tests expriment l'intention, pas les sélecteurs DOM
+Pourquoi les locators POM sont-ils des getter (get) et non des variables ?|Pour être ré-évalués à chaque accès — un Locator Playwright est un pointeur vivant, pas un nœud DOM figé au moment de l'affectation
+À quoi sert storageState dans Playwright ?|Sauvegarder cookies + localStorage d'un contexte browser dans un fichier JSON, rechargeable pour démarrer les tests déjà authentifiés sans re-login
+Dans quel ordre appeler page.route() et page.goto() ?|page.route() d'abord, puis page.goto() — le handler doit être enregistré avant que les requêtes partent
+Quelle méthode dans page.route() court-circuite la requête avec une réponse construite ?|route.fulfill({ status, json }) — renvoie une réponse sans toucher le réseau réel
+Comment créer une fixture custom injectée dans test ?|test.extend<{ maFixture: MonType }>({ maFixture: async ({ page }, use) => { await use(new MonType(page)); } })
+Qu'est-ce que le sharding Playwright ?|Découper la suite en N tranches (--shard=K/N) pour distribuer l'exécution sur N machines CI en parallèle
+Qu'indique Playwright quand un test passe au 2ᵉ retry après avoir échoué au 1ᵉr ?|Il est marqué "flaky" dans le rapport HTML — compté comme réussi mais signalé pour investigation
+À quoi sert la fixture request dans Playwright ?|Envoyer des requêtes HTTP directement sans navigateur (APIRequestContext) — tester des endpoints REST ou préparer et nettoyer les données de test
+```
+
+## Pont vers le lab
+
+> Lab associé : `06-testing/labs/lab-11-playwright-avance/`. Tu y structures la suite E2E TribuZen avec `PageLogin` + `PageMembres` (POM complet), un global setup `storageState`, un mock `page.route()` sur l'API notifications, et une fixture `test.extend`. Corrigé complet commenté + variante J+30 dans le README.

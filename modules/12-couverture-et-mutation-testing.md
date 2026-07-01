@@ -1,445 +1,232 @@
-# Module 12 — Couverture de code et mutation testing
-
-| Difficulte | Duree estimee | Lab | Quiz |
-|------------|---------------|-----|------|
-| 3/5        | 75 min        | [Lab 12](../labs/lab-12-couverture/) | [Quiz 12](../quizzes/quiz-12-couverture.html) |
-
-## Objectifs
-
-- Comprendre les metriques de couverture (lignes, branches, fonctions, statements)
-- Configurer Istanbul/c8 avec Vitest
-- Définir des seuils de couverture pragmatiques
-- Savoir ce que la couverture dit — et ne dit pas
-- Demystifier le mythe du 100%
-- Decouvrir le mutation testing avec Stryker
-- Interpreter un rapport de mutations et corriger les tests faibles
-
+---
+titre: Couverture et mutation testing
+cours: 06-testing
+notions: [couverture de code v8 vs istanbul, types de couverture lignes branches fonctions instructions, limites de la couverture, principe du mutation testing, Stryker et score de mutation, mutants tués vs survivants, coverage comme signal pas comme objectif]
+outcomes: [configurer et lire un rapport de couverture Vitest, comprendre ce que la couverture ne dit pas, expliquer le mutation testing et lire un score de mutation]
+prerequis: [11-playwright-avance]
+next: 12b-tests-accessibilite
+libs: [{ name: vitest, version: ^4.1.9 }, { name: "@stryker-mutator/core", version: ^8 }]
+tribuzen: mesurer la couverture des règles domaine TribuZen + un run de mutation testing sur la logique d'invitation
+last-reviewed: 2026-07
 ---
 
-## Qu'est-ce que la couverture de code ?
+# Couverture et mutation testing
 
-La couverture mesure **quelle proportion du code source est executee** pendant les tests. C'est un indicateur quantitatif, pas qualitatif.
+> **Outcomes — tu sauras FAIRE :** configurer et lire un rapport de couverture Vitest (v8/istanbul), comprendre ce que la couverture ne mesure pas, expliquer le mutation testing et lire un score de mutation Stryker.
+> **Difficulté :** :star::star::star:
 
-### Les 4 metriques principales
+## 1. Cas concret d'abord
 
-| Metrique | Ce qu'elle mesure | Exemple |
-|----------|-------------------|---------|
-| **Statements** | Nombre d'instructions executees | `const x = 1; console.log(x);` = 2 statements |
-| **Branches** | Chemins conditionnels couverts | `if/else`, `switch`, `? :`, `??`, `&&` |
-| **Functions** | Fonctions appelees au moins une fois | Declarations, expressions, fleches |
-| **Lines** | Lignes physiques executees | Approximation de statements |
+Dans TribuZen, la règle domaine suivante contrôle si une invitation est encore valide :
 
-### Visualiser la différence
+```ts
+// src/invitation/invitation.domain.ts
+export type InvitationStatus = 'pending' | 'accepted' | 'expired';
 
-```typescript
-// fichier: src/pricing.ts
-export function calculatePrice(quantity: number, unitPrice: number): number {
-  // Statement 1: la declaration de la variable
-  let total = quantity * unitPrice;
+export interface Invitation {
+  status: InvitationStatus;
+  expiresAt: Date;
+}
 
-  // Branch 1: if — Branch 2: else
-  if (total > 1000) {
-    total *= 0.9; // Statement dans branche 1
-  } else {
-    total *= 0.95; // Statement dans branche 2
-  }
-
-  // Branch 3: if (sans else)
-  if (quantity > 100) {
-    total -= 50; // Bonus volume
-  }
-
-  return total;
+export function isInvitationValid(invitation: Invitation, now: Date): boolean {
+  if (invitation.status !== 'pending') return false;
+  return invitation.expiresAt > now;   // BUG SUBTIL : devrait être >=
 }
 ```
 
-```typescript
-// test qui couvre partiellement
-import { describe, it, expect } from 'vitest';
-import { calculatePrice } from '../src/pricing';
+Ton équipe écrit deux tests et lance la couverture :
 
-describe('calculatePrice', () => {
-  it('should apply 10% discount for orders over 1000', () => {
-    const result = calculatePrice(20, 100); // total = 2000 > 1000
-    expect(result).toBe(1800); // 2000 * 0.9
+```ts
+// src/invitation/invitation.domain.test.ts
+import { describe, it, expect } from 'vitest';
+import { isInvitationValid } from './invitation.domain';
+
+const NOW = new Date('2026-07-01T12:00:00Z');
+
+describe('isInvitationValid', () => {
+  it('retourne true pour une invitation pending non expirée', () => {
+    const inv = { status: 'pending' as const, expiresAt: new Date('2026-07-02T00:00:00Z') };
+    expect(isInvitationValid(inv, NOW)).toBe(true);
+  });
+
+  it('retourne false pour une invitation acceptée', () => {
+    const inv = { status: 'accepted' as const, expiresAt: new Date('2026-07-02T00:00:00Z') };
+    expect(isInvitationValid(inv, NOW)).toBe(false);
   });
 });
 ```
 
-**Résultat de couverture :**
+Résultat de `vitest run --coverage` :
 
-| Metrique | Couvert | Total | % |
-|----------|---------|-------|---|
-| Statements | 4 | 6 | 66.7% |
-| Branches | 1 | 3 | 33.3% |
-| Functions | 1 | 1 | 100% |
-| Lines | 4 | 6 | 66.7% |
+```
+File                      | % Stmts | % Branch | % Funcs | % Lines |
+--------------------------|---------|----------|---------|---------|
+invitation.domain.ts      |     100 |      100 |     100 |     100 |
+```
 
-Branches manquantes : le `else` (total <= 1000) et le `if quantity > 100`.
+**100% partout. Pourtant**, une invitation qui expire exactement à `now` devrait être invalide (`expiresAt === now` → `false`) — mais le test ne le couvre jamais. Le mutant `>` → `>=` **survit** à Stryker. La couverture te dit que chaque ligne a été exécutée ; elle ne te dit pas que ta comparaison est correcte à la frontière.
 
----
+C'est le problème central de ce module : **coverage mesure l'exécution, pas la vérification**.
 
-## Configurer la couverture avec Vitest
+## 2. Théorie complète, concise
 
-Vitest supporte deux providers de couverture :
+### 2.1 Les deux providers de couverture Vitest
 
-| Provider | Mécanisme | Vitesse | Precision |
-|----------|-----------|---------|-----------|
-| **c8** (v8) | Instrumentation native V8 | Rapide | Bonne (quelques edge cases) |
-| **istanbul** | Instrumentation du code source | Plus lent | Excellente |
+Vitest délègue l'instrumentation à l'un de deux providers, configuré via `test.coverage.provider` :
 
-### Installation
+| Provider | Mécanisme | Vitesse | Précision | Package |
+|----------|-----------|---------|-----------|---------|
+| **v8** (défaut) | Instrumentation native du moteur V8 — lit les données de couverture directement depuis le runtime | Rapide | Bonne (quelques edge cases sur les branches optionnelles) | `@vitest/coverage-v8` |
+| **istanbul** | Transforme le code source avant exécution — insère des compteurs à chaque nœud AST | Plus lent | Excellente (précision au niveau instruction) | `@vitest/coverage-istanbul` |
+
+**Quand choisir :**
+- v8 : la majorité des projets. Moins de configuration, sortie identique à c8.
+- istanbul : quand tu as besoin de branches précises sur du code transpilé (decorators, optionals) ou d'un rapport fiable pour une couverture d'audit.
+
+### 2.2 Les quatre types de couverture
+
+```ts
+// src/pricing.ts
+export function applyDiscount(price: number, vip: boolean): number { // instruction 1 (déclaration)
+  let total = price;                    // instruction 2
+  if (vip) {                            // branche A (true) + branche B (false) + instruction 3
+    total = price * 0.8;               // instruction 4
+  }
+  return total;                         // instruction 5
+}
+```
+
+| Métrique | Ce qu'elle mesure | Exemple sur ce code |
+|----------|-------------------|---------------------|
+| **Instructions** (Stmts) | Chaque expression / assignation / appel exécuté | 5 instructions, 4 si vip jamais false |
+| **Branches** | Chaque chemin `if/else`, `switch`, `? :`, `??`, `&&`, `\|\|` | 2 branches (vip true / false) |
+| **Fonctions** (Funcs) | Chaque déclaration de fonction appelée au moins une fois | 1 fonction |
+| **Lignes** (Lines) | Lignes physiques exécutées — approximation des instructions | similaire à Stmts mais par ligne |
+
+**Branches — le mécanisme le plus révélateur.** Un test qui appelle `applyDiscount(100, true)` donne 100% fonctions, 100% lignes, 100% instructions, mais seulement **50% branches** (la branche `vip === false` n'a jamais été prise).
+
+### 2.3 Configurer la couverture Vitest
 
 ```bash
-# Provider v8 (recommande pour la plupart des projets)
+# Installer le provider (choisir l'un ou l'autre)
 pnpm add -D @vitest/coverage-v8
-
-# OU provider Istanbul (meilleure precision)
 pnpm add -D @vitest/coverage-istanbul
 ```
 
-### Configuration dans vitest.config.ts
-
-```typescript
+```ts
 // vitest.config.ts
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
     coverage: {
-      // Provider : 'v8' ou 'istanbul'
-      provider: 'v8',
-
-      // Activer la couverture (sinon il faut --coverage en CLI)
-      enabled: false,
-
-      // Fichiers a inclure dans le rapport
-      include: ['src/**/*.ts', 'src/**/*.tsx'],
-
-      // Fichiers a exclure
+      provider: 'v8',              // ou 'istanbul'
+      enabled: false,              // false = activé seulement avec --coverage en CLI
+      include: ['src/**/*.ts'],
       exclude: [
         'src/**/*.d.ts',
         'src/**/*.test.ts',
         'src/**/*.spec.ts',
+        'src/**/index.ts',         // barrels : rien à tester
         'src/**/types.ts',
-        'src/**/index.ts', // barrels
-        'src/**/__mocks__/**',
       ],
-
-      // Formats de rapport
-      reporter: ['text', 'html', 'lcov', 'json-summary'],
-
-      // Dossier de sortie
+      reporter: ['text', 'html', 'json-summary'],
       reportsDirectory: './coverage',
-
-      // Seuils minimaux
       thresholds: {
         statements: 80,
         branches: 75,
         functions: 80,
         lines: 80,
+        // seuils par glob — logique métier plus exigeante
+        'src/invitation/**': { statements: 90, branches: 85, functions: 90, lines: 90 },
       },
     },
   },
 });
 ```
 
-### Lancer la couverture
+**Lancer :**
 
 ```bash
-# Lancer les tests avec couverture
-pnpm vitest run --coverage
-
-# En mode watch (recalcule a chaque modification)
-pnpm vitest --coverage
-
-# Couverture sur des fichiers specifiques
-pnpm vitest run --coverage src/services/
+pnpm vitest run --coverage            # one-shot avec rapport
+pnpm vitest --coverage                # watch mode, recalcule à chaque save
 ```
 
-### Lire le rapport texte
+Si un seuil n'est pas atteint, **le process sort avec code 1** — ce qui fait échouer la CI.
+
+**Lire le rapport texte :**
 
 ```
---------------------|---------|----------|---------|---------|-------------------
-File                | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
---------------------|---------|----------|---------|---------|-------------------
-All files           |   82.35 |    71.43 |   85.71 |   82.35 |
- pricing.ts         |   66.67 |    33.33 |     100 |   66.67 | 11,16
- cart.ts            |     100 |      100 |     100 |     100 |
- discount.ts        |   83.33 |    66.67 |     100 |   83.33 | 22
---------------------|---------|----------|---------|---------|-------------------
+File                    | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
+------------------------|---------|----------|---------|---------|------------------
+invitation.domain.ts    |   66.67 |    50.00 |     100 |   66.67 | 8,11
 ```
 
-La colonne **Uncovered Line #s** indique les lignes jamais executees.
+La colonne `Uncovered Line #s` est ton point d'entrée — mais elle ne dit pas *pourquoi* ces lignes ne sont pas testées ni si leur non-couverture est intentionnelle.
 
-### Rapport HTML interactif
+**Ignorer du code intentionnellement :**
 
-```bash
-# Generer et ouvrir le rapport HTML
-pnpm vitest run --coverage
-open coverage/index.html  # macOS
-# ou: start coverage/index.html  # Windows
-```
-
-Le rapport HTML permet de :
-- Naviguer fichier par fichier
-- Voir les lignes couvertes (vert) et non couvertes (rouge)
-- Identifier les branches manquantes (surlignage jaune)
-
----
-
-## Seuils de couverture (thresholds)
-
-### Configuration par seuils globaux
-
-```typescript
-// vitest.config.ts
-export default defineConfig({
-  test: {
-    coverage: {
-      thresholds: {
-        statements: 80,
-        branches: 75,
-        functions: 80,
-        lines: 80,
-      },
-    },
-  },
-});
-```
-
-Si un seuil n'est pas atteint, **le process echoue avec code 1** — ideal pour la CI.
-
-### Seuils par fichier ou par dossier
-
-```typescript
-// vitest.config.ts
-export default defineConfig({
-  test: {
-    coverage: {
-      thresholds: {
-        // Seuils globaux
-        statements: 80,
-        branches: 75,
-        functions: 80,
-        lines: 80,
-
-        // Seuils specifiques par glob
-        'src/services/**': {
-          statements: 90,
-          branches: 85,
-          functions: 90,
-          lines: 90,
-        },
-        'src/utils/**': {
-          statements: 95,
-          branches: 90,
-          functions: 95,
-          lines: 95,
-        },
-      },
-    },
-  },
-});
-```
-
-### Script package.json
-
-```json
-{
-  "scripts": {
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "test:coverage:check": "vitest run --coverage --coverage.thresholds.100"
-  }
+```ts
+/* istanbul ignore next -- @preserve: code de debug uniquement */
+if (process.env.NODE_ENV === 'development') {
+  console.log('[DEBUG] invitation', invitation);
 }
 ```
 
----
+Les deux syntaxes `/* istanbul ignore ... */` et `/* v8 ignore ... */` fonctionnent avec les deux providers depuis Vitest 4.x.
 
-## Ce que la couverture dit — et ne dit pas
+### 2.4 Limites de la couverture
 
-### Ce qu'elle dit
+La couverture répond à : **« ce code a-t-il été exécuté ? »**. Elle ne répond pas à :
 
-- Quelles parties du code **ne sont jamais executees** pendant les tests
-- Une approximation du **risque de regression** non detectee
-- Les **zones mortes** potentielles (code mort)
+1. **« Ce comportement est-il vérifié ? »** — un test sans `expect` donne 100% de couverture.
+2. **« La logique est-elle correcte aux frontières ? »** — le cas `expiresAt === now` ci-dessus.
+3. **« Les assertions sont-elles précises ? »** — `expect(result).toBeDefined()` exécute tout le code sans rien vérifier d'utile.
+4. **« Le code non couvert est-il mort ou manquant ? »** — une branche à 0% peut être un bug ou un cas légitimement hors-scope.
 
-### Ce qu'elle ne dit PAS
+**Conséquence directe :** 100% de coverage avec des assertions faibles laisse passer des bugs. C'est exactement ce que détecte le mutation testing.
 
-La couverture ne mesure **pas la qualite des assertions**.
+### 2.5 Principe du mutation testing
 
-```typescript
-// Ce test a 100% de couverture... mais ne teste RIEN
-describe('calculatePrice', () => {
-  it('should work', () => {
-    calculatePrice(10, 50);  // execute tout le code
-    // Aucun expect ! Le test passe toujours.
-  });
-});
-```
+Le mutation testing renverse la question : au lieu de mesurer si le code est exécuté, il mesure si **les tests détectent une erreur introduite dans le code**.
 
-```typescript
-// Ce test a 100% de couverture... mais teste mal
-describe('calculatePrice', () => {
-  it('should calculate', () => {
-    const result = calculatePrice(10, 50);
-    expect(result).toBeDefined(); // verifie juste que ca retourne quelque chose
-  });
-});
-```
+**Algorithme :**
 
-### L'analogie du parachute
+1. Le framework crée des **mutants** — copies du code source avec une petite modification (un opérateur changé, une constante modifiée, une condition inversée).
+2. Il relance la suite de tests sur chaque mutant.
+3. **Mutant tué** : au moins un test échoue → les tests sont suffisamment précis pour détecter ce défaut.
+4. **Mutant survivant** : tous les tests passent → les tests sont trop faibles sur cette partie du code.
 
-> Avoir 100% de couverture, c'est comme avoir vérifié que chaque couture
-> du parachute existe. Mais est-ce qu'elles tiennent sous pression ?
+**Types de mutations courants :**
 
-La couverture mesure **"est-ce que le code a ete exécuté"**, pas **"est-ce que le comportement est correctement vérifié"**.
+| Catégorie | Original | Mutant |
+|-----------|----------|--------|
+| Opérateur arithmétique | `price * 0.8` | `price / 0.8` |
+| Opérateur de comparaison | `expiresAt > now` | `expiresAt >= now` |
+| Opérateur logique | `status === 'pending'` | `status !== 'pending'` |
+| Opérateur booléen | `a && b` | `a \|\| b` |
+| Littéral numérique | `trialDays = 14` | `trialDays = 0` |
+| Bloc conditionnel | `if (vip) { total *= 0.8; }` | `if (vip) {}` |
+| Négation | `return false` | `return true` |
 
----
+### 2.6 Stryker et score de mutation
 
-## Le mythe du 100%
+Stryker JS est le framework de mutation testing de référence pour l'écosystème Node/TypeScript. Il intègre un runner Vitest officiel.
 
-### Pourquoi 100% est presque toujours une mauvaise cible
-
-1. **Rendements decroissants** : passer de 80% a 90% coute beaucoup plus que de 0% a 80%
-2. **Faux sentiment de sécurité** : 100% de couverture != 0 bugs
-3. **Tests fragiles** : pour atteindre 100%, on écrit des tests couples a l'implementation
-4. **Code non testable utilement** : getters triviaux, barrels, types, configurations
-
-### Exemple de code ou 100% est absurde
-
-```typescript
-// src/types.ts — rien a tester ici
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-}
-
-export type Role = 'admin' | 'editor' | 'viewer';
-
-export const DEFAULT_PAGE_SIZE = 20;
-```
-
-```typescript
-// src/index.ts — barrel file, pure re-exportation
-export { calculatePrice } from './pricing';
-export { ShoppingCart } from './cart';
-export { UserValidator } from './validator';
-```
-
-### Seuils pragmatiques recommandes
-
-| Couche | Statement | Branch | Justification |
-|--------|-----------|--------|---------------|
-| Utils / Logique pure | 90-95% | 85-90% | Facile à tester, critique |
-| Services / Use cases | 85-90% | 80-85% | Logique metier importante |
-| API / Controllers | 75-85% | 70-80% | Intégration souvent plus utile |
-| UI Components | 70-80% | 65-75% | Tester le comportement, pas le rendu |
-| **Global** | **80%** | **75%** | Bon equilibre effort/sécurité |
-
-> **Regle d'or** : 80% de couverture + tests de qualite sur les chemins critiques
-> vaut mieux que 100% de couverture avec des tests superficiels.
-
----
-
-## Introduction au mutation testing
-
-### Le problème que ça resout
-
-La couverture dit : "Ce code a ete exécuté pendant les tests."
-
-Le mutation testing demandé : **"Est-ce que les tests detecteraient une erreur dans ce code ?"**
-
-### Le principe
-
-1. **Créer un mutant** : modifier legerement le code source (ex: `>` devient `>=`)
-2. **Lancer les tests** sur le mutant
-3. **Observer** :
-   - Tests echouent -> le mutant est **tue** (les tests sont bons)
-   - Tests passent -> le mutant **survit** (les tests sont faibles)
-
-### Types de mutations
-
-| Categorie | Original | Mutant | Nom |
-|-----------|----------|--------|-----|
-| Arithmetique | `a + b` | `a - b` | ArithmeticOperator |
-| Comparaison | `a > b` | `a >= b` | ConditionalExpression |
-| Comparaison | `a === b` | `a !== b` | EqualityOperator |
-| Logique | `a && b` | `a \|\| b` | LogicalOperator |
-| Negation | `if (x)` | `if (!x)` | BooleanSubstitution |
-| Bloc | `if (x) { ... }` | `if (x) { }` | BlockStatement |
-| Valeur | `return total` | `return 0` | StringLiteral / NumberLiteral |
-| Increment | `i++` | `i--` | UpdateOperator |
-| Suppression | `array.filter(fn)` | `array` | ArrayDeclaration |
-
-### Illustration concrete
-
-```typescript
-// Code original
-export function isEligibleForDiscount(age: number, memberYears: number): boolean {
-  return age >= 65 || memberYears > 5;
-}
-```
-
-```typescript
-// Test faible
-it('should return true for senior members', () => {
-  expect(isEligibleForDiscount(70, 1)).toBe(true);
-});
-
-it('should return true for long-time members', () => {
-  expect(isEligibleForDiscount(30, 10)).toBe(true);
-});
-```
-
-**Mutants generes :**
-
-| # | Mutation | Code mute | Tue ? |
-|---|----------|-----------|-------|
-| 1 | `>=` -> `>` | `age > 65` | Non ! (test utilise 70, pas 65) |
-| 2 | `>` -> `>=` | `memberYears >= 5` | Non ! (test utilise 10, pas 5) |
-| 3 | `\|\|` -> `&&` | `age >= 65 && memberYears > 5` | Oui (70,1 echouerait) |
-| 4 | `true` -> `false` | `return false` | Oui |
-
-**Mutants survivants** = faille dans les tests. Il manque les tests aux **limites** :
-
-```typescript
-// Tests ameliores pour tuer les mutants survivants
-it('should return true for exactly 65 years old', () => {
-  expect(isEligibleForDiscount(65, 0)).toBe(true); // tue mutant #1
-});
-
-it('should return false for exactly 5 member years (not >5)', () => {
-  expect(isEligibleForDiscount(30, 5)).toBe(false); // tue mutant #2
-});
-```
-
----
-
-## Stryker : mutation testing en pratique
-
-### Installation
+**Installation :**
 
 ```bash
-# Installer Stryker et le plugin Vitest
 pnpm add -D @stryker-mutator/core @stryker-mutator/vitest-runner
-
-# OU avec le CLI interactif
-pnpm dlx stryker init
 ```
 
-### Configuration
+**Configuration (`stryker.config.mjs`) :**
 
-```javascript
+```js
 // stryker.config.mjs
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {
-  // Runner de tests
   testRunner: 'vitest',
-
-  // Fichiers a muter
+  plugins: ['@stryker-mutator/vitest-runner'],
   mutate: [
     'src/**/*.ts',
     '!src/**/*.test.ts',
@@ -447,669 +234,192 @@ export default {
     '!src/**/*.d.ts',
     '!src/**/index.ts',
   ],
-
-  // Reporters
   reporters: ['html', 'clear-text', 'progress'],
-
-  // Niveau de log
   logLevel: 'info',
-
-  // Timeouts (les mutants peuvent causer des boucles infinies)
+  coverageAnalysis: 'perTest',   // optimise : ne rejoue que les tests liés au mutant
   timeoutMS: 10000,
   timeoutFactor: 1.5,
-
-  // Concurrence
   concurrency: 4,
-
-  // Seuils
   thresholds: {
-    high: 80,
-    low: 60,
-    break: 50, // echoue en dessous de 50%
+    high: 80,    // vert dans le rapport HTML
+    low: 60,     // orange
+    break: 50,   // échoue le process CI en dessous de 50 %
   },
 };
 ```
 
-### Lancer le mutation testing
+**Lancer :**
 
 ```bash
-# Lancer sur tout le projet
-pnpm stryker run
-
-# Lancer sur un fichier specifique
-pnpm stryker run --mutate "src/services/pricing.ts"
+pnpm stryker run                              # tout le projet
+pnpm stryker run --mutate "src/invitation/**" # ciblé sur un dossier
 ```
 
-### Lire le rapport
+**Lire le rapport :**
 
 ```
 All files
-  Mutation score: 72.34%
-  Mutants:
-    Killed:    34
-    Survived:  10
-    Timeout:    2
-    No coverage: 1
+  Mutation score: 72.34 %
+  Killed:      34  ← tests détectent la mutation → bien
+  Survived:    10  ← tests NE détectent PAS → à corriger
+  Timeout:      2  ← mutation crée une boucle infinie → généralement OK
+  No coverage:  1  ← code non couvert par aucun test → ajouter des tests
 
-src/services/pricing.ts
-  Mutation score: 65.00%
-  Killed: 13   Survived: 7
-
-  Survived mutants:
-  [1] ConditionalExpression: changed "total > 1000" to "true"  (line 8)
-  [2] EqualityOperator: changed ">=" to ">"                    (line 12)
-  [3] ArithmeticOperator: changed "*" to "/"                   (line 15)
-  ...
+src/invitation/invitation.domain.ts
+  Mutation score: 50.00 %
+  [SURVIVED] ConditionalExpression: changed "expiresAt > now" to "expiresAt >= now"  (line 8)
 ```
 
-### Interpreter les résultats
-
-| Statut | Signification | Action |
-|--------|---------------|--------|
-| **Killed** | Les tests detectent la mutation | Rien à faire |
-| **Survived** | Les tests NE detectent PAS la mutation | Ameliorer les tests |
-| **Timeout** | La mutation cause une boucle infinie | Generalement OK |
-| **No coverage** | Le code mute n'est pas couvert | Ajouter des tests |
-| **Compile error** | La mutation produit du code invalide | Ignore |
-
-### Le mutation score
+**Formule du score :**
 
 ```
-Mutation Score = Killed / (Total - CompileErrors - Timeouts) * 100
+Mutation Score = Killed / (Total − CompileErrors − Timeouts) × 100
 ```
 
-Un score de 80%+ sur la logique metier est un **excellent indicateur** de qualite des tests.
+Un score de **80 %+ sur la logique métier** est une cible réaliste et significative. Les timeouts et les erreurs de compilation sont exclus du calcul car ils ne reflètent pas la qualité des tests.
 
----
+### 2.7 Coverage = signal, pas objectif
 
-## Exemple complet : ameliorer des tests grâce à Stryker
+| Utiliser la couverture pour… | Ne PAS utiliser la couverture pour… |
+|------------------------------|-------------------------------------|
+| Identifier du code mort ou jamais exercé | Mesurer la qualité des tests |
+| Trouver les branches non parcourues comme piste | Fixer un objectif absolu (100%) |
+| Gate CI minimal (80% global) | Remplacer une revue de tests |
+| Comparer deux versions d'une PR | Prouver l'absence de bugs |
 
-### Code source
+La couverture et le mutation score se complètent : coverage détecte le code non exécuté ; Stryker détecte les assertions insuffisantes sur le code exécuté.
 
-```typescript
-// src/services/subscription.ts
-export type Plan = 'free' | 'basic' | 'premium' | 'enterprise';
+## 3. Worked examples
 
-export interface SubscriptionResult {
-  price: number;
-  features: string[];
-  trialDays: number;
-}
+### Exemple A — configurer la couverture et lire le rapport
 
-export function calculateSubscription(
-  plan: Plan,
-  isAnnual: boolean,
-  couponPercent: number = 0,
-): SubscriptionResult {
-  const prices: Record<Plan, number> = {
-    free: 0,
-    basic: 9.99,
-    premium: 29.99,
-    enterprise: 99.99,
-  };
+Mise en situation : la logique d'invitation TribuZen. On ajoute la config, on lance, on lit.
 
-  const features: Record<Plan, string[]> = {
-    free: ['basic-access'],
-    basic: ['basic-access', 'email-support'],
-    premium: ['basic-access', 'email-support', 'priority-support', 'api-access'],
-    enterprise: ['basic-access', 'email-support', 'priority-support', 'api-access', 'sla', 'custom-domain'],
-  };
-
-  let price = prices[plan];
-
-  // Reduction annuelle de 20%
-  if (isAnnual && plan !== 'free') {
-    price = price * 12 * 0.8;
-  } else if (!isAnnual && plan !== 'free') {
-    price = price; // Mensuel, pas de reduction
-  }
-
-  // Application du coupon
-  if (couponPercent > 0 && couponPercent <= 100) {
-    price = price * (1 - couponPercent / 100);
-  }
-
-  // Arrondir a 2 decimales
-  price = Math.round(price * 100) / 100;
-
-  // Trial days
-  const trialDays = plan === 'free' ? 0 : plan === 'enterprise' ? 30 : 14;
-
-  return { price, features: features[plan], trialDays };
-}
-```
-
-### Tests initiaux (couverture 100%, mais faibles)
-
-```typescript
-// src/services/subscription.test.ts
-import { describe, it, expect } from 'vitest';
-import { calculateSubscription } from './subscription';
-
-describe('calculateSubscription', () => {
-  it('should return free plan details', () => {
-    const result = calculateSubscription('free', false);
-    expect(result.price).toBe(0);
-    expect(result.features).toContain('basic-access');
-  });
-
-  it('should calculate basic plan monthly', () => {
-    const result = calculateSubscription('basic', false);
-    expect(result.price).toBe(9.99);
-  });
-
-  it('should apply annual discount', () => {
-    const result = calculateSubscription('premium', true);
-    expect(result.price).toBeGreaterThan(0);
-    // Assertion trop vague !
-  });
-
-  it('should apply coupon', () => {
-    const result = calculateSubscription('basic', false, 50);
-    expect(result.price).toBeLessThan(9.99);
-    // Assertion trop vague !
-  });
-
-  it('should return trial days', () => {
-    const result = calculateSubscription('basic', false);
-    expect(result.trialDays).toBeDefined();
-    // Ne verifie pas la valeur exacte !
-  });
-});
-```
-
-**Couverture** : 100% statements, 100% branches, 100% functions, 100% lines.
-
-**Mutation score** : 52% — la moitie des mutants survivent !
-
-### Mutants survivants identifies par Stryker
-
-```
-[1] ArithmeticOperator: "price * 12 * 0.8" -> "price / 12 * 0.8"    (survived)
-[2] ArithmeticOperator: "price * 12 * 0.8" -> "price * 12 / 0.8"    (survived)
-[3] ConditionalExpression: "couponPercent > 0" -> "couponPercent >= 0" (survived)
-[4] EqualityOperator: "plan === 'enterprise'" -> "plan !== 'enterprise'" (survived)
-[5] NumberLiteral: "14" -> "0"                                        (survived)
-[6] NumberLiteral: "30" -> "0"                                        (survived)
-```
-
-### Tests ameliores (mutation score 95%+)
-
-```typescript
-import { describe, it, expect } from 'vitest';
-import { calculateSubscription } from './subscription';
-
-describe('calculateSubscription', () => {
-  describe('pricing', () => {
-    it('should return 0 for free plan', () => {
-      expect(calculateSubscription('free', false).price).toBe(0);
-    });
-
-    it('should return monthly price for basic plan', () => {
-      expect(calculateSubscription('basic', false).price).toBe(9.99);
-    });
-
-    it('should apply 20% annual discount: basic plan', () => {
-      // 9.99 * 12 * 0.8 = 95.90 (arrondi)
-      expect(calculateSubscription('basic', true).price).toBe(95.9);
-    });
-
-    it('should apply 20% annual discount: premium plan', () => {
-      // 29.99 * 12 * 0.8 = 287.90
-      expect(calculateSubscription('premium', true).price).toBe(287.9);
-    });
-
-    it('should NOT apply annual discount to free plan', () => {
-      expect(calculateSubscription('free', true).price).toBe(0);
-    });
-  });
-
-  describe('coupons', () => {
-    it('should apply 50% coupon', () => {
-      // 9.99 * 0.5 = 4.995 -> 5.00
-      expect(calculateSubscription('basic', false, 50).price).toBe(5);
-    });
-
-    it('should apply 100% coupon', () => {
-      expect(calculateSubscription('basic', false, 100).price).toBe(0);
-    });
-
-    it('should NOT apply coupon of 0%', () => {
-      expect(calculateSubscription('basic', false, 0).price).toBe(9.99);
-    });
-
-    it('should ignore negative coupon', () => {
-      expect(calculateSubscription('basic', false, -10).price).toBe(9.99);
-    });
-  });
-
-  describe('trial days', () => {
-    it('should return 0 trial days for free plan', () => {
-      expect(calculateSubscription('free', false).trialDays).toBe(0);
-    });
-
-    it('should return 14 trial days for basic plan', () => {
-      expect(calculateSubscription('basic', false).trialDays).toBe(14);
-    });
-
-    it('should return 14 trial days for premium plan', () => {
-      expect(calculateSubscription('premium', false).trialDays).toBe(14);
-    });
-
-    it('should return 30 trial days for enterprise plan', () => {
-      expect(calculateSubscription('enterprise', false).trialDays).toBe(30);
-    });
-  });
-
-  describe('features', () => {
-    it('should include all premium features', () => {
-      const { features } = calculateSubscription('premium', false);
-      expect(features).toEqual([
-        'basic-access', 'email-support', 'priority-support', 'api-access',
-      ]);
-    });
-
-    it('should include SLA and custom domain for enterprise', () => {
-      const { features } = calculateSubscription('enterprise', false);
-      expect(features).toContain('sla');
-      expect(features).toContain('custom-domain');
-    });
-  });
-});
-```
-
----
-
-## Stratégies avancees
-
-### Couverture incrementale (changed files only)
+**Situation de départ** — `isInvitationValid` ci-dessus, avec deux tests (cas nominal + statut non-pending).
 
 ```bash
-# Couverture uniquement sur les fichiers modifies
-pnpm vitest run --coverage --changed HEAD~1
+# 1. Installer le provider
+pnpm add -D @vitest/coverage-v8
+
+# 2. Lancer
+pnpm vitest run --coverage
 ```
 
-### Ignorer du code avec istanbul comments
+Rapport texte attendu :
 
-```typescript
-export function debugOnly(message: string): void {
-  /* istanbul ignore next -- @preserve: debug-only code */
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[DEBUG] ${message}`);
-  }
-}
-
-export function safeJsonParse(input: string): unknown {
-  try {
-    return JSON.parse(input);
-  } catch {
-    /* istanbul ignore next -- @preserve: defensive error handling */
-    return null;
-  }
-}
+```
+File                      | % Stmts | % Branch | % Funcs | % Lines | Uncovered
+--------------------------|---------|----------|---------|---------|----------
+invitation.domain.ts      |     100 |    66.67 |     100 |     100 | —
 ```
 
-### Combiner couverture et mutation testing dans le workflow
+Branches : 66 % — deux branches couvertes sur trois (`status !== 'pending'` true + false, `expiresAt > now` true), mais la branche `expiresAt > now` false (invitation expirée) n'a jamais été prise. Pourtant le rapport indique 100 % lignes/fonctions/stmts : chaque ligne a bien été exécutée, mais toujours dans les mêmes conditions.
 
-```json
-{
-  "scripts": {
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "test:mutation": "stryker run",
-    "test:mutation:changed": "stryker run --mutate $(git diff --name-only HEAD~1 | grep 'src/' | tr '\\n' ',')",
-    "test:quality": "pnpm test:coverage && pnpm test:mutation"
-  }
-}
-```
+Correction : ajouter le cas manquant.
 
-### Stryker sur les fichiers modifies uniquement (CI)
-
-```yaml
-# .github/workflows/mutation.yml
-name: Mutation Testing (Changed Files)
-on: pull_request
-
-jobs:
-  mutation:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Get changed source files
-        id: changed
-        run: |
-          FILES=$(git diff --name-only origin/main...HEAD | grep '^src/.*\.ts$' | grep -v '\.test\.' | grep -v '\.spec\.' | tr '\n' ',' | sed 's/,$//')
-          echo "files=$FILES" >> $GITHUB_OUTPUT
-
-      - name: Run Stryker on changed files
-        if: steps.changed.outputs.files != ''
-        run: pnpm stryker run --mutate "${{ steps.changed.outputs.files }}"
-```
-
----
-
-## Anti-patterns de couverture
-
-### 1. Le test sans assertion
-
-```typescript
-// MAUVAIS — 100% coverage, 0% utilite
-it('should not crash', () => {
-  calculatePrice(10, 5);
+```ts
+it('retourne false pour une invitation expirée', () => {
+  const inv = { status: 'pending' as const, expiresAt: new Date('2026-06-30T00:00:00Z') };
+  expect(isInvitationValid(inv, NOW)).toBe(false);
 });
 ```
 
-### 2. Le snapshot sur tout
+Nouveau rapport : 100 % branches. Mais le bug à la frontière (`===`) n'est toujours pas révélé.
 
-```typescript
-// MAUVAIS — couverture haute mais fragile
-it('should match snapshot', () => {
-  expect(calculateSubscription('premium', true, 25)).toMatchInlineSnapshot();
-  // Chaque changement casse le test, meme les changements voulus
-});
-```
+### Exemple B — un mutant survivant révèle le bug à la frontière
 
-### 3. L'obsession du chiffre
-
-```typescript
-// MAUVAIS — tester du code trivial pour le %
-it('should export DEFAULT_PAGE_SIZE', () => {
-  expect(DEFAULT_PAGE_SIZE).toBe(20);
-  // Ce test ne protege de rien
-});
-```
-
-### 4. Couverture sans isolation
-
-```typescript
-// MAUVAIS — depend d'un autre test qui s'execute avant
-it('should update user', () => {
-  // Ce test suppose que le test "create user" a deja tourne
-  const user = getLastCreatedUser(); // fragile !
-  user.name = 'Updated';
-  expect(updateUser(user)).toBeTruthy();
-});
-```
-
----
-
-## Checklist du module
-
-- [ ] J'ai configure la couverture v8 ou istanbul dans Vitest
-- [ ] J'ai défini des seuils pragmatiques (80% global, plus haut sur la logique critique)
-- [ ] Je sais lire un rapport de couverture (texte, HTML)
-- [ ] Je comprends la différence entre "code exécuté" et "code vérifié"
-- [ ] J'ai installe et configure Stryker
-- [ ] Je sais interpreter un rapport de mutation (killed, survived, timeout)
-- [ ] J'ai ameliore des tests en corrigeant des mutants survivants
-- [ ] J'utilise la mutation testing sur les chemins critiques, pas partout
-
----
-
-## Exercice pratique
-
-Reprenez un module de votre projet :
-
-1. Lancez la couverture : `pnpm vitest run --coverage`
-2. Identifiez les fichiers sous 80%
-3. Ajoutez les tests manquants
-4. Lancez Stryker : `pnpm stryker run --mutate "src/services/votre-fichier.ts"`
-5. Identifiez les mutants survivants
-6. Corrigez vos tests
-7. Atteignez un mutation score de 80%+
-
-> Solution dans le [Lab 12](../labs/lab-12-couverture/)
-
----
-
-## Navigation
-
-| Précédent | Suivant |
-|-----------|---------|
-| [11 - Playwright avance](./11-playwright-avance) | [13 - Tests en CI/CD](./13-tests-en-ci-cd) |
-
----
-
-## Ressources
-
-- [Quiz 12 : Testez vos connaissances](../quizzes/quiz-12-couverture.html)
-- [Lab 12 : Couverture et mutation testing](../labs/lab-12-couverture/)
-- [Vitest Coverage](https://vitest.dev/guide/coverage)
-- [Stryker Mutator](https://stryker-mutator.io/)
-- [Martin Fowler — Test Coverage](https://martinfowler.com/bliki/TestCoverage.html)
-- [Mutation Testing — Wikipedia](https://en.wikipedia.org/wiki/Mutation_testing)
-
----
-
-## Visual regression testing
-
-### Qu'est-ce que le visual regression testing ?
-
-Le visual regression testing (test de régression visuelle) consiste a **capturer des screenshots** de l'interface a un instant donne, puis a les comparer automatiquement lors des prochains passages de tests. L'objectif est de detecter tout changement visuel involontaire : un bouton decale, une couleur modifiee, un texte tronque, une mise en page cassee.
-
-Contrairement aux tests unitaires ou d'integration qui verifient la logique, les tests visuels verifient ce que **l'utilisateur voit reellement**. Un composant peut passer tous ses tests fonctionnels tout en etant visuellement casse (CSS casse, z-index incorrect, overflow masque).
-
-### Pourquoi c'est important
-
-Les regressions visuelles sont parmi les bugs les plus difficiles a detecter automatiquement :
-
-- Un changement CSS dans un composant partage peut **casser 20 pages** sans qu'aucun test unitaire ne le detecte
-- Les **effets de bord CSS** (specificity wars, cascade, media queries) sont invisibles pour les tests classiques
-- Les **mises a jour de dependances** (framework UI, librairie de composants) peuvent introduire des changements subtils
-- Les **navigateurs** n'interpretent pas tous le CSS de la meme facon
-
-```
-Test unitaire      : "Le bouton a la classe .primary"           ✅
-Test d'integration : "Cliquer le bouton envoie le formulaire"   ✅
-Test visuel        : "Le bouton est rouge au lieu de bleu"      ❌ DETECTE !
-```
-
-### Outils principaux
-
-#### Playwright — `toHaveScreenshot()`
-
-Playwright integre nativement la comparaison de screenshots. C'est la solution la plus simple si vous utilisez deja Playwright pour vos tests E2E.
-
-```typescript
-import { test, expect } from '@playwright/test';
-
-test('page d\'accueil — apparence globale', async ({ page }) => {
-  await page.goto('/');
-  await expect(page).toHaveScreenshot('homepage.png');
-});
-
-test('bouton primary — etat normal et hover', async ({ page }) => {
-  await page.goto('/components/button');
-
-  // Screenshot d'un element specifique
-  const button = page.getByRole('button', { name: 'Envoyer' });
-  await expect(button).toHaveScreenshot('button-primary.png');
-
-  // Screenshot apres hover
-  await button.hover();
-  await expect(button).toHaveScreenshot('button-primary-hover.png');
-});
-
-test('formulaire — etat d\'erreur', async ({ page }) => {
-  await page.goto('/contact');
-  await page.getByRole('button', { name: 'Envoyer' }).click();
-  await expect(page).toHaveScreenshot('form-errors.png', {
-    maxDiffPixelRatio: 0.01, // tolerer 1% de pixels differents
-  });
-});
-```
-
-**Configuration dans `playwright.config.ts`** :
-
-```typescript
-export default defineConfig({
-  expect: {
-    toHaveScreenshot: {
-      maxDiffPixelRatio: 0.005, // seuil global de tolerance
-      animations: 'disabled',   // desactiver les animations pour stabilite
-    },
-  },
-  projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    // Un screenshot par navigateur = detection des differences cross-browser
-  ],
-});
-```
-
-**Gestion des baselines** :
+On lance Stryker sur `invitation.domain.ts` :
 
 ```bash
-# Generer les screenshots de reference (premiere fois)
-npx playwright test --update-snapshots
-
-# Lancer les tests (compare avec les baselines existantes)
-npx playwright test
-
-# Si un changement est volontaire, mettre a jour la baseline
-npx playwright test --update-snapshots
+pnpm stryker run --mutate "src/invitation/invitation.domain.ts"
 ```
 
-Les screenshots de reference sont stockes dans un dossier `__screenshots__` a cote des tests. Ils **doivent etre commites dans git** pour servir de baseline a l'equipe.
+Stryker génère entre autres ce mutant :
 
-#### Chromatic — visual testing pour Storybook
-
-[Chromatic](https://www.chromatic.com/) est un service cloud cree par l'equipe Storybook. Il capture automatiquement un screenshot de chaque story et detecte les changements.
-
-```bash
-# Installation
-pnpm add -D chromatic
-
-# Lancer (necessite un project token)
-pnpm chromatic --project-token=<token>
+```ts
+// Mutant #3 — ConditionalExpression
+// Original : return invitation.expiresAt > now;
+// Mutant   : return invitation.expiresAt >= now;
 ```
 
-**Avantages de Chromatic** :
+Résultat : **SURVIVED**. Les tests passent sur le mutant. Cela signifie que le changement `>` → `>=` ne casse aucun test — autrement dit, tes tests ne testent pas la frontière exacte.
 
-- Integration native avec Storybook — chaque story devient un test visuel
-- Interface web pour approuver ou rejeter les changements visuels
-- Tests cross-navigateur automatiques (Chrome, Firefox, Safari)
-- Parallelisation cloud — rapide meme avec des centaines de composants
+**Diagnostic** : aucun test ne vérifie `expiresAt === now`. Le mutant survivant pointe l'oubli.
 
-**Inconvenients** :
+**Corriger en deux étapes :**
 
-- Service payant au-dela du tier gratuit (5 000 snapshots/mois)
-- Necessite Storybook comme prerequis
-- Les screenshots sont stockes dans le cloud, pas en local
+1. Ajouter le test limite :
 
-#### Percy (BrowserStack)
-
-[Percy](https://percy.io/) est un service similaire a Chromatic, mais agnostique au framework. Il s'integre avec Playwright, Cypress, Puppeteer, Storybook, et d'autres.
-
-```typescript
-// Integration avec Playwright
-import percySnapshot from '@percy/playwright';
-
-test('homepage visual', async ({ page }) => {
-  await page.goto('/');
-  await percySnapshot(page, 'Homepage');
+```ts
+it('retourne false quand expiresAt est exactement now', () => {
+  const inv = { status: 'pending' as const, expiresAt: NOW };
+  // avec > : false ✓   avec >= : true ✗
+  expect(isInvitationValid(inv, NOW)).toBe(false);
 });
 ```
 
-### Quand utiliser le visual regression testing
+2. Relancer Stryker : le mutant #3 est maintenant **tué** car ce nouveau test échoue sur le mutant `>=`.
 
-#### Cas ideaux
+3. Corriger aussi le code si nécessaire (ici `>` est le comportement voulu : une invitation qui expire exactement maintenant est invalide — le code était correct, c'est le test qui manquait).
 
-| Contexte | Pourquoi |
-|----------|----------|
-| **Librairies de composants** (design system) | Chaque composant a un contrat visuel strict |
-| **Pages marketing / landing pages** | L'apparence est le produit — un pixel compte |
-| **Emails HTML** | Le rendu varie enormement entre clients mail |
-| **Refactoring CSS a grande echelle** | Detecter les effets de bord sur toutes les pages |
-| **Migration de framework UI** | Verifier que la nouvelle version rend identiquement |
+Nouveau score de mutation : 100 % sur ce fichier. La couverture à 100 % était atteinte dès le départ — Stryker a révélé ce que la couverture ne pouvait pas voir.
 
-#### Quand ne PAS l'utiliser (ou avec prudence)
+## 4. Pièges & misconceptions
 
-| Contexte | Pourquoi |
-|----------|----------|
-| **UIs qui changent frequemment** | Chaque sprint genere des dizaines de faux positifs a approuver |
-| **Dashboards avec donnees dynamiques** | Les chiffres changent, les graphiques changent — screenshots instables |
-| **Contenus generes par l'utilisateur** | Impossible de predire le rendu exact |
-| **Animations complexes** | Les screenshots capturent un instant — l'animation peut etre cassee entre deux frames |
+- **Viser 100% de couverture.** Les rendements diminuent fortement après 85-90 % : les lignes restantes sont souvent des barrels, des types, du code défensif ou des cas dégénérés qui coûtent plus de maintenance que ce qu'ils protègent. Pire, pour atteindre 100 %, on finit par écrire des tests couplés à l'implémentation qui cassent à chaque refactor. *Correct :* 80 % global, 90 % sur la logique domaine — et laisser le mutation testing juger la qualité.
 
-> **Regle pratique** : si vous passez plus de temps a approuver des changements qu'a corriger des bugs, vos tests visuels couvrent trop de surface instable.
+- **Coverage sans assertions.** Un test qui appelle le code sans `expect` donne 100 % de couverture et ne protège de rien. Ce piège est invisible dans le rapport de couverture. *Correct :* le mutation testing le révèle immédiatement — un mutant qui renvoie `true` au lieu de `false` survivra si aucun test n'assert la valeur de retour. Stryker est le détecteur de ce pattern.
 
-### Integration avec la CI
+- **Ignorer les mutants survivants.** Un mutant survivant indique qu'une erreur précise dans le code ne serait pas détectée. En logique domaine (règles d'autorisation, calculs financiers, règles d'expiration), un mutant survivant est un bug potentiel en production. *Correct :* traiter les survivants sur la logique métier critique comme des failing tests — analyser, écrire le cas manquant, relancer.
 
-#### Workflow typique avec Playwright
+- **Confondre couverture et qualité des assertions.** `expect(result).toBeDefined()` ou `expect(result).not.toBeNull()` exécute tout le code et sature les métriques sans rien vérifier d'utile. *Correct :* asserter sur les valeurs exactes (`toBe(false)`, `toEqual({ id: 'inv-1' })`), les frontières (`toBe(0)`, `toBe(14)`), et les erreurs jetées (`rejects.toThrow('ALREADY_INVITED')`).
 
-```yaml
-# .github/workflows/visual-tests.yml
-name: Visual Regression Tests
-on: pull_request
+- **Lancer Stryker sur tout le projet à chaque PR.** Stryker est lent (il rejoue les tests N fois, une par mutant). Sur un projet avec 500 mutants, un run complet prend plusieurs minutes. *Correct :* utiliser `coverageAnalysis: 'perTest'` pour n'exécuter que les tests liés au mutant, et en CI cibler uniquement les fichiers modifiés (`--mutate` sur le diff de la PR).
 
-jobs:
-  visual:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+## 5. Ancrage TribuZen
 
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+Couche fil-rouge : **mesurer la couverture des règles domaine TribuZen + un run de mutation testing sur la logique d'invitation** (`smaurier/tribuzen`).
 
-      - name: Run visual tests
-        run: pnpm exec playwright test --project=chromium
+**Couverture :** les règles domaine de TribuZen (`isInvitationValid`, `can(user, action, resource)` pour le RBAC, `calculateSubscriptionPrice`) sont en logique pure — pas d'I/O. Elles sont les candidates idéales à un seuil de couverture élevé (`branches: 90`). Configurer `src/domain/**` avec un seuil plus strict que le reste du projet.
 
-      - name: Upload diff artifacts
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: visual-diffs
-          path: test-results/
-          retention-days: 7
+**Mutation testing :** cibler `src/invitation/invitation.domain.ts` et `src/rbac/can.ts`. Ces fichiers contrôlent l'accès aux données familiales — un mutant survivant sur une règle RBAC (`===` → `!==` sur un rôle) pourrait autoriser un accès non prévu. Le mutation testing les cible directement.
+
+**Workflow en session :**
+
+```bash
+# 1. Couverture globale
+pnpm vitest run --coverage
+
+# 2. Mutation testing ciblé sur la logique domaine
+pnpm stryker run --mutate "src/domain/**,src/invitation/invitation.domain.ts"
 ```
 
-#### Workflow d'approbation
+La combinaison couverture + mutation testing donne deux signaux complémentaires sur la même logique : l'un mesure l'exécution, l'autre mesure la précision des assertions.
 
-Le workflow d'approbation des changements visuels est critique pour eviter la frustration :
+## 6. Points clés
+
+1. Vitest supporte deux providers : **v8** (natif, rapide, défaut) et **istanbul** (instrumentation AST, plus précis sur les branches transpilées).
+2. Quatre métriques : **instructions** (Stmts), **branches** (chemins conditionnels), **fonctions** (Funcs), **lignes** (Lines) — les branches sont les plus révélatrices.
+3. Un seuil (`thresholds`) fait échouer la CI si non atteint — porte minimale, pas objectif absolu.
+4. **La couverture mesure l'exécution, pas la vérification** : 100 % de coverage avec des assertions faibles laisse passer des bugs.
+5. Le mutation testing crée des **mutants** (petites modifications du code) et vérifie si les tests les détectent — **tué = test précis**, **survivant = test faible**.
+6. **Score de mutation** = Killed / (Total − CompileErrors − Timeouts) × 100 ; 80 %+ sur la logique métier est la cible.
+7. Stryker JS s'intègre à Vitest via `@stryker-mutator/vitest-runner` ; `coverageAnalysis: 'perTest'` optimise les temps de run.
+8. Coverage et mutation testing sont complémentaires : coverage → code non exécuté ; Stryker → assertions insuffisantes sur le code exécuté.
+
+## 7. Seeds Anki
 
 ```
-1. Developpeur pousse une PR
-2. CI lance les tests visuels
-3. Si diff detectee :
-   a. Playwright : le test echoue, le dev regarde les diffs dans les artifacts
-   b. Chromatic/Percy : interface web avec comparaison cote a cote
-4. Si le changement est volontaire :
-   a. Playwright : `--update-snapshots` puis commit les nouvelles baselines
-   b. Chromatic/Percy : clic "Approve" dans l'interface web
-5. Si le changement est involontaire :
-   a. Le dev corrige le bug CSS et re-pousse
+Quelle est la différence entre les providers v8 et istanbul dans Vitest ?|v8 = instrumentation native du moteur V8 (rapide, défaut) ; istanbul = instrumentation du code source AST (plus précis sur les branches, plus lent)
+Quelles sont les 4 métriques de couverture et que mesurent-elles ?|Statements (instructions exécutées), Branches (chemins conditionnels), Functions (fonctions appelées), Lines (lignes physiques exécutées)
+Pourquoi 100 % de coverage ne garantit pas l'absence de bugs ?|La coverage mesure si le code a été exécuté, pas si le comportement est correctement vérifié — un test sans expect ou avec une assertion trop vague donne 100 %
+Qu'est-ce qu'un mutant tué vs un mutant survivant ?|Tué = au moins un test échoue sur le code muté → les tests sont assez précis. Survivant = tous les tests passent → les tests sont trop faibles sur ce point
+Quelle est la formule du mutation score Stryker ?|Killed / (Total − CompileErrors − Timeouts) × 100
+Quels packages installer pour faire du mutation testing avec Stryker + Vitest ?|@stryker-mutator/core + @stryker-mutator/vitest-runner ; configurer testRunner: 'vitest' et plugins: ['@stryker-mutator/vitest-runner']
+Quel paramètre Stryker optimise les temps de run en ne rejouant que les tests liés au mutant ?|coverageAnalysis: 'perTest'
+Comment un mutant survivant révèle-t-il un bug que la couverture ne voyait pas ?|Il montre qu'une modification précise du code (ex. > → >=) ne casse aucun test — donc les tests ne vérifient pas la valeur aux frontières de la condition
 ```
 
-### Bonnes pratiques
+## Pont vers le lab
 
-1. **Desactiver les animations** dans les tests visuels (`animations: 'disabled'`) pour eviter les screenshots flous
-2. **Utiliser des donnees deterministes** (mocks, fixtures) pour que les screenshots soient reproductibles
-3. **Tester par composant** plutot que par page entiere — les diffs sont plus faciles a analyser
-4. **Definir une tolerance** (`maxDiffPixelRatio`) pour absorber les differences sub-pixel entre OS
-5. **Limiter le scope** : ne testez visuellement que les composants stables et critiques
-6. **Documenter le process d'approbation** pour que toute l'equipe sache comment gerer les diffs
-
----
-
-<!-- parcours-recommande -->
-
-::: tip Parcours recommandé
-1. **Screencast** : [screencast 12 couverture](../screencasts/screencast-12-couverture.md)
-2. **Lab** : [lab-12-couverture](../labs/lab-12-couverture/README)
-3. **Quiz** : [quiz 12 couverture](../quizzes/quiz-12-couverture.html)
-:::
+> Lab associé : `06-testing/labs/lab-12-couverture/`. Tu y configures la couverture Vitest sur la logique d'invitation TribuZen, analyses le rapport, identifies les branches non couvertes, puis lances Stryker pour révéler les mutants survivants et corriges les tests en conséquence. Corrigé complet commenté + variante J+30 dans le README.

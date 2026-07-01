@@ -1,55 +1,219 @@
-# Module 13 — Tests en CI/CD
-
-| Difficulte | Duree estimee | Lab                             | Quiz                                     |
-| ---------- | ------------- | ------------------------------- | ---------------------------------------- |
-| 4/5        | 90 min        | [Lab 13](../labs/lab-13-ci-cd/) | [Quiz 13](../quizzes/quiz-13-ci-cd.html) |
-
-## Objectifs
-
-- Comprendre le principe "shift left" et la pyramide de feedback
-- Configurer un pipeline GitHub Actions complet avec tests
-- Paralleliser les tests (Vitest workers, Playwright sharding)
-- Générer et exploiter les rapports (JUnit, Codecov)
-- Mettre en place les pre-commit hooks (Husky + lint-staged)
-- Gérer les tests flaky en CI
-- Optimiser les couts et la vitesse du pipeline
-
+---
+titre: Tests en CI/CD
+cours: 06-testing
+notions: [exécuter les tests en CI GitHub Actions, cache des dépendances, tests en parallèle et matrice, artefacts et rapports de test, gate de merge sur les tests, tests flaky en CI, coverage et seuils en CI, Playwright en CI]
+outcomes: [écrire un workflow GitHub Actions qui lance Vitest et Playwright, mettre en cache les dépendances, bloquer le merge si les tests échouent, publier rapports et artefacts]
+prerequis: [12b-tests-accessibilite]
+next: 14-flaky-tests-et-debugging
+libs: [{ name: vitest, version: ^4.1.9 }, { name: "@playwright/test", version: ^1 }]
+tribuzen: pipeline CI TribuZen (Vitest + Playwright) bloquant le merge si rouge, avec cache et artefacts
+last-reviewed: 2026-07
 ---
 
-## Shift left : tester le plus tot possible
+# Tests en CI/CD
 
-### La pyramide de feedback
+> **Outcomes — tu sauras FAIRE :** écrire un workflow GitHub Actions complet qui exécute Vitest et Playwright, mettre en cache les dépendances pour accélérer le pipeline, configurer un gate de merge bloquant si les tests échouent, et publier rapports HTML et artefacts.
+> **Difficulté :** :star::star::star:
 
+## 1. Cas concret d'abord
+
+Lundi matin sur TribuZen. Une PR merge sur `main` un refactor de `FamilyService.removeMember()`. Les tests unitaires passent en local pour l'auteur — mais le job CI n'existe pas encore. Trois jours plus tard, un utilisateur signale que retirer un membre d'une famille désactive son compte au lieu de le déplacer en `INACTIVE`. Le bug existait dans la PR, les reviewers l'ont raté à l'œil.
+
+Coût : une demie-journée de diagnostic + correction + redeploy + email d'excuse aux bêta-testeurs.
+
+Si un pipeline CI avait lancé `vitest run` à chaque PR et bloqué le merge en cas d'échec, le bug aurait été détecté en 90 secondes sur le runner, avant le premier `git merge`.
+
+La question centrale : **comment configurer GitHub Actions pour que les tests Vitest et Playwright s'exécutent automatiquement et bloquent le merge si rouge ?** Ce module répond point par point.
+
+## 2. Théorie complète, concise
+
+### Workflow GitHub Actions — anatomie d'un fichier CI
+
+Un workflow est un fichier YAML dans `.github/workflows/`. Il se déclenche sur des événements (`on`), orchestre des `jobs` (parallèles par défaut), chaque job exécute des `steps` séquentiels.
+
+```yaml
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 ```
-                    ┌─────────┐
-                    │  Prod   │  ← Monitoring, alertes
-                   ┌┴─────────┴┐
-                   │  Staging  │  ← Tests smoke, e2e
-                  ┌┴───────────┴┐
-                  │   CI/CD     │  ← Tests auto, coverage, lint
-                 ┌┴─────────────┴┐
-                 │  Pre-commit   │  ← Hooks, lint, format
-                ┌┴───────────────┴┐
-                │    IDE / Local  │  ← Types, tests watch, snippets
-                └─────────────────┘
-  Plus tot = moins cher, plus rapide, plus facile a corriger
+
+La clé `pull_request` est celle qui compte pour les gates : GitHub crée un *check run* par job, et un check en rouge bloque le merge si la branche est protégée.
+
+`concurrency` annule les runs précédents sur la même branche/PR, évitant de gaspiller des minutes CI sur un code déjà dépassé :
+
+```yaml
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 ```
 
-### Cout de correction selon le moment de detection
+### Cache des dépendances — pourquoi et comment
 
-| Detecte en... | Cout relatif | Exemple                     |
-| ------------- | ------------ | --------------------------- |
-| IDE (live)    | 1x           | TypeScript error, ESLint    |
-| Pre-commit    | 2x           | Lint, format, tests rapides |
-| CI (PR)       | 5x           | Tests complets, couverture  |
-| Staging       | 20x          | Bug en review manuelle      |
-| Production    | 100x         | Incident client, rollback   |
+Sans cache, chaque job fait `pnpm install` depuis zéro : 60-90 secondes de téléchargement npm. Avec cache, le store pnpm est restauré depuis le cache Actions si `pnpm-lock.yaml` n'a pas changé : l'install tombe à 5-10 secondes.
 
----
+`actions/setup-node@v4` gère le cache nativement avec `cache: pnpm` (ou `npm`, `yarn`). Il combine `pnpm/action-setup` + `actions/cache` automatiquement :
 
-## GitHub Actions : pipeline complet
+```yaml
+- uses: pnpm/action-setup@v4
+  with:
+    version: 9
 
-### Workflow de base
+- uses: actions/setup-node@v4
+  with:
+    node-version: 20
+    cache: pnpm          # hash de pnpm-lock.yaml comme clé de cache
+
+- run: pnpm install --frozen-lockfile
+```
+
+`--frozen-lockfile` garantit que le lockfile ne dérive pas en CI (fail explicite si le lockfile est désynchronisé).
+
+Pour les navigateurs Playwright, il faut un cache séparé — les binaires ne sont pas dans le node_modules :
+
+```yaml
+- name: Cache navigateurs Playwright
+  uses: actions/cache@v4
+  with:
+    path: ~/.cache/ms-playwright
+    key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+    restore-keys: playwright-${{ runner.os }}-
+```
+
+### Jobs parallèles et matrice
+
+Plusieurs jobs dans un même workflow s'exécutent en parallèle par défaut. `needs` crée une dépendance :
+
+```yaml
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    # ...
+  unit:
+    needs: lint          # attend que lint soit vert
+    runs-on: ubuntu-latest
+    # ...
+  e2e:
+    needs: unit          # attend unit
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+```
+
+La **matrice** (`strategy.matrix`) multiplie un job : ici 4 jobs `e2e` parallèles, chacun portant `shard: 1`, `shard: 2`, etc. La valeur est accessible via `${{ matrix.shard }}`.
+
+`fail-fast: false` sur la matrice E2E est délibéré : on veut tous les résultats, pas seulement le premier shard qui tombe.
+
+### Artefacts et rapports de test
+
+Les jobs CI sont éphémères — les fichiers générés (rapports HTML, traces, coverage) disparaissent à la fin du run. `actions/upload-artifact@v4` les persiste dans le stockage GitHub Actions (téléchargeables depuis l'UI, conservés N jours) :
+
+```yaml
+- uses: actions/upload-artifact@v4
+  if: always()           # uploader même si les tests ont échoué
+  with:
+    name: playwright-report-${{ matrix.shard }}
+    path: playwright-report/
+    retention-days: 7
+```
+
+`if: always()` est essentiel : si les tests ont échoué, le step précédent a renvoyé un exit code non-zéro, et sans `always()` le step upload serait sauté — on n'aurait pas le rapport pour diagnostiquer.
+
+Pour Playwright avec sharding, chaque shard génère son propre rapport. `actions/download-artifact@v4` + `playwright merge-reports` les fusionne en un rapport unifié dans un job dédié.
+
+### Gate de merge — required checks
+
+Un gate de merge se configure dans **Settings > Branches > Branch protection rules** sur GitHub :
+
+1. Cocher *Require status checks to pass before merging*.
+2. Ajouter le nom des jobs critiques (ex. `Unit Tests`, `E2E Tests`).
+3. Cocher *Require branches to be up to date before merging* (optionnel mais recommandé).
+
+Le nom du check = le champ `name:` du job dans le YAML (ou la valeur par défaut = le job id). Si un job échoue, le check est rouge, et GitHub bloque le bouton Merge.
+
+Résultat concret sur TribuZen : si `FamilyService.removeMember()` casse un test unitaire, le check `Unit Tests` passe en rouge et le merge est impossible — le bug ne peut pas atteindre `main`.
+
+### Tests flaky en CI — retries et détection
+
+Un test flaky = test qui passe ou échoue de manière non-déterministe, souvent à cause de timing, de ressources limitées sur le runner, ou d'un ordre d'exécution différent.
+
+En CI, le timing est différent du local (runners plus lents, réseau, contention CPU). Playwright gère les retries nativement :
+
+```typescript
+// playwright.config.ts
+export default defineConfig({
+  retries: process.env.CI ? 2 : 0,  // 2 tentatives en CI, 0 en local
+  use: {
+    trace: 'on-first-retry',         // trace uniquement sur le 1er retry
+    screenshot: 'only-on-failure',
+    video: 'on-first-retry',
+  },
+});
+```
+
+Un test qui passe à la 2e tentative est flaky — Playwright le marque `flaky` dans le rapport HTML (orange, pas vert). C'est un signal d'alerte, pas un succès.
+
+Pour Vitest, les retries se configurent par test ou globalement :
+
+```typescript
+// vitest.config.ts
+export default defineConfig({
+  test: {
+    retry: process.env.CI ? 1 : 0,  // 1 retry en CI
+  },
+});
+```
+
+Stratégie pour un test flaky identifié : le **quarantiner** avec `it.skip` ou un tag `@flaky`, ouvrir un ticket, et le corriger avant de le réactiver — ne jamais laisser un test flaky silencieusement ignorer un vrai bug.
+
+### Coverage et seuils en CI
+
+Vitest génère un rapport de couverture avec `@vitest/coverage-v8` (ou `-istanbul`). En CI, on ajoute un **seuil** qui fait échouer le job si la couverture descend en dessous :
+
+```typescript
+// vitest.config.ts
+export default defineConfig({
+  test: {
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov', 'html'],
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 75,
+        statements: 80,
+      },
+    },
+  },
+});
+```
+
+En CI, la commande est `pnpm vitest run --coverage`. Si la couverture passe sous le seuil, Vitest exit avec un code non-zéro → le job échoue → le check gate est rouge → merge bloqué.
+
+Le rapport `lcov` est utilisé par les services de couverture (Codecov, Coveralls) qui postent un commentaire automatique sur la PR avec l'évolution de la couverture ligne par ligne.
+
+### Playwright en CI avec `--with-deps`
+
+Sur les runners Linux (ubuntu-latest), les navigateurs Playwright ont des dépendances système (libglib, libnss, etc.) absentes par défaut. Sans elles, Playwright plante avec une erreur cryptique à l'ouverture du navigateur.
+
+La commande `playwright install --with-deps chromium` installe le binaire Chromium **et** toutes ses dépendances système via apt :
+
+```yaml
+- name: Installer Playwright et dépendances système
+  run: pnpm playwright install --with-deps chromium
+```
+
+On cible `chromium` spécifiquement pour ne pas installer webkit et firefox (gros téléchargements inutiles si la suite ne les utilise pas). Si la suite requiert plusieurs navigateurs, lister `chromium firefox webkit`.
+
+L'image `mcr.microsoft.com/playwright` pré-installe tout (utile pour Docker CI), mais sur les runners GitHub Standards, `--with-deps` est la voie directe.
+
+## 3. Worked examples
+
+### Workflow complet TribuZen — Vitest + Playwright
+
+Voici le YAML de production utilisé sur TribuZen, annoté pas-à-pas.
 
 ```yaml
 # .github/workflows/ci.yml
@@ -61,15 +225,13 @@ on:
   pull_request:
     branches: [main]
 
-# Annuler les runs precedents sur la meme branche/PR
+# Annuler le run précédent sur la même branche/PR (économie de minutes CI)
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ===================================
-  # JOB 1 : Lint & Types
-  # ===================================
+  # ── JOB 1 : lint et typecheck ──────────────────────────────────────────────
   lint:
     name: Lint & Type Check
     runs-on: ubuntu-latest
@@ -85,24 +247,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
+          cache: pnpm          # cache intégré — hash de pnpm-lock.yaml
 
-      - name: Install dependencies
+      - name: Installer les dépendances
         run: pnpm install --frozen-lockfile
 
-      - name: Run ESLint
+      - name: ESLint (zéro warning toléré)
         run: pnpm eslint . --max-warnings 0
 
-      - name: Type check
+      - name: TypeScript check
         run: pnpm tsc --noEmit
 
-  # ===================================
-  # JOB 2 : Tests unitaires
-  # ===================================
-  unit-tests:
+  # ── JOB 2 : tests unitaires + coverage ────────────────────────────────────
+  unit:
     name: Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: lint              # gate : lint doit être vert
 
     steps:
       - uses: actions/checkout@v4
@@ -116,42 +277,32 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Install dependencies
+      - name: Installer les dépendances
         run: pnpm install --frozen-lockfile
 
-      - name: Run unit tests with coverage
-        run: pnpm vitest run --coverage --reporter=junit --outputFile=test-results/junit.xml
+      - name: Vitest — tests + coverage
+        run: pnpm vitest run --coverage
+        # exit non-zéro si les seuils de coverage ne sont pas atteints
 
-      - name: Upload coverage to Codecov
-        if: always()
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage/lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Upload test results
+      - name: Upload rapport de couverture
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: unit-test-results
-          path: |
-            test-results/
-            coverage/
+          name: coverage-report
+          path: coverage/
           retention-days: 7
 
-  # ===================================
-  # JOB 3 : Tests E2E (Playwright)
-  # ===================================
-  e2e-tests:
-    name: E2E Tests (${{ matrix.shard }}/${{ strategy.job-total }})
+  # ── JOB 3 : tests E2E Playwright (matrice de shards) ──────────────────────
+  e2e:
+    name: E2E Tests (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [lint] # Attendre que le lint passe
+    needs: unit              # gate : unit doit être vert
 
     strategy:
-      fail-fast: false # Continuer meme si un shard echoue
+      fail-fast: false       # on collecte tous les résultats, pas juste le 1er échec
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4]  # 4 jobs parallèles, chacun exécute 1/4 des tests
 
     steps:
       - uses: actions/checkout@v4
@@ -165,34 +316,36 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Install dependencies
+      - name: Installer les dépendances
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright browsers
+      - name: Cache navigateurs Playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
+
+      - name: Installer Playwright + dépendances système Linux
         run: pnpm playwright install --with-deps chromium
 
-      - name: Build application
+      - name: Build de l'application
         run: pnpm build
 
-      - name: Run E2E tests (shard ${{ matrix.shard }}/4)
-        run: |
-          pnpm playwright test \
-            --shard=${{ matrix.shard }}/4 \
-            --reporter=junit \
-            --reporter=html
+      - name: Tests E2E (shard ${{ matrix.shard }}/4)
+        run: pnpm playwright test --shard=${{ matrix.shard }}/4
         env:
           CI: true
-          BASE_URL: http://localhost:3000
 
-      - name: Upload Playwright report
-        if: always()
+      - name: Upload rapport HTML Playwright
+        if: always()         # uploader même si des tests ont échoué
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 7
 
-      - name: Upload test traces (on failure)
+      - name: Upload traces (seulement en cas d'échec)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -200,14 +353,12 @@ jobs:
           path: test-results/
           retention-days: 3
 
-  # ===================================
-  # JOB 4 : Merge des rapports E2E
-  # ===================================
+  # ── JOB 4 : fusionner les rapports Playwright ─────────────────────────────
   e2e-report:
-    name: Merge E2E Reports
+    name: Merge Playwright Reports
     runs-on: ubuntu-latest
-    needs: [e2e-tests]
-    if: always()
+    needs: e2e
+    if: always()             # tourner même si certains shards ont échoué
 
     steps:
       - uses: actions/checkout@v4
@@ -221,19 +372,19 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
-      - name: Download all shard reports
+      - name: Télécharger tous les rapports de shards
         uses: actions/download-artifact@v4
         with:
           pattern: playwright-report-*
           path: all-reports/
+          merge-multiple: true
 
-      - name: Merge reports
+      - name: Fusionner en un rapport unifié
         run: pnpm playwright merge-reports --reporter=html all-reports/
 
-      - name: Upload merged report
+      - name: Upload rapport fusionné
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-merged
@@ -241,725 +392,74 @@ jobs:
           retention-days: 14
 ```
 
-### Matrix strategy : tester sur plusieurs Node/OS
+**Pas-à-pas des décisions clés :**
 
-```yaml
-unit-tests:
-  name: Unit Tests (Node ${{ matrix.node }}, ${{ matrix.os }})
-  runs-on: ${{ matrix.os }}
-  strategy:
-    fail-fast: false
-    matrix:
-      node: [18, 20, 22]
-      os: [ubuntu-latest, windows-latest]
-      exclude:
-        - node: 18
-          os: windows-latest # Exclure une combinaison
+1. `needs: lint` sur `unit`, `needs: unit` sur `e2e` : cascade séquentielle. Un lint rouge ne lance pas les tests (économie de minutes CI, feedback rapide).
+2. `strategy.matrix.shard: [1, 2, 3, 4]` avec `fail-fast: false` : 4 jobs E2E parallèles, chacun reçoit 25 % des tests de Playwright. Le temps total passe de 20 min à ~5 min. `fail-fast: false` permet de voir tous les échecs à la fois.
+3. Cache Playwright séparé : les binaires (~200 Mo) ne sont pas dans `node_modules`. Clé = hash du lockfile pour invalider si la version de Playwright change.
+4. `if: always()` sur l'upload des rapports : si le step `playwright test` échoue (exit code 1), sans `always()` le step upload est ignoré et on n'a pas le rapport HTML pour diagnostiquer.
+5. Le job `e2e-report` fusionne les 4 rapports HTML en un seul téléchargeable depuis l'UI GitHub.
 
-  steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node }}
-    # ...
+### Gate de merge — configuration GitHub
+
+Dans le dépôt TribuZen, `main` est protégé avec ces règles :
+
+- *Require status checks to pass before merging* : activé.
+- Checks requis : `Lint & Type Check`, `Unit Tests`, `E2E Tests (shard 1/4)` … `(shard 4/4)`.
+- *Require branches to be up to date* : activé (la PR doit être à jour avec `main` avant de merger).
+
+Avec cette configuration, la PR du refactor `removeMember` aurait été bloquée : le test `FamilyService > removeMember > déplace le membre en INACTIVE` serait passé rouge, le check `Unit Tests` rouge, le merge impossible.
+
+## 4. Pièges & misconceptions
+
+- **Pas de cache = CI chroniquement lente.** Sans cache `pnpm` et Playwright, chaque run télécharge 300-500 Mo de dépendances. Sur un pipeline à 50 PR/jour, c'est des heures de runner gaspillées et des PRs qui attendent 10 min au lieu de 90 secondes. *Correct* : configurer le cache dès le premier workflow, pas en optimisation a posteriori.
+
+- **Flaky ignoré = fausse sécurité.** Un test qui passe à la 2e tentative grâce aux `retries` masque un problème réel. Si on laisse les retries tourner indéfiniment sans quarantiner le test flaky, le pipeline reste « vert » mais ne garantit plus rien. *Correct* : traiter le `flaky` marqué par Playwright comme un bug de test — l'isoler, le diagnostiquer, le corriger. Les retries sont un filet de sécurité pour les faux flaky (contention CI passagère), pas une excuse pour ne pas corriger.
+
+- **Pas de gate de merge = pipeline cosmétique.** Un workflow CI qui tourne mais dont aucun check n'est requis pour le merge ne protège rien — les développeurs peuvent ignorer le rouge et merger quand même. *Correct* : configurer la branch protection rule avec les checks requis dès qu'on crée le premier workflow. Sans règle de protection, le CI est informatif, pas bloquant.
+
+- **`if: always()` manquant sur l'upload des rapports.** Erreur la plus fréquente : quand les tests échouent, le step upload est sauté car le step précédent a renvoyé un exit code non-zéro. On se retrouve à chercher un rapport qui n'existe pas. *Correct* : mettre `if: always()` sur tout `upload-artifact` lié à des rapports de test ou de couverture.
+
+- **Oublier `--with-deps` sur Linux.** Playwright sur `ubuntu-latest` sans `--with-deps` plante à l'ouverture du navigateur avec une erreur sur les librairies système manquantes (`libnss3`, etc.), pas sur le test lui-même. *Correct* : toujours utiliser `pnpm playwright install --with-deps chromium` en CI — la variante sans `--with-deps` est pour le local où les dépendances système sont déjà présentes.
+
+- **Seuils de coverage trop bas ou absents.** Une couverture à 40 % ne gate rien d'utile, et sans seuil la coverage peut s'effondrer silencieusement PR après PR. *Correct* : définir des seuils réalistes (`lines: 80`, `branches: 75`) dans `vitest.config.ts` dès le début, et les faire monter progressivement. Le seuil fait échouer le job → gate rouge → merge bloqué.
+
+## 5. Ancrage TribuZen
+
+Couche fil-rouge : **pipeline CI TribuZen (Vitest + Playwright) bloquant le merge si rouge, avec cache et artefacts** (`smaurier/tribuzen`).
+
+Le workflow du worked example ci-dessus est le fichier `.github/workflows/ci.yml` réel de TribuZen. En session, on le crée pas à pas :
+
+- Job `lint` : protège `main` contre les régressions TypeScript et ESLint (particulièrement utile sur les types Nuxt/Vue auto-générés).
+- Job `unit` avec coverage : lance les tests Vitest sur `InvitationService`, `FamilyService`, `RBAC` — la logique domaine du module 04. Le seuil `lines: 80` force à maintenir la couverture des branches métier critiques.
+- Job `e2e` en matrice de 4 shards : les tests Playwright du module 11 (navigation famille, flow invitation) s'exécutent en parallèle. `--with-deps chromium` est obligatoire sur `ubuntu-latest`.
+- Branch protection sur `main` : les 3 check types (`Lint & Type Check`, `Unit Tests`, `E2E Tests`) sont requis. Le bug `removeMember` de la section 1 aurait été bloqué ici.
+- Artefacts : le rapport HTML Playwright fusionné est téléchargeable depuis l'onglet *Actions* de GitHub — pratique pour diagnostiquer un E2E rouge sans devoir reproduire en local.
+
+## 6. Points clés
+
+1. Un workflow GitHub Actions se déclenche sur `push`/`pull_request` ; chaque job génère un *check run* utilisable comme gate de merge.
+2. `cache: pnpm` sur `actions/setup-node@v4` réduit l'install de 60-90 s à 5-10 s via le hash de `pnpm-lock.yaml` comme clé de cache.
+3. `strategy.matrix` multiplie un job en N instances parallèles ; `fail-fast: false` sur les shards E2E permet de collecter tous les résultats même si un shard échoue.
+4. `if: always()` sur `upload-artifact` garantit que les rapports sont uploadés même si les tests ont échoué — sans ça, on n'a pas de rapport à diagnostiquer.
+5. Le gate de merge se configure dans *Settings > Branch protection rules* : cocher *Require status checks* avec les noms exacts des jobs critiques.
+6. Les retries Playwright (`retries: 2` en CI) sont un filet de sécurité, pas un correctif : un test marqué `flaky` doit être quarantiné et corrigé.
+7. Les seuils de coverage dans `vitest.config.ts` (`thresholds.lines: 80`) font échouer le job si la couverture descend — le seuil est un gate autant que les tests eux-mêmes.
+8. `pnpm playwright install --with-deps chromium` est obligatoire sur `ubuntu-latest` : sans les dépendances système Linux, Playwright ne peut pas ouvrir le navigateur.
+
+## 7. Seeds Anki
+
+```
+Quelle clé YAML rend un job dépendant d'un autre dans GitHub Actions ?|needs: [nom-du-job] — le job attend que ses dépendances soient vertes avant de démarrer
+Comment mettre en cache pnpm dans un workflow GitHub Actions ?|actions/setup-node@v4 avec cache: pnpm — utilise automatiquement le hash de pnpm-lock.yaml comme clé
+Pourquoi mettre if: always() sur un step upload-artifact de rapport de test ?|Sans always(), si les tests échouent (exit code non-zéro), le step upload est sauté et le rapport est perdu
+Comment bloquer le merge d'une PR si les tests CI échouent ?|Branch protection rule > Require status checks to pass before merging — ajouter le nom exact des jobs critiques
+À quoi sert strategy.matrix.shard avec Playwright ?|Distribue les tests E2E sur N jobs parallèles (pnpm playwright test --shard=X/N) pour réduire le temps total d'exécution
+Que fait pnpm playwright install --with-deps chromium en CI ?|Installe le binaire Chromium ET toutes ses dépendances système Linux (libnss, libglib, etc.) — obligatoire sur ubuntu-latest
+Un test Playwright passe à la 2e tentative grâce aux retries. Est-ce un succès ?|Non — Playwright le marque flaky (orange). C'est un signal d'alerte à traiter comme un bug de test, pas un succès
+Comment configurer un seuil de coverage qui fait échouer le job CI ?|vitest.config.ts > test.coverage.thresholds > { lines: 80, branches: 75 } — Vitest exit code 1 si en dessous
 ```
 
----
+## Pont vers le lab
 
-## Parallelisation des tests
-
-### Vitest : workers et pool
-
-```typescript
-// vitest.config.ts
-export default defineConfig({
-  test: {
-    // Pool de workers
-    pool: "forks", // 'threads' | 'forks' | 'vmThreads'
-
-    // Nombre de workers (par defaut : nombre de CPUs)
-    poolOptions: {
-      forks: {
-        maxForks: 4, // Maximum 4 process
-        minForks: 1, // Minimum 1
-      },
-    },
-
-    // Isoler chaque fichier dans son worker
-    fileParallelism: true,
-
-    // Sequencer (ordre d'execution)
-    sequence: {
-      // Executer les fichiers les plus lents en premier
-      sequencer: class extends BaseSequencer {
-        async sort(files: string[]) {
-          // Trier par duree (du cache) decroissante
-          return files;
-        }
-      },
-    },
-  },
-});
-```
-
-### Playwright : sharding
-
-```typescript
-// playwright.config.ts
-import { defineConfig } from "@playwright/test";
-
-export default defineConfig({
-  // Nombre de workers locaux
-  workers: process.env.CI ? 2 : "50%",
-
-  // Nombre de tentatives en CI
-  retries: process.env.CI ? 2 : 0,
-
-  // Sharding (active via CLI)
-  // pnpm playwright test --shard=1/4
-});
-```
-
-### Repartition intelligente des tests
-
-```yaml
-# Splitter les tests par duree estimee
-e2e-tests:
-  strategy:
-    matrix:
-      shard: [1, 2, 3, 4]
-
-  steps:
-    # ...
-    - name: Run E2E tests
-      run: pnpm playwright test --shard=${{ matrix.shard }}/4
-```
-
-Playwright repartit automatiquement les fichiers de test entre les shards de manière equilibree.
-
----
-
-## Rapports et artefacts
-
-### JUnit XML (standard universel)
-
-```typescript
-// vitest.config.ts
-export default defineConfig({
-  test: {
-    reporters: ["default", "junit"],
-    outputFile: {
-      junit: "test-results/junit.xml",
-    },
-  },
-});
-```
-
-```xml
-<!-- Exemple de sortie JUnit -->
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuites tests="142" failures="2" errors="0" time="12.345">
-  <testsuite name="src/services/pricing.test.ts" tests="8" failures="0" time="0.234">
-    <testcase name="calculatePrice > should apply discount for bulk orders"
-              classname="src/services/pricing.test.ts"
-              time="0.012"/>
-    <!-- ... -->
-  </testsuite>
-</testsuites>
-```
-
-### Intégration Codecov
-
-```yaml
-- name: Upload coverage
-  uses: codecov/codecov-action@v4
-  with:
-    file: ./coverage/lcov.info
-    token: ${{ secrets.CODECOV_TOKEN }}
-    flags: unit-tests
-    fail_ci_if_error: false
-```
-
-Configuration Codecov :
-
-```yaml
-# codecov.yml (a la racine du repo)
-coverage:
-  status:
-    project:
-      default:
-        target: 80%
-        threshold: 2% # Tolerer 2% de variation
-    patch:
-      default:
-        target: 80% # Couverture des lignes modifiees
-
-comment:
-  layout: "reach, diff, flags, files"
-  behavior: default
-  require_changes: false
-```
-
-### GitHub PR Checks et commentaires
-
-```yaml
-- name: Post test results as PR comment
-  if: github.event_name == 'pull_request' && always()
-  uses: dorny/test-reporter@v1
-  with:
-    name: Unit Test Results
-    path: test-results/junit.xml
-    reporter: java-junit
-    fail-on-error: false
-```
-
----
-
-## Fail-fast vs Run-all
-
-### Fail-fast (defaut pour matrix)
-
-```yaml
-strategy:
-  fail-fast: true # Arrete tous les jobs si un echoue
-  matrix:
-    node: [18, 20, 22]
-```
-
-**Avantage** : feedback rapide, economie de minutes CI.
-**Inconvenient** : on ne voit pas toutes les erreurs d'un coup.
-
-### Run-all
-
-```yaml
-strategy:
-  fail-fast: false # Tous les jobs tournent meme si un echoue
-  matrix:
-    shard: [1, 2, 3, 4]
-```
-
-**Quand utiliser run-all :**
-
-- E2E tests avec sharding (on veut tous les résultats)
-- Matrix OS/Node (on veut savoir quels environnements cassent)
-- Tests non-déterministes en investigation
-
-### Stratégie recommandee
-
-```yaml
-jobs:
-  lint:
-    # fail-fast implicite (pas de matrix)
-
-  unit-tests:
-    strategy:
-      fail-fast: true # Rapide, un echec = tout le lot echoue
-      matrix:
-        node: [18, 20]
-
-  e2e-tests:
-    needs: [lint] # Gate : lint doit passer d'abord
-    strategy:
-      fail-fast: false # Collecter tous les resultats
-      matrix:
-        shard: [1, 2, 3, 4]
-```
-
----
-
-## Pre-commit hooks : Husky + lint-staged
-
-### Installation
-
-```bash
-pnpm add -D husky lint-staged
-
-# Initialiser Husky
-pnpm husky init
-```
-
-### Configuration Husky
-
-```bash
-# .husky/pre-commit
-pnpm lint-staged
-```
-
-### Configuration lint-staged
-
-```json
-// package.json (ou .lintstagedrc.json)
-{
-  "lint-staged": {
-    "*.{ts,tsx}": ["eslint --fix --max-warnings 0", "vitest related --run"],
-    "*.{json,md,yml}": ["prettier --write"]
-  }
-}
-```
-
-### vitest related : tester uniquement les fichiers impactes
-
-```bash
-# Trouver les tests lies aux fichiers modifies
-pnpm vitest related src/services/pricing.ts --run
-# -> Execute pricing.test.ts et tout test qui importe pricing.ts
-```
-
-### Pre-push hook pour les tests plus longs
-
-```bash
-# .husky/pre-push
-pnpm vitest run --coverage
-```
-
-### Contourner temporairement (avec justification)
-
-```bash
-# UNIQUEMENT en cas d'urgence, jamais en pratique courante
-git commit --no-verify -m "hotfix: emergency patch"
-```
-
----
-
-## Detection et gestion des tests flaky en CI
-
-### Le problème
-
-Un test flaky passe localement mais echoue aleatoirement en CI (où l'inverse). Causes typiques :
-
-- Timing (timeouts trop courts en CI)
-- Ressources limitees (CPU/RAM sur runners)
-- Acces réseau
-- Ordre d'exécution différent
-
-### Detection automatique
-
-```yaml
-- name: Run tests with flaky detection
-  run: |
-    # Lancer 3 fois pour detecter les flaky
-    for i in 1 2 3; do
-      pnpm vitest run --reporter=json --outputFile=results-$i.json || true
-    done
-
-- name: Analyze flaky tests
-  run: |
-    node scripts/detect-flaky.js results-1.json results-2.json results-3.json
-```
-
-```typescript
-// scripts/detect-flaky.ts
-import { readFileSync } from "node:fs";
-
-interface TestResult {
-  testResults: Array<{
-    name: string;
-    status: "passed" | "failed";
-  }>;
-}
-
-function detectFlaky(files: string[]): void {
-  const allResults = files.map(
-    (f) => JSON.parse(readFileSync(f, "utf-8")) as TestResult,
-  );
-
-  const testStatuses = new Map<string, Set<string>>();
-
-  for (const result of allResults) {
-    for (const test of result.testResults) {
-      if (!testStatuses.has(test.name)) {
-        testStatuses.set(test.name, new Set());
-      }
-      testStatuses.get(test.name)!.add(test.status);
-    }
-  }
-
-  const flakyTests = [...testStatuses.entries()]
-    .filter(([, statuses]) => statuses.size > 1)
-    .map(([name]) => name);
-
-  if (flakyTests.length > 0) {
-    console.error("Flaky tests detected:");
-    flakyTests.forEach((t) => console.error(`  - ${t}`));
-    process.exit(1);
-  }
-
-  console.log("No flaky tests detected.");
-}
-
-detectFlaky(process.argv.slice(2));
-```
-
-### Quarantaine des tests flaky
-
-```typescript
-// vitest.config.ts — marquer les tests flaky
-// Utiliser un tag pour les identifier
-describe("Payment flow", () => {
-  it.skipIf(process.env.QUARANTINE !== "true")(
-    "should process payment via external gateway",
-    async () => {
-      // Ce test est flaky — en quarantaine
-    },
-  );
-});
-```
-
-### Retries en CI (Playwright)
-
-```typescript
-// playwright.config.ts
-export default defineConfig({
-  retries: process.env.CI ? 2 : 0,
-
-  reporter: [["html"], ["json", { outputFile: "test-results/results.json" }]],
-
-  use: {
-    // Traces uniquement sur retry (pour diagnostiquer)
-    trace: "on-first-retry",
-    screenshot: "only-on-failure",
-    video: "on-first-retry",
-  },
-});
-```
-
----
-
-## Tests dans Docker
-
-### Pourquoi Docker en CI ?
-
-- Environnement **identique** local et CI
-- Dependances système controlees (Playwright browsers)
-- Isolation complete
-- Reproductibilite
-
-### Dockerfile pour les tests
-
-```dockerfile
-# Dockerfile.test
-FROM mcr.microsoft.com/playwright:v1.42.0-jammy
-
-WORKDIR /app
-
-# Copier uniquement les fichiers de dependances d'abord (cache Docker)
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
-
-# Copier le code source
-COPY . .
-
-# Commande par defaut
-CMD ["pnpm", "test"]
-```
-
-### Docker Compose pour les tests d'intégration
-
-```yaml
-# docker-compose.test.yml
-services:
-  db:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_DB: testdb
-      POSTGRES_USER: test
-      POSTGRES_PASSWORD: test
-    ports:
-      - "5433:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile.test
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://test:test@db:5432/testdb
-      NODE_ENV: test
-    command: pnpm vitest run
-```
-
-### Utiliser Docker dans GitHub Actions
-
-```yaml
-integration-tests:
-  runs-on: ubuntu-latest
-  timeout-minutes: 20
-
-  services:
-    postgres:
-      image: postgres:17-alpine
-      env:
-        POSTGRES_DB: testdb
-        POSTGRES_USER: test
-        POSTGRES_PASSWORD: test
-      ports:
-        - 5432:5432
-      options: >-
-        --health-cmd pg_isready
-        --health-interval 10s
-        --health-timeout 5s
-        --health-retries 5
-
-  steps:
-    - uses: actions/checkout@v4
-
-    - uses: pnpm/action-setup@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: 20
-        cache: pnpm
-
-    - run: pnpm install --frozen-lockfile
-
-    - name: Run integration tests
-      run: pnpm vitest run --project integration
-      env:
-        DATABASE_URL: postgresql://test:test@localhost:5432/testdb
-```
-
----
-
-## Optimisation des couts CI
-
-### Caching agressif
-
-```yaml
-- name: Cache pnpm store
-  uses: actions/cache@v4
-  with:
-    path: ~/.pnpm-store
-    key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-    restore-keys: |
-      pnpm-${{ runner.os }}-
-
-- name: Cache Playwright browsers
-  uses: actions/cache@v4
-  with:
-    path: ~/.cache/ms-playwright
-    key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-```
-
-### Exécution conditionnelle
-
-```yaml
-unit-tests:
-  # Ne lancer que si des fichiers source ont change
-  if: |
-    github.event_name == 'push' ||
-    contains(github.event.pull_request.labels.*.name, 'run-tests') ||
-    !contains(github.event.head_commit.message, '[skip ci]')
-
-  steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 2
-
-    - name: Check for source changes
-      id: changes
-      run: |
-        CHANGED=$(git diff --name-only HEAD~1 | grep -E '^(src|tests)/' | wc -l)
-        echo "source_changed=$CHANGED" >> $GITHUB_OUTPUT
-
-    - name: Run tests
-      if: steps.changes.outputs.source_changed != '0'
-      run: pnpm vitest run
-```
-
-### Timeout et budget
-
-```yaml
-e2e-tests:
-  timeout-minutes: 30 # Tuer le job apres 30 min
-
-  steps:
-    # ...
-    - name: Run E2E (with timeout)
-      run: timeout 1200 pnpm playwright test # 20 min max
-```
-
-### Résumé des stratégies d'optimisation
-
-| Stratégie                 | Gain estime             | Complexite |
-| ------------------------- | ----------------------- | ---------- |
-| Cache pnpm/node_modules   | 30-60% install time     | Faible     |
-| Cache Playwright browsers | 2-3 min                 | Faible     |
-| Exécution conditionnelle  | 100% (skip entier)      | Moyenne    |
-| Sharding E2E              | 50-75%                  | Moyenne    |
-| `fail-fast: true` (unit)  | Variable                | Faible     |
-| `concurrency` + cancel    | Evite les runs inutiles | Faible     |
-| Runners self-hosted       | Variable                | Haute      |
-
----
-
-## Workflow complet : du commit au deploy
-
-```yaml
-# .github/workflows/full-pipeline.yml
-name: Full Pipeline
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-concurrency:
-  group: pipeline-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-jobs:
-  # Gate 1 : Qualite du code
-  quality:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm eslint . --max-warnings 0
-      - run: pnpm tsc --noEmit
-      - run: pnpm prettier --check .
-
-  # Gate 2 : Tests unitaires
-  unit:
-    needs: quality
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm vitest run --coverage
-      - uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          file: ./coverage/lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-  # Gate 3 : Build
-  build:
-    needs: unit
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: build-output
-          path: dist/
-
-  # Gate 4 : E2E
-  e2e:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm playwright install --with-deps chromium
-      - uses: actions/download-artifact@v4
-        with: { name: build-output, path: dist/ }
-      - run: pnpm playwright test --shard=${{ matrix.shard }}/2
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: traces-${{ matrix.shard }}
-          path: test-results/
-
-  # Gate 5 : Deploy (main only)
-  deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [e2e]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: production
-    steps:
-      - uses: actions/download-artifact@v4
-        with: { name: build-output, path: dist/ }
-      - name: Deploy to production
-        run: echo "Deploying..."
-        # Remplacer par votre commande de deploy reelle
-```
-
----
-
-## Checklist du module
-
-- [ ] Mon pipeline CI a des jobs separes (lint, unit, e2e)
-- [ ] Les tests E2E utilisent le sharding pour paralleliser
-- [ ] Les rapports de couverture sont envoyes a Codecov
-- [ ] Les artefacts (rapports, traces) sont uploades
-- [ ] Les pre-commit hooks verifient lint + tests impactes
-- [ ] La stratégie fail-fast est configuree selon le type de tests
-- [ ] Le caching est en place (pnpm, Playwright browsers)
-- [ ] Les tests flaky sont detectes et mis en quarantaine
-
----
-
-## Exercice pratique
-
-Creez un pipeline GitHub Actions pour votre projet :
-
-1. Job `lint` : ESLint + TypeScript check
-2. Job `unit` : Vitest avec couverture + upload Codecov
-3. Job `e2e` : Playwright avec 2 shards + upload des traces
-4. Configurez Husky + lint-staged en pre-commit
-5. Ajoutez le caching pnpm et Playwright
-6. Testez en poussant une PR
-
-> Solution dans le [Lab 13](../labs/lab-13-ci-cd/)
-
----
-
-## Navigation
-
-| Précédent                                                                  | Suivant                                                        |
-| -------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| [12 - Couverture et mutation testing](./12-couverture-et-mutation-testing) | [14 - Flaky tests et debugging](./14-flaky-tests-et-debugging) |
-
----
-
-## Ressources
-
-- [Quiz 13 : Testez vos connaissances](../quizzes/quiz-13-ci-cd.html)
-- [Lab 13 : Tests en CI/CD](../labs/lab-13-ci-cd/)
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [Playwright Sharding](https://playwright.dev/docs/test-sharding)
-- [Vitest Coverage](https://vitest.dev/guide/coverage)
-- [Husky](https://typicode.github.io/husky/)
-- [lint-staged](https://github.com/lint-staged/lint-staged)
-
----
-
-<!-- parcours-recommande -->
-
-::: tip Parcours recommandé
-
-1. **Screencast** : [screencast 13 ci cd](../screencasts/screencast-13-ci-cd.md)
-2. **Lab** : [lab-13-ci-cd](../labs/lab-13-ci-cd/README)
-3. **Visualisation** : [Pipeline CI/CD](../visualizations/ci-pipeline.html)
-4. **Quiz** : [quiz 13 ci cd](../quizzes/quiz-13-ci-cd.html)
-   :::
+> Lab associé : `06-testing/labs/lab-13-ci-cd/`. Tu crées le fichier `.github/workflows/ci.yml` réel de TribuZen de zéro : jobs lint, unit (Vitest + coverage), e2e (Playwright + matrix de 2 shards), cache pnpm et Playwright, artefacts, gate de merge. Corrigé YAML complet commenté + variante J+30 dans le README du lab.

@@ -8,6 +8,17 @@ export default defineConfig({
   srcDir: '.',
   ignoreDeadLinks: true,
 
+  // Docs statiques : on neutralise l'interpolation Vue `{{ }}` (délimiteurs improbables)
+  // pour que les moustaches de démonstration en prose ET les expressions GitHub Actions
+  // `${{ ... }}` dans les blocs YAML ne cassent pas le build SSR VitePress.
+  vue: {
+    template: {
+      compilerOptions: {
+        delimiters: ['(%(', ')%)'],
+      },
+    },
+  },
+
   themeConfig: {
     nav: [
       { text: 'Modules', link: '/modules/00-prerequis-et-introduction' },
