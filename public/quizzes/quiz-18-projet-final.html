@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quiz 18 — Projet final</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; padding: 2rem 1rem; }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { text-align: center; margin-bottom: 0.5rem; font-size: 1.8rem; color: #ffffff; }
+    .subtitle { text-align: center; color: #8892b0; margin-bottom: 2rem; font-size: 1rem; }
+    .progress-bar-container { background: #0d1117; border-radius: 10px; height: 14px; margin-bottom: 2rem; overflow: hidden; }
+    .progress-bar { background: linear-gradient(90deg, #0d6efd, #4dabf7); height: 100%; width: 0%; border-radius: 10px; transition: width 0.4s ease; }
+    .progress-text { text-align: center; color: #8892b0; margin-bottom: 1rem; font-size: 0.9rem; }
+    .card { background: #16213e; border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    .question-label { font-size: 0.85rem; color: #4dabf7; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
+    .question-text { font-size: 1.15rem; margin-bottom: 1.2rem; line-height: 1.5; color: #ffffff; }
+    pre { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 1rem; margin-bottom: 1.2rem; overflow-x: auto; font-size: 0.95rem; }
+    code { font-family: 'Consolas', 'Fira Code', 'Courier New', monospace; color: #c9d1d9; }
+    .options { list-style: none; }
+    .options li { margin-bottom: 0.5rem; }
+    .options label { display: flex; align-items: center; gap: 0.75rem; padding: 0.8rem 1rem; background: #0d1117; border: 2px solid #30363d; border-radius: 8px; cursor: pointer; transition: border-color 0.2s, background 0.2s; font-size: 1rem; }
+    .options label:hover { border-color: #4dabf7; background: #1c2a4a; }
+    .options input[type="radio"] { accent-color: #0d6efd; width: 18px; height: 18px; flex-shrink: 0; }
+    .btn { display: inline-block; padding: 0.7rem 2rem; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s, transform 0.1s; }
+    .btn-primary { background: #0d6efd; color: #fff; }
+    .btn-primary:hover { background: #3b82f6; }
+    .btn-primary:disabled { background: #374151; cursor: not-allowed; }
+    .btn-restart { background: #238636; color: #fff; margin-top: 1rem; padding: 0.7rem 2rem; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+    .btn-restart:hover { background: #2ea043; }
+    .feedback { margin-top: 1rem; padding: 1rem 1.2rem; border-radius: 8px; font-size: 0.95rem; line-height: 1.5; display: none; }
+    .feedback.correct { background: #0f5132; border: 1px solid #198754; color: #d1fae5; display: block; }
+    .feedback.wrong { background: #842029; border: 1px solid #dc3545; color: #fdd; display: block; }
+    .score-card { text-align: center; padding: 3rem 2rem; }
+    .score-card .score { font-size: 3rem; font-weight: 700; color: #4dabf7; margin-bottom: 0.5rem; }
+    .score-card .score-label { font-size: 1.2rem; color: #8892b0; margin-bottom: 1.5rem; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Quiz 18 — Projet final</h1>
+    <p class="subtitle">Strategie complete de test, pyramide, outillage, CI/CD et best practices</p>
+    <div class="progress-bar-container"><div class="progress-bar" id="progressBar"></div></div>
+    <p class="progress-text" id="progressText">Question 1 / 5</p>
+    <div id="quizContainer"></div>
+    <div id="scoreContainer" class="card score-card hidden"></div>
+  </div>
+  <script>
+    const questions = [
+      {
+        label: "Question 1 — Strategie de test",
+        text: "Vous demarrez un nouveau projet e-commerce. Quelle strategie de test adopteriez-vous ?",
+        code: null,
+        options: [
+          "Uniquement des tests E2E car ils testent tout l'ensemble",
+          "Uniquement des tests unitaires car ils sont les plus rapides",
+          "Une pyramide equilibree : tests unitaires pour la logique metier (70%), tests d'integration avec MSW pour les flux API (20%), tests E2E Playwright pour les parcours critiques (10%)",
+          "Pas de tests au debut, on les ajoutera quand il y aura des bugs"
+        ],
+        answer: 2,
+        explanation: "La pyramide des tests equilibre cout, vitesse et confiance. Les tests unitaires couvrent la logique pure (validations, calculs). Les tests d'integration verifient les flux (composant + API). Les E2E securisent les parcours critiques (checkout, login). Les proportions varient selon le projet."
+      },
+      {
+        label: "Question 2 — Choix d'outillage",
+        text: "Pour un projet Vue.js/Nuxt avec API REST, quel stack de test est le plus adapte ?",
+        code: null,
+        options: [
+          "Jest + Enzyme + Selenium",
+          "Vitest (unit + composants) + MSW (mock API) + Playwright (E2E) + GitHub Actions (CI)",
+          "Uniquement Cypress pour tout tester",
+          "Tests manuels documentes dans un tableur Excel"
+        ],
+        answer: 1,
+        explanation: "Vitest : rapide, natif ESM, compatible Vue. MSW : mock reseau realiste pour les composants qui fetch. Playwright : E2E multi-navigateur avec auto-wait. GitHub Actions : CI automatisee. Ce stack couvre tous les niveaux de la pyramide avec des outils modernes et maintenus."
+      },
+      {
+        label: "Question 3 — CI/CD pipeline",
+        text: "Dans quel ordre organiser les etapes de test dans un pipeline CI ?",
+        code: "# Quel ordre optimal ?\n# A. Lint + typecheck\n# B. Tests unitaires\n# C. Tests d'integration\n# D. Tests E2E\n# E. Coverage check\n# F. Deploy staging",
+        options: [
+          "D -> C -> B -> A (E2E d'abord pour plus de confiance)",
+          "A -> B -> E -> C -> D -> F (du plus rapide au plus lent, fail-fast : lint et types d'abord, puis unitaires, coverage, integration, E2E, et enfin deploy)",
+          "F -> D -> C -> B -> A (deployer d'abord, tester ensuite)",
+          "L'ordre n'a aucune importance"
+        ],
+        answer: 1,
+        explanation: "Principe fail-fast : les etapes les plus rapides et les plus susceptibles d'echouer passent en premier. Lint/typecheck (secondes) -> unitaires (secondes) -> coverage gate -> integration (minutes) -> E2E (minutes). Si le lint echoue, inutile de lancer les E2E couteux."
+      },
+      {
+        label: "Question 4 — Quoi ne PAS tester",
+        text: "Quels elements ne necessitent generalement PAS de tests unitaires ?",
+        code: null,
+        options: [
+          "La logique metier complexe avec des regles de calcul",
+          "Les utilitaires partages utilises dans toute l'application",
+          "Le code genere automatiquement (types GraphQL, routes), les bibliotheques tierces, et le simple cablage/configuration sans logique",
+          "Les fonctions qui gèrent les cas limites (edge cases)"
+        ],
+        answer: 2,
+        explanation: "Ne pas tester : le code genere (deja teste par le generateur), les libs tierces (responsabilite de leurs mainteneurs), le cablage trivial (routes declaratives, config). Tester : toute logique metier, validation, transformation, edge cases. Concentrer l'effort la ou la valeur est maximale."
+      },
+      {
+        label: "Question 5 — Test maintenable",
+        text: "Quelle est la cle pour ecrire des tests maintenables a long terme ?",
+        code: null,
+        options: [
+          "Maximiser le nombre de tests pour atteindre 100% de couverture",
+          "Ecrire des tests complexes qui couvrent le maximum de scenarios en un seul test",
+          "Tester les comportements (pas l'implementation), garder les tests simples et isoles, utiliser des helpers/factories pour eviter la duplication, et nommer clairement",
+          "Ne jamais modifier les tests une fois ecrits"
+        ],
+        answer: 2,
+        explanation: "Tests maintenables : 1) Tester le QUOI pas le COMMENT (resilient au refactoring), 2) Un test = un comportement (diagnostic facile), 3) Factories/helpers pour le setup (DRY), 4) Noms descriptifs (documentation vivante), 5) Pas de logique dans les tests (pas de if/loop). Le test ideal lit comme une specification."
+      }
+    ];
+    let currentQuestion = 0, score = 0, answered = false;
+    function renderQuestion() {
+      const q = questions[currentQuestion];
+      const total = questions.length;
+      document.getElementById('progressBar').style.width = ((currentQuestion / total) * 100) + '%';
+      document.getElementById('progressText').textContent = `Question ${currentQuestion + 1} / ${total}`;
+      let html = `<div class="card"><p class="question-label">${q.label}</p><p class="question-text">${q.text}</p>`;
+      if (q.code) html += `<pre><code>${q.code}</code></pre>`;
+      html += `<ul class="options">`;
+      q.options.forEach((opt, i) => { html += `<li><label><input type="radio" name="q" value="${i}"> ${opt}</label></li>`; });
+      html += `</ul><button class="btn btn-primary" id="validateBtn" onclick="validate()" disabled>Valider</button><div class="feedback" id="feedback"></div></div>`;
+      document.getElementById('quizContainer').innerHTML = html;
+      document.querySelectorAll('input[name="q"]').forEach(r => { r.addEventListener('change', () => { document.getElementById('validateBtn').disabled = false; }); });
+      answered = false;
+    }
+    function validate() {
+      if (answered) { currentQuestion++; if (currentQuestion < questions.length) renderQuestion(); else showScore(); return; }
+      answered = true;
+      const selected = document.querySelector('input[name="q"]:checked');
+      if (!selected) return;
+      const val = parseInt(selected.value);
+      const q = questions[currentQuestion];
+      const fb = document.getElementById('feedback');
+      const btn = document.getElementById('validateBtn');
+      document.querySelectorAll('input[name="q"]').forEach(r => r.disabled = true);
+      if (val === q.answer) { score++; fb.className = 'feedback correct'; fb.innerHTML = `<strong>Correct !</strong> ${q.explanation}`; }
+      else { fb.className = 'feedback wrong'; fb.innerHTML = `<strong>Incorrect.</strong> ${q.explanation}`; }
+      btn.textContent = currentQuestion < questions.length - 1 ? 'Suivant' : 'Voir le score';
+    }
+    function showScore() {
+      document.getElementById('quizContainer').classList.add('hidden');
+      document.getElementById('progressBar').style.width = '100%';
+      document.getElementById('progressText').textContent = 'Termine !';
+      const sc = document.getElementById('scoreContainer');
+      sc.classList.remove('hidden');
+      const pct = Math.round((score / questions.length) * 100);
+      let msg = pct === 100 ? 'Parfait !' : pct >= 60 ? 'Bien joue !' : 'Continuez a reviser !';
+      sc.innerHTML = `<div class="score">${score} / ${questions.length}</div><div class="score-label">${msg} (${pct}%)</div><button class="btn-restart" onclick="restart()">Recommencer</button>`;
+    }
+    function restart() { currentQuestion = 0; score = 0; answered = false; document.getElementById('scoreContainer').classList.add('hidden'); document.getElementById('quizContainer').classList.remove('hidden'); renderQuestion(); }
+    renderQuestion();
+  </script>
+</body>
+</html>

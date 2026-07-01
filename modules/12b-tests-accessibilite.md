@@ -5,7 +5,7 @@ notions: [axe-core et automatisation, vitest-axe et jest-axe, limites de l'audit
 outcomes: [automatiser des tests d'accessibilité avec axe-core dans Vitest, connaître les limites de l'audit automatique, compléter par des tests clavier manuels, intégrer les tests a11y en CI]
 prerequis: [12-couverture-et-mutation-testing]
 next: 13-tests-en-ci-cd
-libs: [{ name: vitest, version: ^4.1.9 }, { name: axe-core, version: ^4 }]
+libs: [{ name: vitest, version: ^4.1.9 }, { name: "@testing-library/vue", version: ^8 }, { name: "vitest-axe", version: ^4 }, { name: axe-core, version: ^4 }]
 tribuzen: tester l'accessibilité des composants TribuZen (vitest-axe) + audit manuel des parcours clés
 last-reviewed: 2026-07
 ---
@@ -19,20 +19,22 @@ last-reviewed: 2026-07
 
 TribuZen comporte un formulaire d'invitation qui demande un prénom et un email. Un membre de l'équipe le livre rapidement :
 
-```tsx
-// src/components/InvitationForm.tsx — tel que livré (INACCESSIBLE)
-export function InvitationForm({ onInvite }: { onInvite: (email: string) => void }) {
-  return (
-    <div>
-      <input type="text" placeholder="Prénom" />
-      <input type="email" placeholder="Email" />
-      <div onClick={() => onInvite('...')}>Envoyer l'invitation</div>
-    </div>
-  );
-}
+```vue
+<!-- src/components/InvitationForm.vue — tel que livré (INACCESSIBLE) -->
+<template>
+  <div>
+    <input type="text" placeholder="Prénom" />
+    <input type="email" placeholder="Email" />
+    <div @click="onInvite('...')">Envoyer l'invitation</div>
+  </div>
+</template>
+
+<script setup lang="ts">
+defineProps<{ onInvite: (email: string) => void }>()
+</script>
 ```
 
-Trois violations immédiates : pas de `<label>` associé aux champs, un `<div onClick>` non accessible au clavier, pas de rôle sémantique sur la zone. Un utilisateur naviguant au clavier ou sous NVDA ne peut pas remplir ce formulaire.
+Trois violations immédiates : pas de `<label>` associé aux champs, un `<div @click>` non accessible au clavier, pas de rôle sémantique sur la zone. Un utilisateur naviguant au clavier ou sous NVDA ne peut pas remplir ce formulaire.
 
 Question centrale : comment **détecter automatiquement** ces violations dès la PR, **quantifier ce que l'outil ne peut pas voir**, et organiser les tests clavier qu'aucun outil ne remplacera ?
 
@@ -84,14 +86,14 @@ expect.extend({ toHaveNoViolations });
 Utilisation dans un test :
 
 ```ts
-import { render } from '@testing-library/react';
+import { render } from '@testing-library/vue';
 import { axe } from 'vitest-axe';
 import { describe, it, expect } from 'vitest';
-import { InvitationForm } from './InvitationForm';
+import InvitationForm from './InvitationForm.vue';
 
 describe('InvitationForm a11y', () => {
   it('ne doit avoir aucune violation axe détectable', async () => {
-    const { container } = render(<InvitationForm onInvite={() => {}} />);
+    const { container } = render(InvitationForm, { props: { onInvite: () => {} } });
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
@@ -283,16 +285,16 @@ Le tag `wcag2aa` dans axe-core sélectionne les règles taggées par axe selon l
 Objectif : prouver que le formulaire livré viole des règles axe, puis vérifier que la version corrigée les passe.
 
 ```ts
-// src/components/InvitationForm.test.tsx
-import { render } from '@testing-library/react';
+// src/components/InvitationForm.test.ts
+import { render } from '@testing-library/vue';
 import { axe } from 'vitest-axe';
 import { describe, it, expect } from 'vitest';
-import { InvitationFormBroken } from './InvitationFormBroken';
-import { InvitationForm } from './InvitationForm';
+import InvitationFormBroken from './InvitationFormBroken.vue';
+import InvitationForm from './InvitationForm.vue';
 
 describe('InvitationForm — accessibilité axe', () => {
   it('DÉTECTE des violations sur la version inaccessible', async () => {
-    const { container } = render(<InvitationFormBroken onInvite={() => {}} />);
+    const { container } = render(InvitationFormBroken, { props: { onInvite: () => {} } });
     const results = await axe(container);
     // On s'attend à des violations : labels manquants, div cliquable
     expect(results.violations.length).toBeGreaterThan(0);
@@ -302,7 +304,7 @@ describe('InvitationForm — accessibilité axe', () => {
   });
 
   it('PASSE sans violation sur la version corrigée', async () => {
-    const { container } = render(<InvitationForm onInvite={() => {}} />);
+    const { container } = render(InvitationForm, { props: { onInvite: () => {} } });
     // En JSDOM, color-contrast ne peut pas être calculé (pas de CSS rendu)
     const results = await axe(container, {
       rules: { 'color-contrast': { enabled: false } },
@@ -312,45 +314,46 @@ describe('InvitationForm — accessibilité axe', () => {
 });
 ```
 
-```tsx
-// src/components/InvitationForm.tsx — VERSION CORRIGÉE
-export function InvitationForm({ onInvite }: { onInvite: (email: string) => void }) {
-  const [prenom, setPrenom] = useState('');
-  const [email, setEmail] = useState('');
+```vue
+<!-- src/components/InvitationForm.vue — VERSION CORRIGÉE -->
+<script setup lang="ts">
+import { ref } from 'vue'
 
-  return (
-    <form
-      id="invitation-form"
-      aria-label="Inviter un membre"
-      onSubmit={(e) => { e.preventDefault(); onInvite(email); }}
-    >
-      {/* label explicitement lié par htmlFor ↔ id */}
-      <label htmlFor="invite-prenom">Prénom</label>
-      <input
-        id="invite-prenom"
-        type="text"
-        value={prenom}
-        onChange={(e) => setPrenom(e.target.value)}
-      />
+const props = defineProps<{ onInvite: (email: string) => void }>()
+const prenom = ref('')
+const email = ref('')
+</script>
 
-      <label htmlFor="invite-email">Adresse email</label>
-      <input
-        id="invite-email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        aria-describedby="invite-email-hint"
-      />
-      <span id="invite-email-hint">Format attendu : prénom@domaine.fr</span>
+<template>
+  <form
+    id="invitation-form"
+    aria-label="Inviter un membre"
+    @submit.prevent="props.onInvite(email)"
+  >
+    <!-- label lié par for ↔ id (attribut HTML natif, pas htmlFor) -->
+    <label for="invite-prenom">Prénom</label>
+    <input
+      id="invite-prenom"
+      type="text"
+      v-model="prenom"
+    />
 
-      {/* <button type="submit"> = interactif au clavier nativement */}
-      <button type="submit">Envoyer l'invitation</button>
-    </form>
-  );
-}
+    <label for="invite-email">Adresse email</label>
+    <input
+      id="invite-email"
+      type="email"
+      v-model="email"
+      aria-describedby="invite-email-hint"
+    />
+    <span id="invite-email-hint">Format attendu : prénom@domaine.fr</span>
+
+    <!-- button type="submit" = interactif au clavier nativement -->
+    <button type="submit">Envoyer l'invitation</button>
+  </form>
+</template>
 ```
 
-Pas-à-pas : (1) le test "broken" prouve que l'outil détecte bien la violation `label` — il ne faut pas supprimer ce test, il sert de régression-inverse ; (2) `color-contrast: { enabled: false }` est justifié en JSDOM où le CSS n'est jamais rendu — on le note explicitement pour ne pas laisser croire qu'on ignore les contrastes ; (3) la correction utilise uniquement du HTML sémantique natif (`<label htmlFor>`, `<button type="submit">`) sans ARIA superflu — la première règle ARIA est « ne pas l'utiliser si le HTML natif suffit ».
+Pas-à-pas : (1) le test "broken" prouve que l'outil détecte bien la violation `label` — il ne faut pas supprimer ce test, il sert de régression-inverse ; (2) `color-contrast: { enabled: false }` est justifié en JSDOM où le CSS n'est jamais rendu — on le note explicitement pour ne pas laisser croire qu'on ignore les contrastes ; (3) la correction utilise uniquement du HTML sémantique natif (`<label for>`, `<button type="submit">`) sans ARIA superflu — la première règle ARIA est « ne pas l'utiliser si le HTML natif suffit ».
 
 ### Exemple B — `@axe-core/playwright` sur la page d'invitation (vrai navigateur)
 

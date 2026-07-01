@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quiz 15 — TDD & BDD</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; padding: 2rem 1rem; }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { text-align: center; margin-bottom: 0.5rem; font-size: 1.8rem; color: #ffffff; }
+    .subtitle { text-align: center; color: #8892b0; margin-bottom: 2rem; font-size: 1rem; }
+    .progress-bar-container { background: #0d1117; border-radius: 10px; height: 14px; margin-bottom: 2rem; overflow: hidden; }
+    .progress-bar { background: linear-gradient(90deg, #0d6efd, #4dabf7); height: 100%; width: 0%; border-radius: 10px; transition: width 0.4s ease; }
+    .progress-text { text-align: center; color: #8892b0; margin-bottom: 1rem; font-size: 0.9rem; }
+    .card { background: #16213e; border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    .question-label { font-size: 0.85rem; color: #4dabf7; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
+    .question-text { font-size: 1.15rem; margin-bottom: 1.2rem; line-height: 1.5; color: #ffffff; }
+    pre { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 1rem; margin-bottom: 1.2rem; overflow-x: auto; font-size: 0.95rem; }
+    code { font-family: 'Consolas', 'Fira Code', 'Courier New', monospace; color: #c9d1d9; }
+    .options { list-style: none; }
+    .options li { margin-bottom: 0.5rem; }
+    .options label { display: flex; align-items: center; gap: 0.75rem; padding: 0.8rem 1rem; background: #0d1117; border: 2px solid #30363d; border-radius: 8px; cursor: pointer; transition: border-color 0.2s, background 0.2s; font-size: 1rem; }
+    .options label:hover { border-color: #4dabf7; background: #1c2a4a; }
+    .options input[type="radio"] { accent-color: #0d6efd; width: 18px; height: 18px; flex-shrink: 0; }
+    .btn { display: inline-block; padding: 0.7rem 2rem; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s, transform 0.1s; }
+    .btn-primary { background: #0d6efd; color: #fff; }
+    .btn-primary:hover { background: #3b82f6; }
+    .btn-primary:disabled { background: #374151; cursor: not-allowed; }
+    .btn-restart { background: #238636; color: #fff; margin-top: 1rem; padding: 0.7rem 2rem; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+    .btn-restart:hover { background: #2ea043; }
+    .feedback { margin-top: 1rem; padding: 1rem 1.2rem; border-radius: 8px; font-size: 0.95rem; line-height: 1.5; display: none; }
+    .feedback.correct { background: #0f5132; border: 1px solid #198754; color: #d1fae5; display: block; }
+    .feedback.wrong { background: #842029; border: 1px solid #dc3545; color: #fdd; display: block; }
+    .score-card { text-align: center; padding: 3rem 2rem; }
+    .score-card .score { font-size: 3rem; font-weight: 700; color: #4dabf7; margin-bottom: 0.5rem; }
+    .score-card .score-label { font-size: 1.2rem; color: #8892b0; margin-bottom: 1.5rem; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Quiz 15 — TDD & BDD</h1>
+    <p class="subtitle">Red-Green-Refactor, Given-When-Then, Cucumber et outside-in TDD</p>
+    <div class="progress-bar-container"><div class="progress-bar" id="progressBar"></div></div>
+    <p class="progress-text" id="progressText">Question 1 / 5</p>
+    <div id="quizContainer"></div>
+    <div id="scoreContainer" class="card score-card hidden"></div>
+  </div>
+  <script>
+    const questions = [
+      {
+        label: "Question 1 — Red-Green-Refactor",
+        text: "Quelles sont les trois etapes du cycle TDD ?",
+        code: "// Etape 1: RED — ecrire un test qui echoue\ntest('adds two numbers', () => {\n  expect(add(2, 3)).toBe(5); // add() n'existe pas encore!\n});\n\n// Etape 2: GREEN — ecrire le minimum pour passer\nfunction add(a, b) { return a + b; }\n\n// Etape 3: REFACTOR — ameliorer sans casser les tests",
+        options: [
+          "Write, Run, Deploy",
+          "Red (ecrire un test qui echoue), Green (ecrire le code minimal pour le faire passer), Refactor (ameliorer le code en gardant les tests verts)",
+          "Plan, Code, Test",
+          "Debug, Fix, Commit"
+        ],
+        answer: 1,
+        explanation: "Le cycle TDD : 1) RED - ecrire un test pour un comportement souhaite (il echoue car le code n'existe pas), 2) GREEN - implementer le minimum pour faire passer le test, 3) REFACTOR - nettoyer/ameliorer le code tout en verifiant que les tests restent verts. Puis on recommence."
+      },
+      {
+        label: "Question 2 — Pourquoi RED d'abord",
+        text: "Pourquoi est-il important que le test echoue (RED) avant d'ecrire le code ?",
+        code: null,
+        options: [
+          "Pour perdre du temps intentionnellement",
+          "Pour verifier que le test est capable de detecter un echec — un test qui passe immediatement sans code pourrait etre un faux positif qui ne teste rien",
+          "Pour generer des rapports d'erreur utiles",
+          "C'est une convention sociale sans valeur technique"
+        ],
+        answer: 1,
+        explanation: "Si le test passe avant d'ecrire le code, il ne teste probablement rien d'utile (faux positif). Le RED initial prouve que le test est valide et detecte bien l'absence du comportement. C'est aussi un filet de securite : on sait que le GREEN est cause par notre code."
+      },
+      {
+        label: "Question 3 — BDD et Cucumber",
+        text: "Qu'est-ce que le BDD (Behavior-Driven Development) apporte de plus que le TDD ?",
+        code: "# Fichier .feature (Gherkin)\nFeature: Panier d'achat\n\n  Scenario: Appliquer un code promo\n    Given un panier avec un article a 100 euros\n    When j'applique le code promo 'SOLDES20'\n    Then le total doit etre 80 euros\n    And le code promo doit etre affiche",
+        options: [
+          "Le BDD utilise un langage naturel (Gherkin) compris par les non-developpeurs (PO, QA), creant une specification executable partagee entre l'equipe technique et metier",
+          "Le BDD est plus rapide que le TDD",
+          "Le BDD remplace completement les tests unitaires",
+          "Le BDD ne fonctionne qu'avec Java"
+        ],
+        answer: 0,
+        explanation: "Le BDD etend le TDD avec une couche de communication : les scenarios sont ecrits en langage naturel (Gherkin) comprehensible par tous. Les .feature files servent de specification vivante et executable. Cucumber/SpecFlow lient les steps aux implementations de test."
+      },
+      {
+        label: "Question 4 — Outside-in TDD",
+        text: "Comment le TDD outside-in (London school) differe-t-il du TDD classique (Detroit school) ?",
+        code: "// Detroit (inside-out): commence par les unites\n// 1. Test add() -> implemente add()\n// 2. Test Calculator -> utilise add()\n// 3. Test CalculatorUI -> utilise Calculator\n\n// London (outside-in): commence par l'exterieur\n// 1. Test CalculatorUI -> mock Calculator\n// 2. Test Calculator -> mock add()\n// 3. Test add() -> implementation reelle",
+        options: [
+          "Il n'y a aucune difference entre les deux approches",
+          "Outside-in part de l'interface utilisateur vers les details, mockant les couches internes, guidant la conception par les besoins reels de l'utilisateur",
+          "Outside-in est toujours superieur au classique",
+          "Outside-in ne s'applique qu'aux applications web"
+        ],
+        answer: 1,
+        explanation: "Detroit (inside-out) : construit du detail vers l'ensemble, favorise les tests d'etat sans mocks. London (outside-in) : part du besoin utilisateur, mock les couches internes, decouvre les interfaces par les tests. Chaque approche a ses forces selon le contexte."
+      },
+      {
+        label: "Question 5 — Limites du TDD",
+        text: "Dans quel cas le TDD strict est-il le moins adapte ?",
+        code: null,
+        options: [
+          "Pour implementer de la logique metier bien definie",
+          "Pour une API avec des regles de validation claires",
+          "Pour du prototypage exploratoire ou les exigences sont floues et changent rapidement — le cout de reecriture des tests depasse le benefice",
+          "Pour un algorithme avec des entrees/sorties bien definies"
+        ],
+        answer: 2,
+        explanation: "Le TDD brille quand les comportements sont clairs. En phase exploratoire (spike, prototype, UI en iteration rapide), les specs changent si vite que les tests deviennent un frein. Mieux vaut prototyper, stabiliser, puis ajouter les tests. Le TDD n'est pas dogmatique."
+      }
+    ];
+    let currentQuestion = 0, score = 0, answered = false;
+    function renderQuestion() {
+      const q = questions[currentQuestion];
+      const total = questions.length;
+      document.getElementById('progressBar').style.width = ((currentQuestion / total) * 100) + '%';
+      document.getElementById('progressText').textContent = `Question ${currentQuestion + 1} / ${total}`;
+      let html = `<div class="card"><p class="question-label">${q.label}</p><p class="question-text">${q.text}</p>`;
+      if (q.code) html += `<pre><code>${q.code}</code></pre>`;
+      html += `<ul class="options">`;
+      q.options.forEach((opt, i) => { html += `<li><label><input type="radio" name="q" value="${i}"> ${opt}</label></li>`; });
+      html += `</ul><button class="btn btn-primary" id="validateBtn" onclick="validate()" disabled>Valider</button><div class="feedback" id="feedback"></div></div>`;
+      document.getElementById('quizContainer').innerHTML = html;
+      document.querySelectorAll('input[name="q"]').forEach(r => { r.addEventListener('change', () => { document.getElementById('validateBtn').disabled = false; }); });
+      answered = false;
+    }
+    function validate() {
+      if (answered) { currentQuestion++; if (currentQuestion < questions.length) renderQuestion(); else showScore(); return; }
+      answered = true;
+      const selected = document.querySelector('input[name="q"]:checked');
+      if (!selected) return;
+      const val = parseInt(selected.value);
+      const q = questions[currentQuestion];
+      const fb = document.getElementById('feedback');
+      const btn = document.getElementById('validateBtn');
+      document.querySelectorAll('input[name="q"]').forEach(r => r.disabled = true);
+      if (val === q.answer) { score++; fb.className = 'feedback correct'; fb.innerHTML = `<strong>Correct !</strong> ${q.explanation}`; }
+      else { fb.className = 'feedback wrong'; fb.innerHTML = `<strong>Incorrect.</strong> ${q.explanation}`; }
+      btn.textContent = currentQuestion < questions.length - 1 ? 'Suivant' : 'Voir le score';
+    }
+    function showScore() {
+      document.getElementById('quizContainer').classList.add('hidden');
+      document.getElementById('progressBar').style.width = '100%';
+      document.getElementById('progressText').textContent = 'Termine !';
+      const sc = document.getElementById('scoreContainer');
+      sc.classList.remove('hidden');
+      const pct = Math.round((score / questions.length) * 100);
+      let msg = pct === 100 ? 'Parfait !' : pct >= 60 ? 'Bien joue !' : 'Continuez a reviser !';
+      sc.innerHTML = `<div class="score">${score} / ${questions.length}</div><div class="score-label">${msg} (${pct}%)</div><button class="btn-restart" onclick="restart()">Recommencer</button>`;
+    }
+    function restart() { currentQuestion = 0; score = 0; answered = false; document.getElementById('scoreContainer').classList.add('hidden'); document.getElementById('quizContainer').classList.remove('hidden'); renderQuestion(); }
+    renderQuestion();
+  </script>
+</body>
+</html>

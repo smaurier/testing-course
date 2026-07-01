@@ -26,7 +26,7 @@ import { mailer } from '../mailer';            // couplage dur au SMTP
 
 export async function inviteMember(familyId: string, email: string) {
   const res = await db.query(
-    'SELECT id FROM invitations WHERE family_id = $1 AND email = $2 AND status = $2',
+    'SELECT id FROM invitations WHERE family_id = $1 AND email = $2 AND status = $3',
     [familyId, email, 'pending']
   );
   if (res.rows.length) throw new Error('ALREADY_INVITED');

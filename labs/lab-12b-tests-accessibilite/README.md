@@ -1,6 +1,6 @@
 # Lab 12b — Tests d'accessibilité
 
-> **Outcome :** à la fin, tu sais détecter des violations axe-core avec **vitest-axe** sur un vrai composant React, corriger le composant pour passer `toHaveNoViolations`, et automatiser un test de navigation clavier avec **Playwright**.
+> **Outcome :** à la fin, tu sais détecter des violations axe-core avec **vitest-axe** sur un vrai composant Vue, corriger le composant pour passer `toHaveNoViolations`, et automatiser un test de navigation clavier avec **Playwright**.
 > **Vrai outil :** vitest-axe, axe-core, @axe-core/playwright. Aucun harnais simulé.
 > **Feedback :** le coach valide en session (pas de test-runner auto-correcteur).
 
@@ -14,30 +14,32 @@ Tu travailles sur le formulaire d'invitation TribuZen. Le composant livré (`Inv
 
 Code de départ fourni — **ne modifie pas `InvitationFormBroken`** :
 
-```tsx
-// src/components/InvitationFormBroken.tsx
-export function InvitationFormBroken({ onInvite }: { onInvite: (email: string) => void }) {
-  return (
-    <div>
-      <input type="text" placeholder="Prénom" />
-      <input type="email" placeholder="Email" />
-      <div onClick={() => onInvite('...')}>Envoyer l'invitation</div>
-    </div>
-  );
-}
+```vue
+<!-- src/components/InvitationFormBroken.vue -->
+<template>
+  <div>
+    <input type="text" placeholder="Prénom" />
+    <input type="email" placeholder="Email" />
+    <div @click="onInvite('...')">Envoyer l'invitation</div>
+  </div>
+</template>
+
+<script setup lang="ts">
+defineProps<{ onInvite: (email: string) => void }>()
+</script>
 ```
 
-Tu dois créer `InvitationForm.tsx` (version corrigée) et les deux fichiers de tests.
+Tu dois créer `InvitationForm.vue` (version corrigée) et les deux fichiers de tests.
 
 ## Étapes (en friction)
 
-1. **Setup vitest-axe.** Installe `vitest-axe` et `axe-core`. Crée `tests/setup-a11y.ts` qui étend `expect` avec `toHaveNoViolations`. Branche-le dans `vitest.config.ts` via `setupFiles`.
+1. **Setup vitest-axe.** Installe `vitest-axe`, `axe-core` et `@testing-library/vue`. Crée `tests/setup-a11y.ts` qui étend `expect` avec `toHaveNoViolations`. Branche-le dans `vitest.config.ts` via `setupFiles`.
 
-2. **Test rouge sur la version cassée.** Dans `InvitationFormBroken.test.tsx`, rends le composant dans JSDOM et appelle `axe(container)`. Assert que `results.violations.length > 0` ET que le tableau des `id` de violations contient `'label'`. Ce test doit rester dans le repo — c'est la preuve que l'outil détecte bien le problème.
+2. **Test rouge sur la version cassée.** Dans `InvitationFormBroken.test.ts`, rends le composant dans JSDOM et appelle `axe(container)`. Assert que `results.violations.length > 0` ET que le tableau des `id` de violations contient `'label'`. Ce test doit rester dans le repo — c'est la preuve que l'outil détecte bien le problème.
 
-3. **Correction du composant.** Crée `InvitationForm.tsx` : deux `<label htmlFor>` liés à leurs `<input id>`, un `<button type="submit">` à la place du `<div onClick>`, un `aria-label` ou `aria-labelledby` sur le `<form>`. Pas d'ARIA superflu là où le HTML natif suffit.
+3. **Correction du composant.** Crée `InvitationForm.vue` : deux `<label for>` liés à leurs `<input id>`, un `<button type="submit">` à la place du `<div @click>`, un `aria-label` sur le `<form>`. Pas d'ARIA superflu là où le HTML natif suffit.
 
-4. **Test vert sur la version corrigée.** Dans `InvitationForm.test.tsx`, rends le composant et appelle `axe(container, { rules: { 'color-contrast': { enabled: false } } })` (JSDOM ne rend pas le CSS — justification obligatoire en commentaire). Assert `toHaveNoViolations()`.
+4. **Test vert sur la version corrigée.** Dans `InvitationForm.test.ts`, rends le composant et appelle `axe(container, { rules: { 'color-contrast': { enabled: false } } })` (JSDOM ne rend pas le CSS — justification obligatoire en commentaire). Assert `toHaveNoViolations()`.
 
 5. **Test clavier Playwright.** Dans `tests/e2e/a11y/invitation.spec.ts`, navigue vers `/invite`, utilise `page.keyboard.press('Tab')` pour atteindre le champ Prénom, remplis-le, Tab vers Email, remplis-le, Tab vers le bouton Envoyer, active avec `Enter`. Assert qu'une confirmation est visible (`role="alert"` ou texte prévisible).
 
@@ -45,66 +47,64 @@ Tu dois créer `InvitationForm.tsx` (version corrigée) et les deux fichiers de 
 
 ## Corrigé complet commenté
 
-```tsx
-// src/components/InvitationForm.tsx
-import { useState } from 'react';
+```vue
+<!-- src/components/InvitationForm.vue -->
+<script setup lang="ts">
+import { ref } from 'vue'
 
-export function InvitationForm({ onInvite }: { onInvite: (email: string) => void }) {
-  const [prenom, setPrenom] = useState('');
-  const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(false);
+const props = defineProps<{ onInvite: (email: string) => void }>()
+const prenom = ref('')
+const email = ref('')
+const sent = ref(false)
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    onInvite(email);
-    setSent(true);
-  }
-
-  return (
-    // aria-label sur form : pas de <legend> ou <h2> associé ici,
-    // donc on nomme explicitement la region formulaire
-    <form id="invitation-form" aria-label="Inviter un membre" onSubmit={handleSubmit}>
-
-      {/* label + htmlFor + input id : association explicite, la plus robuste */}
-      <label htmlFor="invite-prenom">Prénom</label>
-      <input
-        id="invite-prenom"
-        type="text"
-        value={prenom}
-        onChange={(e) => setPrenom(e.target.value)}
-      />
-
-      <label htmlFor="invite-email">Adresse email</label>
-      <input
-        id="invite-email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        aria-describedby="invite-email-hint"
-      />
-      {/* hint associé via aria-describedby : lu après le nom du champ sous SR */}
-      <span id="invite-email-hint">Format attendu : prénom@domaine.fr</span>
-
-      {/* <button type="submit"> : interactif nativement (Tab + Enter + Space) */}
-      <button type="submit">Envoyer l'invitation</button>
-
-      {/* role="alert" : annoncé immédiatement par le lecteur d'écran à l'apparition */}
-      {sent && <p role="alert">Invitation envoyée</p>}
-    </form>
-  );
+function handleSubmit() {
+  // aria-label sur form : pas de <legend> ou <h2> associé ici,
+  // donc on nomme explicitement la région formulaire
+  props.onInvite(email.value)
+  sent.value = true
 }
+</script>
+
+<template>
+  <form id="invitation-form" aria-label="Inviter un membre" @submit.prevent="handleSubmit">
+
+    <!-- label + for + input id : association explicite, la plus robuste -->
+    <label for="invite-prenom">Prénom</label>
+    <input
+      id="invite-prenom"
+      type="text"
+      v-model="prenom"
+    />
+
+    <label for="invite-email">Adresse email</label>
+    <input
+      id="invite-email"
+      type="email"
+      v-model="email"
+      aria-describedby="invite-email-hint"
+    />
+    <!-- hint associé via aria-describedby : lu après le nom du champ sous SR -->
+    <span id="invite-email-hint">Format attendu : prénom@domaine.fr</span>
+
+    <!-- button type="submit" : interactif nativement (Tab + Enter + Space) -->
+    <button type="submit">Envoyer l'invitation</button>
+
+    <!-- role="alert" : annoncé immédiatement par le lecteur d'écran à l'apparition -->
+    <p v-if="sent" role="alert">Invitation envoyée</p>
+  </form>
+</template>
 ```
 
-```tsx
-// src/components/InvitationFormBroken.test.tsx
-import { render } from '@testing-library/react';
+```ts
+// src/components/InvitationFormBroken.test.ts
+import { render } from '@testing-library/vue';
 import { axe } from 'vitest-axe';
 import { describe, it, expect } from 'vitest';
-import { InvitationFormBroken } from './InvitationFormBroken';
+import InvitationFormBroken from './InvitationFormBroken.vue';
 
 describe('InvitationFormBroken — détection violations axe', () => {
   it('détecte des violations sur la version inaccessible', async () => {
-    const { container } = render(<InvitationFormBroken onInvite={() => {}} />);
+    const { container } = render(InvitationFormBroken, { props: { onInvite: () => {} } });
     const results = await axe(container);
 
     // Ce test doit rester rouge tant que le composant n'est pas corrigé.
@@ -119,16 +119,16 @@ describe('InvitationFormBroken — détection violations axe', () => {
 });
 ```
 
-```tsx
-// src/components/InvitationForm.test.tsx
-import { render } from '@testing-library/react';
+```ts
+// src/components/InvitationForm.test.ts
+import { render, fireEvent } from '@testing-library/vue';
 import { axe } from 'vitest-axe';
-import { describe, it, expect } from 'vitest';
-import { InvitationForm } from './InvitationForm';
+import { describe, it, expect, vi } from 'vitest';
+import InvitationForm from './InvitationForm.vue';
 
 describe('InvitationForm — accessibilité axe (version corrigée)', () => {
   it('ne contient aucune violation détectable par axe', async () => {
-    const { container } = render(<InvitationForm onInvite={() => {}} />);
+    const { container } = render(InvitationForm, { props: { onInvite: () => {} } });
 
     const results = await axe(container, {
       rules: {
@@ -144,11 +144,13 @@ describe('InvitationForm — accessibilité axe (version corrigée)', () => {
   it('détecte le formulaire envoyé (état sent)', async () => {
     // Tester l'état après soumission : le role="alert" est-il présent et accessible ?
     const onInvite = vi.fn();
-    const { container, getByRole } = render(<InvitationForm onInvite={onInvite} />);
+    const { container, getByRole } = render(InvitationForm, { props: { onInvite } });
 
-    // Simuler la soumission
-    const btn = getByRole('button', { name: 'Envoyer l\'invitation' });
-    btn.click(); // déclenche handleSubmit (state change → "sent" = true)
+    const btn = getByRole('button', { name: "Envoyer l'invitation" });
+    // fireEvent de @testing-library/vue est async : il déclenche l'événement
+    // puis attend le nextTick de réactivité Vue. Nécessaire pour que v-if="sent"
+    // soit rendu dans le DOM avant le scan axe — btn.click() synchrone ne suffit pas.
+    await fireEvent.click(btn);
 
     const results = await axe(container, {
       rules: { 'color-contrast': { enabled: false } },
@@ -235,9 +237,11 @@ Points de validation par le coach :
 - (a) le test "broken" **reste en rouge** et prouve que l'outil détecte `label` — ne pas le supprimer ;
 - (b) `color-contrast` est **désactivé et commenté** avec la justification JSDOM ;
 - (c) on teste aussi l'**état `sent`** — pas seulement l'état initial ;
-- (d) le test clavier Playwright vérifie les **noms accessibles** (`toHaveAccessibleName`) pas seulement les rôles ;
-- (e) le test axe Playwright **filtre par sévérité** avec un message d'erreur lisible ;
-- (f) aucun ARIA superflu dans le composant corrigé — HTML natif en premier.
+- (d) l'interaction dans le test "état sent" utilise **`await fireEvent.click(btn)`** (pas `btn.click()` synchrone) — la réactivité Vue est asynchrone, `fireEvent` de `@testing-library/vue` attend le nextTick avant de résoudre ;
+- (e) `vi` est **importé explicitement** : `import { vi } from 'vitest'` — ne pas supposer les globals ;
+- (f) le test clavier Playwright vérifie les **noms accessibles** (`toHaveAccessibleName`) pas seulement les rôles ;
+- (g) le test axe Playwright **filtre par sévérité** avec un message d'erreur lisible ;
+- (h) aucun ARIA superflu dans le composant corrigé — HTML natif en premier.
 
 ## Variante J+30 (fading)
 
@@ -252,9 +256,9 @@ Bonus : identifie dans quelle catégorie WCAG (critère de succès) tombe le mes
 
 Porte ce lab dans le vrai repo `smaurier/tribuzen` :
 
-1. Crée ou corrige `src/components/InvitationForm.tsx` selon les exigences du lab.
-2. Ajoute `vitest-axe` au `devDependencies` et branche `toHaveNoViolations` dans le setup Vitest existant.
-3. Écris `InvitationForm.test.tsx` avec les deux cas (état initial + état sent), `color-contrast` désactivé et commenté.
+1. Crée ou corrige `src/components/InvitationForm.vue` selon les exigences du lab.
+2. Ajoute `vitest-axe`, `axe-core` et `@testing-library/vue` au `devDependencies` et branche `toHaveNoViolations` dans le setup Vitest existant.
+3. Écris `InvitationForm.test.ts` avec les deux cas (état initial + état sent), `color-contrast` désactivé et commenté.
 4. Ajoute le test Playwright dans `tests/e2e/a11y/invitation.spec.ts` (clavier + axe Playwright).
 5. Commit : `test(a11y): vitest-axe + Playwright clavier sur InvitationForm`.
 6. Note dans le PR les violations détectées avant correction et celles qui restent hors périmètre auto (~30-40 % de couverture).

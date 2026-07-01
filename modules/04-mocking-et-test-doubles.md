@@ -3,11 +3,11 @@ titre: Mocking et test doubles
 cours: 06-testing
 notions: [test-double, dummy, stub, spy, mock, fake, dependency-injection, vi.fn, vi.spyOn, vi.mock, vi.hoisted, mock-partiel, fake-timers, date-mocking, over-mocking, tester-le-comportement]
 outcomes: [choisir le bon type de test double selon l'intention du test, isoler du code via injection de dépendances, écrire un spy/mock/fake avec l'API Vitest, mocker un module et des timers, éviter le sur-mock et le test de l'implémentation]
-prerequis: [anatomie-dun-test, vitest-fondamentaux, assertions]
+prerequis: [02-anatomie-dun-test, 03-vitest-fondamentaux]
 next: 05-tests-asynchrones
 libs: [{ name: vitest, version: ^4.1.9 }]
 tribuzen: tests logique domaine (invitation, RBAC) — Vitest réel
-last-reviewed: 2026-06
+last-reviewed: 2026-07
 ---
 
 # Mocking et test doubles

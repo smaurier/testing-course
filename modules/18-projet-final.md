@@ -124,22 +124,24 @@ Règles de composition :
 
 | # | Notion | Outil clé |
 |---|--------|-----------|
-| 01 | Anatomie d'un test, TDD | Vitest |
-| 02 | Vitest fondamentaux | Vitest |
-| 03 | Assertions avancées | Vitest |
+| 00 | Prérequis | Node, pnpm, TypeScript |
+| 01 | Pourquoi tester | — |
+| 02 | Anatomie d'un test | Vitest |
+| 03 | Vitest fondamentaux | Vitest |
 | 04 | Mocking et test doubles | vi.fn / vi.spyOn / vi.mock |
 | 05 | Tests asynchrones | async/await, fake timers |
-| 06 | Fixtures et factories | beforeEach, test.extend |
-| 07 | Tests d'intégration | Supertest |
+| 06 | Architecture testable | DI, ports et adaptateurs |
+| 07 | Tests de composants | Testing Library |
 | 08 | MSW | msw |
-| 09 | Tests Prisma | Prisma + DB test |
-| 10 | Tests de composants | Testing Library |
-| 11 | E2E Playwright bases | Playwright |
-| 12 | Page Objects et fixtures | Playwright POM |
-| 13 | Visual regression | Playwright screenshots |
-| 14 | Accessibilité | axe-core + Playwright |
-| 15 | Contract tests | Zod |
-| 16 | CI GitHub Actions | GitHub Actions |
+| 09 | Tests d'intégration | Supertest + Prisma |
+| 10 | Playwright fondamentaux | Playwright |
+| 11 | Playwright avancé (POM, fixtures) | Playwright POM |
+| 12 | Couverture et mutation | @vitest/coverage-v8, Stryker |
+| 12b | Tests d'accessibilité | axe-core + Playwright |
+| 13 | Tests en CI/CD | GitHub Actions |
+| 14 | Flaky tests et debugging | Playwright traces, Vitest retry |
+| 15 | TDD / BDD | Vitest, Gherkin |
+| 16 | Contract testing | Pact |
 | 17 | Performance testing | k6 |
 | 18 | Projet final (ce module) | tout |
 
