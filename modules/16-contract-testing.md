@@ -1,327 +1,81 @@
-# Module 16 — Contract testing
-
-| Difficulte | Duree estimee | Lab | Quiz |
-|------------|---------------|-----|------|
-| 5/5        | 90 min        | [Lab 16](../labs/lab-16-contract-testing/) | [Quiz 16](../quizzes/quiz-16-contract.html) |
-
-## Objectifs
-
-- Comprendre pourquoi les changements d'API cassent les consommateurs
-- Maîtriser le concept de consumer-driven contracts
-- Configurer Pact avec TypeScript (consumer et provider)
-- Utiliser Zod pour la validation de schemas partages
-- Distinguer les changements cassants des non-cassants
-- Decouvrir le contract testing pour GraphQL et gRPC
-
+---
+titre: Contract testing
+cours: 06-testing
+notions: [tests de contrat consumer-driven, consumer et provider, contrat comme source de vérité, Pact, vérification du provider, broker de contrats, vs tests d'intégration et e2e, cas d'usage microservices]
+outcomes: [expliquer le contract testing consumer-driven, écrire un contrat côté consumer avec Pact, vérifier le contrat côté provider, situer le contract testing vs e2e]
+prerequis: [15-tdd-et-bdd]
+next: 17-performance-testing
+libs: [{ name: vitest, version: ^4.1.9 }, { name: "@pact-foundation/pact", version: ^12 }]
+tribuzen: contrat entre le front TribuZen et l'API famille/invitation (consumer-driven)
+last-reviewed: 2026-07
 ---
 
-## Le problème : les changements d'API cassants
+# Contract testing
 
-### Scenario classique
+> **Outcomes — tu sauras FAIRE :** expliquer le contract testing consumer-driven, écrire un contrat côté consumer avec PactV3, vérifier le contrat côté provider avec `Verifier` et des `stateHandlers`, et situer le contract testing face aux tests d'intégration et e2e.
+> **Difficulté :** :star::star::star::star:
 
-```
-  Team A (Frontend)              Team B (Backend API)
-  ┌─────────────────┐           ┌─────────────────┐
-  │  Fetches         │           │                 │
-  │  GET /api/users  │──────────►│  Returns         │
-  │                  │           │  { name, email } │
-  │  Expects:        │           │                 │
-  │  { name, email } │           │  Renames:        │
-  │                  │◄──────────│  { fullName,     │
-  │  CRASH !         │           │    emailAddress } │
-  └─────────────────┘           └─────────────────┘
-```
+## 1. Cas concret d'abord
 
-Team B renomme des champs. Ses propres tests passent. Team A découvre la casse en staging (où pire, en production).
-
-### Pourquoi les tests classiques ne suffisent pas
-
-| Type de test | Detecte le problème ? | Pourquoi |
-|-------------|----------------------|----------|
-| Tests unitaires (Team B) | Non | Ne connaissent pas les attentes de Team A |
-| Tests unitaires (Team A) | Non | Mockent l'API, pas le vrai contrat |
-| Tests E2E | Oui, mais tard | Lents, fragiles, en fin de pipeline |
-| Tests d'intégration | Parfois | Necessitent les deux services déployés |
-| **Contract tests** | **Oui, tot** | **Verifient le contrat explicitement** |
-
----
-
-## Consumer-Driven Contracts
-
-### Le principe
-
-Le **consommateur** (frontend, autre service) définit ce qu'il attend de l'API. Le **fournisseur** (API) s'engage a respecter ces attentes.
+L'équipe front TribuZen lit `GET /api/invitations/:id` et consomme les champs `id`, `familyId`, `email`, `status`. L'équipe API, de son côté, refactorise et renomme `familyId` en `groupId`. Chaque équipe fait passer ses propres tests unitaires — les unit tests du front mockent l'API, ceux de l'API ne connaissent pas les attentes du front. Résultat : les deux suites sont vertes, mais la feature d'invitation plante en staging.
 
 ```
-  Consumer                      Pact Broker                    Provider
-  ┌──────────┐                 ┌──────────┐                  ┌──────────┐
-  │ Genere   │   Publie        │ Stocke   │    Verifie       │ Execute  │
-  │ un Pact  ├────────────────►│ les      ├─────────────────►│ les      │
-  │ (contrat)│                 │ contrats │                  │ requetes │
-  └──────────┘                 └──────────┘                  └──────────┘
-       │                                                          │
-       │  "Je m'attends a                    "Mon API respecte    │
-       │   un champ name"                     le contrat"         │
+Front TribuZen (consumer)           API TribuZen (provider)
+┌──────────────────────┐            ┌──────────────────────┐
+│ attend { familyId }  │            │ renomme → { groupId }│
+│ unit tests : verts   │            │ unit tests : verts   │
+│ → CRASH en staging   │            │ → ignore le consumer │
+└──────────────────────┘            └──────────────────────┘
 ```
 
-### Les 3 étapes
+**Question centrale** : comment détecter cette rupture AVANT le déploiement, sans lancer deux services en parallèle ni écrire un test e2e lent ? Réponse : le **contract testing consumer-driven** avec Pact.
 
-1. **Consumer** : écrit un test qui généré un fichier Pact (contrat JSON)
-2. **Broker** : stocke et versionne les contrats (optionnel mais recommande)
-3. **Provider** : rejoue les requêtes du contrat contre sa vraie API et vérifié les réponses
+## 2. Théorie complète, concise
 
----
+### Consumer-driven contracts — le principe
 
-## Pact avec TypeScript
-
-### Installation
-
-```bash
-# Consumer side
-pnpm add -D @pact-foundation/pact
-
-# Provider side (peut etre un autre projet)
-pnpm add -D @pact-foundation/pact
-```
-
-### Structure du projet
+Dans le contract testing **consumer-driven**, c'est le **consommateur** (le front, un autre microservice) qui définit ce qu'il attend du **fournisseur** (l'API). Le fournisseur s'engage à respecter ces attentes. C'est l'inverse du contrat imposé par le provider (OpenAPI first).
 
 ```
-consumer/
-  src/
-    api/user-api.ts          # Client API
-  tests/
-    pact/
-      user-api.pact.test.ts  # Test consumer
-  pacts/                     # Contrats generes (JSON)
-
-provider/
-  src/
-    routes/users.ts          # Routes API
-  tests/
-    pact/
-      provider.pact.test.ts  # Verification provider
+Consumer                   Pact file (JSON)            Provider
+┌──────────┐  génère       ┌──────────────┐  vérifie   ┌──────────┐
+│ test     ├──────────────►│ interactions │────────────►│ Verifier │
+│ consumer │               │ (source de   │             │ rejoue   │
+└──────────┘               │  vérité)     │             │ requêtes │
+                           └──────────────┘             └──────────┘
 ```
 
-### Le client API (consumer)
+### Consumer et provider — deux rôles, deux moments
 
-```typescript
-// consumer/src/api/user-api.ts
-export interface User {
-  id: number;
-  name: string;
-  email: string;
-  role: 'admin' | 'editor' | 'viewer';
-}
+| Rôle | Quand s'exécute | Ce qu'il fait |
+|------|-----------------|---------------|
+| **Consumer** | dans son propre pipeline CI | écrit les interactions, exécute contre un mock server Pact, génère le pact file |
+| **Provider** | dans son propre pipeline CI | récupère le pact file, rejoue chaque interaction contre sa vraie API, publie le résultat |
 
-export interface CreateUserRequest {
-  name: string;
-  email: string;
-  role: 'admin' | 'editor' | 'viewer';
-}
+Les deux pipelines sont **indépendants**. Ils ne nécessitent pas de lancer les deux services en même temps.
 
-export class UserApi {
-  constructor(private baseUrl: string) {}
+### Le contrat comme source de vérité
 
-  async getUser(id: number): Promise<User> {
-    const response = await fetch(`${this.baseUrl}/api/users/${id}`);
-    if (!response.ok) {
-      throw new Error(`User not found: ${response.status}`);
-    }
-    return response.json() as Promise<User>;
-  }
-
-  async createUser(data: CreateUserRequest): Promise<User> {
-    const response = await fetch(`${this.baseUrl}/api/users`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to create user: ${response.status}`);
-    }
-    return response.json() as Promise<User>;
-  }
-
-  async listUsers(role?: string): Promise<User[]> {
-    const url = role
-      ? `${this.baseUrl}/api/users?role=${role}`
-      : `${this.baseUrl}/api/users`;
-    const response = await fetch(url);
-    return response.json() as Promise<User[]>;
-  }
-}
-```
-
-### Test consumer (généré le contrat)
-
-```typescript
-// consumer/tests/pact/user-api.pact.test.ts
-import { PactV4, MatchersV3 } from '@pact-foundation/pact';
-import { describe, it, expect } from 'vitest';
-import { UserApi } from '../../src/api/user-api';
-
-const { like, eachLike, integer, string, regex } = MatchersV3;
-
-const provider = new PactV4({
-  consumer: 'frontend-app',
-  provider: 'user-api',
-  dir: './pacts', // Dossier de sortie des contrats
-});
-
-describe('UserApi Pact', () => {
-  describe('GET /api/users/:id', () => {
-    it('should return a user when the user exists', async () => {
-      await provider
-        .addInteraction()
-        .given('user 1 exists')
-        .uponReceiving('a request for user 1')
-        .withRequest('GET', '/api/users/1')
-        .willRespondWith(200, (builder) => {
-          builder
-            .headers({ 'Content-Type': 'application/json' })
-            .jsonBody({
-              id: integer(1),
-              name: string('Alice'),
-              email: regex('alice@example.com', '^[\\w.+-]+@[\\w-]+\\.[\\w.]+$'),
-              role: regex('admin', '^(admin|editor|viewer)$'),
-            });
-        })
-        .executeTest(async (mockServer) => {
-          const api = new UserApi(mockServer.url);
-          const user = await api.getUser(1);
-
-          expect(user.id).toBe(1);
-          expect(user.name).toBe('Alice');
-          expect(user.email).toBe('alice@example.com');
-          expect(user.role).toBe('admin');
-        });
-    });
-
-    it('should return 404 when user does not exist', async () => {
-      await provider
-        .addInteraction()
-        .given('user 999 does not exist')
-        .uponReceiving('a request for a non-existent user')
-        .withRequest('GET', '/api/users/999')
-        .willRespondWith(404, (builder) => {
-          builder
-            .headers({ 'Content-Type': 'application/json' })
-            .jsonBody({
-              error: string('User not found'),
-            });
-        })
-        .executeTest(async (mockServer) => {
-          const api = new UserApi(mockServer.url);
-          await expect(api.getUser(999)).rejects.toThrow('User not found');
-        });
-    });
-  });
-
-  describe('POST /api/users', () => {
-    it('should create a new user', async () => {
-      await provider
-        .addInteraction()
-        .uponReceiving('a request to create a user')
-        .withRequest('POST', '/api/users', (builder) => {
-          builder
-            .headers({ 'Content-Type': 'application/json' })
-            .jsonBody({
-              name: string('Bob'),
-              email: string('bob@example.com'),
-              role: string('editor'),
-            });
-        })
-        .willRespondWith(201, (builder) => {
-          builder
-            .headers({ 'Content-Type': 'application/json' })
-            .jsonBody({
-              id: integer(2),
-              name: string('Bob'),
-              email: string('bob@example.com'),
-              role: string('editor'),
-            });
-        })
-        .executeTest(async (mockServer) => {
-          const api = new UserApi(mockServer.url);
-          const user = await api.createUser({
-            name: 'Bob',
-            email: 'bob@example.com',
-            role: 'editor',
-          });
-
-          expect(user.id).toBe(2);
-          expect(user.name).toBe('Bob');
-        });
-    });
-  });
-
-  describe('GET /api/users', () => {
-    it('should return a list of users', async () => {
-      await provider
-        .addInteraction()
-        .given('users exist')
-        .uponReceiving('a request for all users')
-        .withRequest('GET', '/api/users')
-        .willRespondWith(200, (builder) => {
-          builder
-            .headers({ 'Content-Type': 'application/json' })
-            .jsonBody(
-              eachLike({
-                id: integer(1),
-                name: string('Alice'),
-                email: string('alice@example.com'),
-                role: string('admin'),
-              }),
-            );
-        })
-        .executeTest(async (mockServer) => {
-          const api = new UserApi(mockServer.url);
-          const users = await api.listUsers();
-
-          expect(users).toHaveLength(1);
-          expect(users[0].id).toBe(1);
-        });
-    });
-  });
-});
-```
-
-### Contrat généré (Pact JSON)
-
-```bash
-# Apres execution du test consumer :
-ls pacts/
-# frontend-app-user-api.json
-```
+Le **pact file** est un fichier JSON généré automatiquement lors du test consumer. Il contient la liste des **interactions** : pour chaque cas, la requête attendue et la réponse minimale requise. Ce fichier est **versionné** et partagé entre les équipes (via le broker ou le VCS).
 
 ```json
 {
-  "consumer": { "name": "frontend-app" },
-  "provider": { "name": "user-api" },
+  "consumer": { "name": "tribu-front" },
+  "provider": { "name": "tribu-api" },
   "interactions": [
     {
-      "description": "a request for user 1",
-      "providerState": "user 1 exists",
-      "request": {
-        "method": "GET",
-        "path": "/api/users/1"
-      },
+      "description": "une demande GET /api/invitations/inv-1",
+      "providerState": "invitation inv-1 exists",
+      "request": { "method": "GET", "path": "/api/invitations/inv-1" },
       "response": {
         "status": 200,
-        "headers": { "Content-Type": "application/json" },
-        "body": {
-          "id": 1,
-          "name": "Alice",
-          "email": "alice@example.com",
-          "role": "admin"
-        },
+        "body": { "id": "inv-1", "familyId": "fam-1", "email": "alice@tribu.fr", "status": "pending" },
         "matchingRules": {
           "body": {
-            "$.id": { "matchers": [{ "match": "integer" }] },
-            "$.name": { "matchers": [{ "match": "type" }] },
-            "$.email": { "matchers": [{ "match": "regex", "regex": "^[\\w.+-]+@[\\w-]+\\.[\\w.]+$" }] },
-            "$.role": { "matchers": [{ "match": "regex", "regex": "^(admin|editor|viewer)$" }] }
+            "$.id":       { "matchers": [{ "match": "type" }] },
+            "$.familyId": { "matchers": [{ "match": "type" }] },
+            "$.email":    { "matchers": [{ "match": "type" }] },
+            "$.status":   { "matchers": [{ "match": "type" }] }
           }
         }
       }
@@ -330,790 +84,323 @@ ls pacts/
 }
 ```
 
-### Vérification provider
+### Pact — l'outil
+
+**Pact** est la librairie de référence pour le contract testing consumer-driven. En TypeScript/Node.js, `@pact-foundation/pact` v12 expose `PactV3` (interactions HTTP REST) et `PactV4` (messages asynchrones, transports non-HTTP).
+
+**PactV3 — côté consumer** : chaîne fluente pour décrire une interaction.
+
+```
+pact.addInteraction()
+  .given(...)           // état requis du provider
+  .uponReceiving(...)   // description humaine de l'interaction
+  .withRequest(...)     // méthode + path + headers + body attendus
+  .willRespondWith(...) // status + body + headers retournés
+  .executeTest(async (mockServer) => { ... }) // appelle le vrai client contre le mock
+```
+
+Pendant `executeTest`, Pact démarre un **mock server** qui simule le provider selon les règles définies. Le test instancie le client HTTP réel en le pointant sur ce mock server. Si la requête ne correspond pas à l'interaction enregistrée, Pact échoue. À la fin du test réussi, le pact file est écrit sur disque.
+
+**MatchersV3** — les matchers permettent d'écrire des contrats **flexibles** plutôt que rigides (valeurs exactes) :
+
+| Matcher | Import | Vérifie |
+|---------|--------|---------|
+| `like(value)` | `MatchersV3` | le **type** de `value` (string, number, boolean…) |
+| `string(example)` | `MatchersV3` | que le champ est de type string |
+| `integer(example)` | `MatchersV3` | que le champ est un entier |
+| `decimal(example)` | `MatchersV3` | que le champ est un décimal |
+| `eachLike(template)` | `MatchersV3` | que le champ est un tableau dont chaque item satisfait `template` |
+| `regex(example, pattern)` | `MatchersV3` | que le champ correspond à l'expression régulière |
+
+Règle d'or : préférer `string`/`integer`/`like` aux valeurs exactes. Un contrat qui vérifie le **type** reste valide même si l'API renvoie un ID différent à chaque run.
+
+**PactV3 — vérification provider** : `Verifier` rejoue chaque interaction du pact file contre la vraie API.
 
 ```typescript
-// provider/tests/pact/provider.pact.test.ts
+await new Verifier({
+  providerBaseUrl: 'http://localhost:3000',
+  pactUrls: ['./pacts/tribu-front-tribu-api.json'],
+  stateHandlers: {
+    'invitation inv-1 exists': async () => { /* seed DB */ },
+  },
+}).verifyProvider();
+```
+
+Les **state handlers** sont des fonctions exécutées avant chaque interaction pour mettre la base de données dans l'état requis par le champ `given`. Sans eux, le provider reçoit des requêtes sans données et retourne 404.
+
+### Broker de contrats
+
+Le **Pact Broker** (self-hosted ou PactFlow SaaS) centralise le stockage et le versionnement des pact files. Les deux pipelines — consumer et provider — s'y connectent pour publier et récupérer les contrats.
+
+La commande `can-i-deploy` interroge le broker pour savoir si une version donnée du consumer peut être déployée sans casser le provider déjà en production :
+
+```bash
+pnpm pact-broker can-i-deploy \
+  --pacticipant tribu-front \
+  --version $(git rev-parse --short HEAD) \
+  --to-environment production \
+  --broker-base-url http://pact-broker:9292
+```
+
+Sans broker, les pact files s'échangent via le VCS ou les artefacts CI — faisable pour deux services, ingérable pour une dizaine.
+
+### Contract testing vs intégration vs e2e
+
+| Critère | Unit (avec mock) | Contract (Pact) | Intégration | E2E |
+|---------|-----------------|-----------------|-------------|-----|
+| Services déployés | 0 | 0 | 2+ | tous |
+| Vitesse | ms | secondes | minutes | minutes-heures |
+| Détecte les ruptures de contrat | non | oui | oui | oui |
+| Isole les équipes | oui | oui | non | non |
+| Flakiness | nulle | faible | moyenne | élevée |
+
+Le contract testing ne remplace ni l'e2e (qui couvre les scénarios end-to-end réels) ni les tests d'intégration (qui vérifient la persistance, la sécurité, etc.). Il couvre le **gap spécifique** de la rupture de contrat d'API inter-équipes.
+
+### Cas d'usage microservices
+
+Le contract testing prend toute sa valeur quand plusieurs équipes consomment la même API :
+
+```
+tribu-front   ──────────────────────────────────────────┐
+mobile-app    ──── chacun génère son pact ─────────────►│ tribu-api
+admin-panel   ──────────────────────────────────────────┘
+```
+
+Le provider exécute une vérification par consumer. Si `tribu-front` attend `familyId` et que `mobile-app` attend `groupId`, le renommage est détecté comme cassant pour `tribu-front` mais pas pour `mobile-app`. Granularité impossible avec un test e2e unique.
+
+## 3. Worked examples
+
+### Exemple A — contrat consumer avec PactV3
+
+Le front TribuZen expose un `InvitationApiClient` qui appelle `GET /api/invitations/:id`. On écrit le contrat qui fige le champ `familyId` comme attendu.
+
+```ts
+// src/api/invitation-api-client.ts
+export interface Invitation {
+  id: string;
+  familyId: string;
+  email: string;
+  status: 'pending' | 'accepted' | 'declined';
+}
+
+export class InvitationApiClient {
+  constructor(private baseUrl: string) {}
+
+  async getInvitation(id: string): Promise<Invitation> {
+    const res = await fetch(`${this.baseUrl}/api/invitations/${id}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json() as Promise<Invitation>;
+  }
+
+  async sendInvitation(familyId: string, email: string): Promise<Invitation> {
+    const res = await fetch(`${this.baseUrl}/api/invitations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ familyId, email }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json() as Promise<Invitation>;
+  }
+}
+```
+
+```ts
+// src/api/invitation-api-client.pact.test.ts
+import { PactV3, MatchersV3 } from '@pact-foundation/pact';
+import { describe, it, expect } from 'vitest';
+import { InvitationApiClient } from './invitation-api-client';
+
+const { string } = MatchersV3;
+
+// 1. Instanciation du pact : consumer = front, provider = API
+const pact = new PactV3({
+  consumer: 'tribu-front',
+  provider: 'tribu-api',
+  dir: './pacts',   // le pact file JSON sera écrit ici
+  logLevel: 'warn',
+});
+
+describe('InvitationApiClient — contrat Pact', () => {
+  it('récupère une invitation existante (GET /api/invitations/:id)', async () => {
+    await pact
+      // 2. given = état requis du provider (utilisé par les stateHandlers côté provider)
+      .addInteraction()
+      .given('invitation inv-1 exists')
+      // 3. description humaine de l'interaction (clé de correspondance dans le pact file)
+      .uponReceiving('une demande GET /api/invitations/inv-1')
+      // 4. requête que le client va émettre
+      .withRequest({ method: 'GET', path: '/api/invitations/inv-1' })
+      // 5. réponse minimale que le consumer exige — string() vérifie le TYPE, pas la valeur exacte
+      .willRespondWith({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: {
+          id:       string('inv-1'),      // type string suffisant
+          familyId: string('fam-1'),      // CE champ doit exister et être une string
+          email:    string('alice@tribu.fr'),
+          status:   string('pending'),
+        },
+      })
+      // 6. executeTest démarre le mock server et y pointe le vrai client
+      .executeTest(async (mockServer) => {
+        const client = new InvitationApiClient(mockServer.url);
+        const inv = await client.getInvitation('inv-1');
+
+        // on assert sur le vrai client, pas sur le mock
+        expect(inv.id).toBe('inv-1');
+        expect(inv.familyId).toBe('fam-1');
+        expect(inv.status).toBe('pending');
+      });
+    // après le test réussi → pacts/tribu-front-tribu-api.json est généré/mis à jour
+  });
+
+  it('envoie une invitation (POST /api/invitations)', async () => {
+    await pact
+      .addInteraction()
+      .given('family fam-1 exists')
+      .uponReceiving('une demande POST /api/invitations')
+      .withRequest({
+        method: 'POST',
+        path: '/api/invitations',
+        headers: { 'Content-Type': 'application/json' },
+        body: { familyId: string('fam-1'), email: string('bob@tribu.fr') },
+      })
+      .willRespondWith({
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+        body: {
+          id:       string('inv-new'),
+          familyId: string('fam-1'),
+          email:    string('bob@tribu.fr'),
+          status:   string('pending'),
+        },
+      })
+      .executeTest(async (mockServer) => {
+        const client = new InvitationApiClient(mockServer.url);
+        const inv = await client.sendInvitation('fam-1', 'bob@tribu.fr');
+
+        expect(inv.status).toBe('pending');
+        expect(inv.familyId).toBe('fam-1');
+      });
+  });
+});
+```
+
+Pas-à-pas : (1) `PactV3({ consumer, provider, dir })` configure l'instance ; (2) `given` pose l'état que le provider devra préparer ; (3) `string(example)` impose le **type** string — si l'API renvoie un nombre à la place, le contrat échoue ; (4) `executeTest` reçoit le `mockServer` : on instancie le **vrai** `InvitationApiClient` dessus (pas un mock) ; (5) le pact file est écrit **uniquement** si le test est vert.
+
+### Exemple B — vérification provider avec Verifier
+
+Le provider (`tribu-api`) récupère le pact file et rejoue chaque interaction contre sa vraie API en cours de démarrage.
+
+```ts
+// tests/pact/provider.pact.test.ts  (dans le repo tribu-api)
 import { Verifier } from '@pact-foundation/pact';
 import { describe, it, beforeAll, afterAll } from 'vitest';
 import { createApp } from '../../src/app';
 import type { Server } from 'node:http';
 
-describe('Pact Provider Verification', () => {
+// helpers de seed (à adapter à ta stack — Prisma, Drizzle, etc.)
+import { seedInvitation, clearInvitations } from '../helpers/db-seed';
+
+describe('tribu-api — vérification du contrat Pact', () => {
   let server: Server;
   let port: number;
 
+  // démarrage de la vraie API sur un port aléatoire
   beforeAll(async () => {
     const app = createApp();
     await new Promise<void>((resolve) => {
       server = app.listen(0, () => {
         const addr = server.address();
-        if (addr && typeof addr !== 'string') {
-          port = addr.port;
-        }
+        if (addr && typeof addr !== 'string') port = addr.port;
         resolve();
       });
     });
   });
 
   afterAll(async () => {
-    await new Promise<void>((resolve) => {
-      server.close(() => resolve());
-    });
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
-  it('should honor the pact with frontend-app', async () => {
-    const verifier = new Verifier({
+  it('satisfait le contrat tribu-front-tribu-api', async () => {
+    await new Verifier({
+      // URL de la vraie API démarrée ci-dessus
       providerBaseUrl: `http://localhost:${port}`,
-      pactUrls: ['../consumer/pacts/frontend-app-user-api.json'],
 
-      // State handlers : mettre la DB dans l'etat requis
+      // chemin vers le pact file généré par le consumer
+      // (en CI : artefact téléchargé ou récupéré depuis le broker)
+      pactUrls: ['./pacts/tribu-front-tribu-api.json'],
+
+      // state handlers : préparent la DB AVANT chaque interaction
       stateHandlers: {
-        'user 1 exists': async () => {
-          // Seeder la base de donnees
-          await seedUser({ id: 1, name: 'Alice', email: 'alice@example.com', role: 'admin' });
+        'invitation inv-1 exists': async () => {
+          await clearInvitations();
+          await seedInvitation({
+            id: 'inv-1',
+            familyId: 'fam-1',
+            email: 'alice@tribu.fr',
+            status: 'pending',
+          });
         },
-        'user 999 does not exist': async () => {
-          // S'assurer que l'utilisateur 999 n'existe pas
-          await clearUser(999);
-        },
-        'users exist': async () => {
-          await seedUsers([
-            { id: 1, name: 'Alice', email: 'alice@example.com', role: 'admin' },
-            { id: 2, name: 'Bob', email: 'bob@example.com', role: 'editor' },
-          ]);
+        'family fam-1 exists': async () => {
+          await clearInvitations();
+          // pas d'invitation à pré-charger — POST créera la nouvelle
         },
       },
-    });
-
-    await verifier.verifyProvider();
+    }).verifyProvider();
+    // Pact rejoue GET /api/invitations/inv-1 et POST /api/invitations
+    // et compare les réponses réelles aux matchers du pact file
   });
 });
 ```
 
----
+Pas-à-pas : (1) la vraie app démarre sur un port aléatoire — pas de mock ; (2) `pactUrls` pointe vers le pact file produit par le test consumer ; (3) chaque `stateHandler` est appelé juste avant l'interaction correspondante — il seed ou nettoie la DB pour que la requête ait une réponse valide ; (4) si `tribu-api` renomme `familyId` en `groupId`, Pact échoue ici car le matcher `string('fam-1')` vérifie que le champ `familyId` existe dans la réponse.
 
-## Pact Broker
+## 4. Pièges & misconceptions
 
-Le Pact Broker centralise les contrats et permet la vérification croisee.
+- **Contract test qui teste la logique métier.** Vérifier dans un contract test que le service refuse une invitation en doublon, qu'un email est valide, ou qu'un RBAC est appliqué — c'est faux. Le contract test ne couvre que le **format du contrat** (champs, types, status codes). La logique métier reste dans les tests unitaires. *Correct* : chaque test Pact décrit une interaction atomique et ne contient pas d'assertions sur des règles de gestion.
 
-### Avec Docker
+- **Contrat non partagé entre équipes.** Envoyer le pact file par email, le commit dans le mauvais repo, ou laisser chaque équipe le reconstruire à la main — le contrat n'est plus une source de vérité commune. *Correct* : publier le pact file via le Pact Broker (ou via un artefact CI) et l'adresser par une URL stable dans le `Verifier`.
 
-```yaml
-# docker-compose.yml
-services:
-  pact-broker:
-    image: pactfoundation/pact-broker:latest
-    ports:
-      - "9292:9292"
-    environment:
-      PACT_BROKER_DATABASE_URL: sqlite:///pact_broker.sqlite3
-      PACT_BROKER_LOG_LEVEL: INFO
+- **Confondre contract testing et e2e.** Un contract test ne démarre pas l'UI, ne simule pas un utilisateur, n'a pas besoin d'une base populée en permanence. Il ne remplace pas les e2e. *Correct* : contract test = vérification du **format de communication** entre deux services ; e2e = vérification des **scénarios utilisateur end-to-end**.
+
+- **Matchers trop stricts (valeurs exactes).** Écrire `id: 'inv-1'` au lieu de `id: string('inv-1')` → le contrat exige la valeur exacte `'inv-1'`. Si le provider retourne un vrai UUID en prod, le contrat échoue inutilement. *Correct* : utiliser `string`, `integer`, `like` pour les champs dont la valeur change ; réserver les valeurs exactes aux champs sémantiquement fixes (ex. `status: 'pending'`).
+
+- **Oublier les state handlers.** Sans state handler pour `'invitation inv-1 exists'`, le provider reçoit `GET /api/invitations/inv-1` alors que la DB est vide — il renvoie 404 et la vérification échoue pour la mauvaise raison. *Correct* : chaque `given` du consumer **doit** avoir un state handler correspondant côté provider.
+
+## 5. Ancrage TribuZen
+
+Couche fil-rouge : **contrat entre le front TribuZen et l'API famille/invitation (consumer-driven)** (`smaurier/tribuzen`).
+
+- `InvitationApiClient` (front) consomme `GET /api/invitations/:id` et `POST /api/invitations`. Ces deux endpoints sont précisément ceux pour lesquels on écrit les contrats Pact côté consumer.
+- L'équipe API (ou toi seul en solo) peut faire évoluer les routes NestJS sans craindre de casser le front : la suite Pact détecte tout renommage de champ, tout changement de status code, tout retrait de champ dans la réponse.
+- Le pact file `tribu-front-tribu-api.json` engagé dans le repo est la preuve formelle que les deux couches se parlent — bien plus fiable qu'un commentaire dans le code ou une documentation OpenAPI non vérifiée.
+- En solo, le broker est optionnel : un artefact CI ou un chemin relatif entre les deux projets suffit. Le broker devient indispensable dès qu'il y a plus d'un consumer (ex. mobile TribuZen).
+
+## 6. Points clés
+
+1. Le contract testing consumer-driven inverse la responsabilité : c'est le **consumer** qui définit ses attentes, pas le provider.
+2. **Consumer** = génère le pact file via un test contre un mock server ; **Provider** = vérifie le pact file contre sa vraie API.
+3. Le **pact file JSON** est la source de vérité partagée entre les deux équipes — le renommer ou le reconstruire à la main brise le modèle.
+4. `PactV3({ consumer, provider, dir })` + chaîne `.addInteraction().given().uponReceiving().withRequest().willRespondWith().executeTest()` — API consommateur.
+5. `MatchersV3` : `string`, `integer`, `like`, `eachLike`, `regex` — préférer le **type** à la valeur exacte pour des contrats durables.
+6. `Verifier({ providerBaseUrl, pactUrls, stateHandlers })` + `.verifyProvider()` — API provider ; les `stateHandlers` seedent la DB avant chaque interaction.
+7. Le **Pact Broker** centralise le versionnement des contrats ; `can-i-deploy` bloque un déploiement si le contrat n'est pas vérifié par le provider cible.
+8. Contract testing ≠ e2e : pas de services déployés ensemble, pas d'UI, pas de scénarios utilisateur — uniquement la vérification du format de communication.
+
+## 7. Seeds Anki
+
+```
+Qu'est-ce que le contract testing consumer-driven ?|Le consumer définit ses attentes (contrat) ; le provider s'engage à les respecter — chaque équipe valide indépendamment
+Quels sont les deux rôles dans Pact ?|Consumer (génère le pact file contre un mock server) et Provider (vérifie le pact file contre sa vraie API)
+Qu'est-ce qu'un pact file ?|Un fichier JSON généré automatiquement par le test consumer, contenant toutes les interactions — source de vérité partagée
+Différence entre string() et une valeur exacte dans MatchersV3 ?|string() vérifie uniquement que le champ est de type string ; une valeur exacte impose la valeur littérale — préférer string() pour des contrats stables
+À quoi servent les state handlers côté provider ?|À préparer la base de données (seed/cleanup) dans l'état requis par le champ given avant que Pact rejoue chaque interaction
+Qu'est-ce que can-i-deploy ?|Commande Pact Broker qui vérifie si une version du consumer (ou provider) peut être déployée sans casser les participants déjà en production
+Contract testing vs e2e — différence clé ?|Contract testing est rapide, isolé, sans environnement déployé ; e2e est lent, nécessite tous les services actifs, couvre les scénarios utilisateur
+Quel piège se cache derrière les matchers trop stricts ?|Vérifier des valeurs exactes rend le contrat fragile — si l'API retourne des IDs dynamiques (UUID), le contrat échoue inutilement
 ```
 
-### Publier un contrat
+## Pont vers le lab
 
-```bash
-# Publier les pacts au broker
-pnpm pact-broker publish ./pacts \
-  --consumer-app-version=$(git rev-parse --short HEAD) \
-  --broker-base-url=http://localhost:9292 \
-  --tag=$(git branch --show-current)
-```
-
-### Vérifier depuis le broker
-
-```typescript
-const verifier = new Verifier({
-  providerBaseUrl: `http://localhost:${port}`,
-  providerVersion: process.env.GIT_SHA,
-  publishVerificationResult: true,
-
-  // Recuperer les pacts depuis le broker
-  pactBrokerUrl: 'http://localhost:9292',
-  provider: 'user-api',
-
-  // Verifier les pacts des branches deployees
-  consumerVersionSelectors: [
-    { mainBranch: true },
-    { deployedOrReleased: true },
-  ],
-
-  stateHandlers: { /* ... */ },
-});
-```
-
-### Can-I-Deploy
-
-```bash
-# Verifier si le consumer peut etre deploye sans casser le provider
-pnpm pact-broker can-i-deploy \
-  --pacticipant=frontend-app \
-  --version=$(git rev-parse --short HEAD) \
-  --to-environment=production \
-  --broker-base-url=http://localhost:9292
-```
-
----
-
-## Validation de schemas avec Zod
-
-### Le problème avec les types TypeScript
-
-Les types TypeScript disparaissent a l'exécution. Un `interface User` ne valide rien au runtime.
-
-```typescript
-// Les types ne protegent pas au runtime
-interface User {
-  id: number;
-  name: string;
-}
-
-// Ceci compile mais peut planter si l'API retourne autre chose
-const user: User = await response.json();
-// Si response.json() retourne { id: "abc", fullName: "..." }, TypeScript ne dit rien
-```
-
-### Zod : schemas partages consumer/provider
-
-```typescript
-// shared/schemas/user.schema.ts
-import { z } from 'zod';
-
-// Schema Zod = source de verite
-export const UserSchema = z.object({
-  id: z.number().int().positive(),
-  name: z.string().min(1).max(100),
-  email: z.string().email(),
-  role: z.enum(['admin', 'editor', 'viewer']),
-  createdAt: z.string().datetime(),
-});
-
-export const CreateUserSchema = z.object({
-  name: z.string().min(1).max(100),
-  email: z.string().email(),
-  role: z.enum(['admin', 'editor', 'viewer']),
-});
-
-export const UserListSchema = z.array(UserSchema);
-
-// Types TypeScript derives automatiquement
-export type User = z.infer<typeof UserSchema>;
-export type CreateUserRequest = z.infer<typeof CreateUserSchema>;
-```
-
-### Cote consumer : validation au runtime
-
-```typescript
-// consumer/src/api/user-api.ts
-import { UserSchema, UserListSchema } from '@shared/schemas/user.schema';
-import type { User, CreateUserRequest } from '@shared/schemas/user.schema';
-
-export class UserApi {
-  constructor(private baseUrl: string) {}
-
-  async getUser(id: number): Promise<User> {
-    const response = await fetch(`${this.baseUrl}/api/users/${id}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const data = await response.json();
-
-    // Validation Zod au runtime !
-    const result = UserSchema.safeParse(data);
-    if (!result.success) {
-      console.error('API contract violation:', result.error.flatten());
-      throw new Error('Invalid API response');
-    }
-
-    return result.data;
-  }
-
-  async listUsers(): Promise<User[]> {
-    const response = await fetch(`${this.baseUrl}/api/users`);
-    const data = await response.json();
-    return UserListSchema.parse(data); // Throw si invalide
-  }
-}
-```
-
-### Cote provider : validation des requêtes
-
-```typescript
-// provider/src/routes/users.ts
-import express from 'express';
-import { CreateUserSchema } from '@shared/schemas/user.schema';
-
-const router = express.Router();
-
-router.post('/api/users', async (req, res) => {
-  // Valider le body avec le meme schema Zod
-  const result = CreateUserSchema.safeParse(req.body);
-
-  if (!result.success) {
-    return res.status(400).json({
-      error: 'Validation failed',
-      details: result.error.flatten().fieldErrors,
-    });
-  }
-
-  const user = await createUser(result.data);
-  return res.status(201).json(user);
-});
-
-export default router;
-```
-
-### Tests de schema (consumer et provider)
-
-```typescript
-// shared/schemas/__tests__/user.schema.test.ts
-import { describe, it, expect } from 'vitest';
-import { UserSchema, CreateUserSchema } from '../user.schema';
-
-describe('UserSchema', () => {
-  it('should accept a valid user', () => {
-    const result = UserSchema.safeParse({
-      id: 1,
-      name: 'Alice',
-      email: 'alice@example.com',
-      role: 'admin',
-      createdAt: '2025-01-15T10:30:00Z',
-    });
-
-    expect(result.success).toBe(true);
-  });
-
-  it('should reject user with invalid email', () => {
-    const result = UserSchema.safeParse({
-      id: 1,
-      name: 'Alice',
-      email: 'not-an-email',
-      role: 'admin',
-      createdAt: '2025-01-15T10:30:00Z',
-    });
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.flatten().fieldErrors.email).toBeDefined();
-    }
-  });
-
-  it('should reject unknown role', () => {
-    const result = UserSchema.safeParse({
-      id: 1,
-      name: 'Alice',
-      email: 'alice@example.com',
-      role: 'superadmin', // N'existe pas
-      createdAt: '2025-01-15T10:30:00Z',
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  it('should reject negative id', () => {
-    const result = UserSchema.safeParse({
-      id: -1,
-      name: 'Alice',
-      email: 'alice@example.com',
-      role: 'admin',
-      createdAt: '2025-01-15T10:30:00Z',
-    });
-
-    expect(result.success).toBe(false);
-  });
-});
-
-describe('CreateUserSchema', () => {
-  it('should accept valid creation data', () => {
-    const result = CreateUserSchema.safeParse({
-      name: 'Bob',
-      email: 'bob@example.com',
-      role: 'editor',
-    });
-
-    expect(result.success).toBe(true);
-  });
-
-  it('should reject empty name', () => {
-    const result = CreateUserSchema.safeParse({
-      name: '',
-      email: 'bob@example.com',
-      role: 'editor',
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  it('should strip unknown fields', () => {
-    const result = CreateUserSchema.safeParse({
-      name: 'Bob',
-      email: 'bob@example.com',
-      role: 'editor',
-      isAdmin: true, // Champ inconnu
-    });
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect('isAdmin' in result.data).toBe(false);
-    }
-  });
-});
-```
-
----
-
-## Changements cassants vs non-cassants
-
-### Non-cassants (backward compatible)
-
-| Changement | Exemple | Pourquoi c'est OK |
-|-----------|---------|-------------------|
-| Ajouter un champ optionnel | `+ avatar?: string` | Les anciens consumers l'ignorent |
-| Ajouter un endpoint | `+ GET /api/users/search` | N'affecte pas les routes existantes |
-| Ajouter une valeur d'enum | `role: 'admin' \| 'super-admin'` | Si le consumer ne filtre pas |
-| Assouplir une validation | `min(3)` -> `min(1)` | Accepte plus, rejette moins |
-
-### Cassants (breaking changes)
-
-| Changement | Exemple | Pourquoi ça casse |
-|-----------|---------|-------------------|
-| Renommer un champ | `name` -> `fullName` | Le consumer cherche `name` |
-| Supprimer un champ | `- email` | Le consumer l'utilise |
-| Changer un type | `id: number` -> `id: string` | Parsing différent |
-| Rendre obligatoire | `bio?` -> `bio` (required) | Les requests sans `bio` echouent |
-| Restreindre une validation | `min(1)` -> `min(5)` | Des inputs valides deviennent invalides |
-| Changer un status code | `201` -> `200` | Le consumer check le status |
-
-### Detection automatique avec Zod
-
-```typescript
-// scripts/check-breaking-changes.ts
-import { z } from 'zod';
-
-// Ancien schema (version N)
-const UserV1 = z.object({
-  id: z.number(),
-  name: z.string(),
-  email: z.string().email(),
-});
-
-// Nouveau schema (version N+1)
-const UserV2 = z.object({
-  id: z.number(),
-  fullName: z.string(), // Renomme !
-  email: z.string().email(),
-  avatar: z.string().optional(), // Ajoute (OK)
-});
-
-// Test de compatibilite : les donnees V2 passent-elles le schema V1 ?
-function checkBackwardCompatibility(
-  oldSchema: z.ZodSchema,
-  sampleNewData: unknown,
-): void {
-  const result = oldSchema.safeParse(sampleNewData);
-  if (!result.success) {
-    console.error('BREAKING CHANGE detected !');
-    console.error('V2 data does not satisfy V1 schema:');
-    console.error(result.error.flatten().fieldErrors);
-    process.exit(1);
-  }
-  console.log('No breaking changes detected.');
-}
-
-// Tester
-checkBackwardCompatibility(UserV1, {
-  id: 1,
-  fullName: 'Alice', // V1 attend "name", pas "fullName"
-  email: 'alice@example.com',
-  avatar: 'https://...',
-});
-// Output: BREAKING CHANGE detected !
-// { name: ['Required'] }
-```
-
----
-
-## API versioning
-
-### Stratégies
-
-| Stratégie | Exemple | Avantage | Inconvenient |
-|-----------|---------|----------|-------------|
-| URL path | `/api/v1/users` | Simple, explicite | Duplication de routes |
-| Header | `Accept: application/vnd.api+json;version=2` | URL propre | Cache complique |
-| Query param | `/api/users?version=2` | Simple | Peut etre oublie |
-
-### Implementation avec Express
-
-```typescript
-// provider/src/routes/users.ts
-import express from 'express';
-import { UserSchemaV1, UserSchemaV2 } from '@shared/schemas/user.schema';
-
-const router = express.Router();
-
-// V1 : ancien format (maintenu pour compatibilite)
-router.get('/api/v1/users/:id', async (req, res) => {
-  const user = await findUser(req.params.id);
-  return res.json({
-    id: user.id,
-    name: user.name,           // V1 : "name"
-    email: user.email,
-  });
-});
-
-// V2 : nouveau format
-router.get('/api/v2/users/:id', async (req, res) => {
-  const user = await findUser(req.params.id);
-  return res.json({
-    id: user.id,
-    fullName: user.name,       // V2 : "fullName"
-    email: user.email,
-    avatar: user.avatar ?? null,
-    createdAt: user.createdAt,
-  });
-});
-
-export default router;
-```
-
-### Contract tests par version
-
-```typescript
-describe('User API v1 contract', () => {
-  it('should return user with "name" field', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/users/1`);
-    const data = await response.json();
-    const result = UserSchemaV1.safeParse(data);
-    expect(result.success).toBe(true);
-  });
-});
-
-describe('User API v2 contract', () => {
-  it('should return user with "fullName" field', async () => {
-    const response = await fetch(`${baseUrl}/api/v2/users/1`);
-    const data = await response.json();
-    const result = UserSchemaV2.safeParse(data);
-    expect(result.success).toBe(true);
-  });
-});
-```
-
----
-
-## GraphQL contract testing
-
-### Le problème spécifique a GraphQL
-
-GraphQL n'a pas de routes/endpoints distincts. Le contrat est défini par le **schema** et les **queries/mutations** utilisees par chaque consumer.
-
-### Approche : schema-first + operation testing
-
-```graphql
-# schema.graphql
-type User {
-  id: ID!
-  name: String!
-  email: String!
-  role: Role!
-  posts: [Post!]!
-}
-
-enum Role {
-  ADMIN
-  EDITOR
-  VIEWER
-}
-
-type Post {
-  id: ID!
-  title: String!
-  content: String!
-}
-
-type Query {
-  user(id: ID!): User
-  users(role: Role): [User!]!
-}
-
-type Mutation {
-  createUser(input: CreateUserInput!): User!
-}
-
-input CreateUserInput {
-  name: String!
-  email: String!
-  role: Role!
-}
-```
-
-### Test de non-regression du schema
-
-```typescript
-// tests/schema-compat.test.ts
-import { describe, it, expect } from 'vitest';
-import { buildSchema, findBreakingChanges } from 'graphql';
-import { readFileSync } from 'node:fs';
-
-describe('GraphQL Schema Compatibility', () => {
-  it('should not have breaking changes compared to published schema', () => {
-    const publishedSchema = buildSchema(
-      readFileSync('schemas/published/schema.graphql', 'utf-8'),
-    );
-    const currentSchema = buildSchema(
-      readFileSync('schemas/current/schema.graphql', 'utf-8'),
-    );
-
-    const breakingChanges = findBreakingChanges(publishedSchema, currentSchema);
-
-    if (breakingChanges.length > 0) {
-      console.error('Breaking changes detected:');
-      breakingChanges.forEach((change) => {
-        console.error(`  - ${change.type}: ${change.description}`);
-      });
-    }
-
-    expect(breakingChanges).toHaveLength(0);
-  });
-});
-```
-
-### Test des operations consumer
-
-```typescript
-// consumer/tests/graphql-contract.test.ts
-import { describe, it, expect } from 'vitest';
-import { graphql, buildSchema } from 'graphql';
-import { readFileSync } from 'node:fs';
-
-const schema = buildSchema(
-  readFileSync('schemas/current/schema.graphql', 'utf-8'),
-);
-
-describe('Consumer GraphQL operations', () => {
-  it('UserProfile query should be valid against schema', () => {
-    // La query utilisee par le consumer
-    const query = `
-      query UserProfile($id: ID!) {
-        user(id: $id) {
-          id
-          name
-          email
-          role
-        }
-      }
-    `;
-
-    // Valider que la query est valide contre le schema
-    const errors = graphql({
-      schema,
-      source: query,
-      // Pas besoin de resolvers pour la validation syntaxique
-    });
-
-    // Si la query est invalide, graphql retourne des erreurs
-    expect(errors).toBeDefined();
-  });
-
-  it('CreateUser mutation should be valid', () => {
-    const mutation = `
-      mutation CreateUser($input: CreateUserInput!) {
-        createUser(input: $input) {
-          id
-          name
-          email
-        }
-      }
-    `;
-
-    const { errors } = require('graphql').validate(schema, require('graphql').parse(mutation));
-    expect(errors).toHaveLength(0);
-  });
-});
-```
-
----
-
-## gRPC et Protocol Buffers
-
-### Compatibilite Protobuf
-
-Protocol Buffers ont des regles de compatibilite intrinseques :
-
-```protobuf
-// user.proto — version 1
-syntax = "proto3";
-
-message User {
-  int32 id = 1;
-  string name = 2;
-  string email = 3;
-}
-
-// user.proto — version 2 (compatible)
-message User {
-  int32 id = 1;
-  string name = 2;
-  string email = 3;
-  string avatar = 4;      // AJOUT OK : nouveau champ optionnel
-  // reserved 5;           // Reserver les numeros supprimes
-}
-```
-
-### Regles de compatibilite Protobuf
-
-| Action | Compatible ? | Explication |
-|--------|-------------|-------------|
-| Ajouter un champ | Oui | Les anciens clients l'ignorent |
-| Supprimer un champ | Oui* | Avec `reserved`, les anciens clients ignorent sa valeur |
-| Renommer un champ | Oui | Le numéro de champ est ce qui compte, pas le nom |
-| Changer le type | Non | `int32` != `string` |
-| Changer le numéro | Non | Le numéro identifie le champ dans le wire format |
-
-### Test de compatibilite
-
-```typescript
-// tests/proto-compat.test.ts
-import { describe, it, expect } from 'vitest';
-import { execSync } from 'node:child_process';
-
-describe('Protobuf backward compatibility', () => {
-  it('should not have breaking changes', () => {
-    // Utiliser buf (outil de linting protobuf)
-    const result = execSync(
-      'buf breaking proto/current --against proto/published',
-      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
-    );
-
-    expect(result).toBe('');
-  });
-});
-```
-
----
-
-## Workflow CI complet pour le contract testing
-
-```yaml
-# .github/workflows/contract-tests.yml
-name: Contract Tests
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-
-jobs:
-  consumer-tests:
-    name: Consumer Contract Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-
-      - name: Run consumer pact tests
-        run: pnpm vitest run tests/pact/
-
-      - name: Upload pact files
-        uses: actions/upload-artifact@v4
-        with:
-          name: pacts
-          path: pacts/
-
-  provider-verification:
-    name: Provider Verification
-    needs: consumer-tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: my-org/user-api # Le repo du provider
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-
-      - name: Download pact files
-        uses: actions/download-artifact@v4
-        with:
-          name: pacts
-          path: pacts/
-
-      - name: Verify provider against pacts
-        run: pnpm vitest run tests/pact/provider.pact.test.ts
-
-  schema-validation:
-    name: Schema Validation (Zod)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-
-      - name: Run schema tests
-        run: pnpm vitest run shared/schemas/
-
-      - name: Check backward compatibility
-        run: pnpm tsx scripts/check-breaking-changes.ts
-```
-
----
-
-## Checklist du module
-
-- [ ] Je comprends pourquoi les tests classiques ne detectent pas les ruptures de contrat
-- [ ] Je sais configurer Pact (consumer + provider) avec TypeScript
-- [ ] Je sais utiliser les matchers Pact (like, eachLike, regex, integer)
-- [ ] Je comprends le role du Pact Broker et de can-i-deploy
-- [ ] J'utilise Zod pour valider les schemas au runtime
-- [ ] Je distingue les changements cassants des non-cassants
-- [ ] Je connais les approches pour GraphQL et gRPC
-- [ ] Mon pipeline CI inclut les contract tests
-
----
-
-## Exercice pratique
-
-1. Creez un client API avec 3 operations (GET, POST, LIST)
-2. Ecrivez les tests Pact cote consumer
-3. Verifiez le contrat cote provider
-4. Creez les schemas Zod partages
-5. Simulez un changement cassant et verifiez que les tests le detectent
-6. Corrigez avec du versioning
-
-> Solution dans le [Lab 16](../labs/lab-16-contract-testing/)
-
----
-
-## Navigation
-
-| Précédent | Suivant |
-|-----------|---------|
-| [15 - TDD et BDD](./15-tdd-et-bdd) | [17 - Performance testing](./17-performance-testing) |
-
----
-
-## Ressources
-
-- [Quiz 16 : Testez vos connaissances](../quizzes/quiz-16-contract.html)
-- [Lab 16 : Contract testing](../labs/lab-16-contract-testing/)
-- [Pact Documentation](https://docs.pact.io/)
-- [Zod Documentation](https://zod.dev/)
-- [Martin Fowler — Consumer-Driven Contracts](https://martinfowler.com/articles/consumerDrivenContracts.html)
-- [GraphQL — findBreakingChanges](https://graphql.org/graphql-js/utilities/#findbreakingchanges)
-- [Buf — Protobuf Linting](https://buf.build/)
-
----
-
-<!-- parcours-recommande -->
-
-::: tip Parcours recommandé
-1. **Screencast** : [screencast 16 contract](../screencasts/screencast-16-contract.md)
-2. **Lab** : [lab-16-contract-testing](../labs/lab-16-contract-testing/README)
-3. **Quiz** : [quiz 16 contract](../quizzes/quiz-16-contract.html)
-:::
+> Lab associé : `06-testing/labs/lab-16-contract-testing/`. Tu y écris le contrat consumer PactV3 pour l'API invitation TribuZen (GET + POST), puis tu vérifies le provider avec `Verifier` et des `stateHandlers` — en `@pact-foundation/pact` réel. Corrigé complet commenté + variante J+30 dans le README du lab.

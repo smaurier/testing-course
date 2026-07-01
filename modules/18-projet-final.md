@@ -1,1033 +1,378 @@
-# Module 18 — Projet final
-
-| Difficulte | Duree estimee | Lab | Quiz |
-|------------|---------------|-----|------|
-| 5/5        | 480 min (8h)  | [Lab 18](../labs/lab-18-projet-final/) | [Quiz 18](../quizzes/quiz-18-projet-final.html) |
-
-## Objectifs
-
-- Appliquer l'ensemble des compétences acquises dans les modules 01 a 17
-- Construire une suite de tests complete pour une application réelle
-- Rediger un document de stratégie de test
-- Livrer 10 deliverables couvrant tous les niveaux de la pyramide de tests
-- Demontrer la maîtrise des outils (Vitest, Playwright, MSW, k6, Zod, GitHub Actions)
-
+---
+titre: Projet final
+cours: 06-testing
+notions: [stratégie de test d'une feature complète, pyramide appliquée, choisir le bon niveau de test, suite maintenable, coverage et gates, CI complète, synthèse du cours]
+outcomes: [concevoir la stratégie de test d'une feature complète, écrire une suite équilibrée unit intégration e2e, mettre en place les gates CI, livrer une feature testée de bout en bout]
+prerequis: [17-performance-testing]
+next: fin-parcours-06-testing
+libs: [{ name: vitest, version: ^4.1.9 }, { name: "@playwright/test", version: ^1 }]
+tribuzen: tester intégralement la feature invitation TribuZen — unit + intégration + e2e + CI
+last-reviewed: 2026-07
 ---
 
-## Contexte du projet
+# Projet final
 
-### L'application : Task Manager
+> **Outcomes — tu sauras FAIRE :** définir une stratégie de test avant de coder, écrire une suite unit + intégration + E2E équilibrée sur une feature réelle, configurer les coverage gates CI qui bloquent une PR non couverte, livrer la feature invitation TribuZen testée de bout en bout.
+> **Difficulté :** :star::star::star::star::star:
 
-Une application de gestion de taches avec :
+## 1. Cas concret d'abord
 
-- **Backend** : API REST Express.js + SQLite (via better-sqlite3)
-- **Frontend** : application SPA (HTML/CSS/TypeScript, pas de framework)
-- **Authentification** : JWT (login/register)
-- **Fonctionnalites** : CRUD taches, filtres (statut, priorite, date), assignation, tags
+La feature invitation TribuZen vient d'être développée : `InvitationService.invite()`, la route `POST /invitations`, et le formulaire frontend. Tu dois la livrer — c'est-à-dire merger une PR où une CI passe, coverage gate inclus. Trois questions concrètes se posent avant d'écrire un seul test :
 
-### Architecture
+1. Combien de tests à quel niveau — unit, intégration, E2E ?
+2. Comment structurer la suite pour qu'elle soit encore maintenable dans 6 mois ?
+3. Quel gate CI bloque la PR si le coverage tombe sous le seuil ?
 
-```
-task-manager/
-├── src/
-│   ├── server/
-│   │   ├── app.ts                  # Express app factory
-│   │   ├── server.ts               # Entrypoint
-│   │   ├── db/
-│   │   │   ├── database.ts         # SQLite connection
-│   │   │   ├── migrations/         # Schema migrations
-│   │   │   └── seeds/              # Donnees de test
-│   │   ├── middleware/
-│   │   │   ├── auth.ts             # JWT verification
-│   │   │   ├── validation.ts       # Zod validation middleware
-│   │   │   └── error-handler.ts    # Error handling global
-│   │   ├── routes/
-│   │   │   ├── auth.routes.ts      # POST /auth/login, POST /auth/register
-│   │   │   ├── tasks.routes.ts     # CRUD /api/tasks
-│   │   │   └── users.routes.ts     # GET /api/users/me
-│   │   ├── services/
-│   │   │   ├── auth.service.ts     # Hash, JWT, login logic
-│   │   │   ├── task.service.ts     # Task business logic
-│   │   │   └── user.service.ts     # User management
-│   │   └── schemas/
-│   │       ├── task.schema.ts      # Zod schemas
-│   │       ├── auth.schema.ts      # Zod schemas
-│   │       └── user.schema.ts      # Zod schemas
-│   └── client/
-│       ├── index.html
-│       ├── app.ts                  # Application principale
-│       ├── api.ts                  # Client HTTP
-│       ├── components/
-│       │   ├── task-list.ts        # Liste des taches
-│       │   ├── task-form.ts        # Formulaire creation/edition
-│       │   ├── task-filters.ts     # Filtres
-│       │   ├── login-form.ts       # Formulaire de connexion
-│       │   └── header.ts           # Header avec user info
-│       ├── services/
-│       │   ├── auth.client.ts      # Gestion du token JWT
-│       │   └── task.client.ts      # Logique metier client
-│       └── utils/
-│           ├── date-formatter.ts   # Formatage de dates
-│           ├── validators.ts       # Validation cote client
-│           └── dom-helpers.ts      # Utilitaires DOM
-├── tests/
-│   ├── unit/                       # Tests unitaires (Vitest)
-│   ├── integration/                # Tests d'integration API (supertest)
-│   ├── component/                  # Tests de composants client
-│   ├── e2e/                        # Tests E2E (Playwright)
-│   ├── performance/                # Tests de charge (k6)
-│   ├── contract/                   # Tests de contrat (Zod)
-│   └── mocks/                      # MSW handlers
-├── .github/workflows/ci.yml       # Pipeline CI
-├── vitest.config.ts
-├── playwright.config.ts
-└── package.json
-```
+Ce module répond aux trois, avec des exemples sur la feature invitation, et synthétise les 18 modules du cours.
 
-### Endpoints API
+## 2. Théorie complète, concise
 
-| Méthode | Route | Description | Auth |
-|---------|-------|-------------|------|
-| POST | `/auth/register` | Créer un compte | Non |
-| POST | `/auth/login` | Se connecter (retourne JWT) | Non |
-| GET | `/api/users/me` | Profil utilisateur | Oui |
-| GET | `/api/tasks` | Lister les taches (avec filtres) | Oui |
-| GET | `/api/tasks/:id` | Detail d'une tache | Oui |
-| POST | `/api/tasks` | Créer une tache | Oui |
-| PUT | `/api/tasks/:id` | Modifier une tache | Oui |
-| DELETE | `/api/tasks/:id` | Supprimer une tache | Oui |
-| PATCH | `/api/tasks/:id/status` | Changer le statut | Oui |
+### Stratégie de test d'une feature
 
-### Modèle de donnees
+Quatre questions à répondre **avant** le premier test :
 
-```typescript
-// src/server/schemas/task.schema.ts
-import { z } from 'zod';
+1. **Quelles parties sont critiques ?** Logique domaine (`InvitationService`), contrat d'API (`POST /invitations`), UX (formulaire + confirmation).
+2. **Quel niveau couvre le mieux chaque partie ?** Logique → unit, contrat API + SQL → intégration, parcours utilisateur → E2E.
+3. **Quel coverage vise-t-on ?** Statements 80 %, branches 75 % minimum sur la feature.
+4. **Quel gate bloque la livraison ?** Un `vitest run --coverage` qui sort avec code 1 si un seuil est franchi.
 
-export const TaskStatusSchema = z.enum(['todo', 'in-progress', 'done', 'cancelled']);
-export const TaskPrioritySchema = z.enum(['low', 'medium', 'high', 'urgent']);
+### Pyramide appliquée
 
-export const TaskSchema = z.object({
-  id: z.number().int().positive(),
-  title: z.string().min(1).max(200),
-  description: z.string().max(2000).optional(),
-  status: TaskStatusSchema,
-  priority: TaskPrioritySchema,
-  dueDate: z.string().datetime().nullable(),
-  tags: z.array(z.string().max(50)).max(10),
-  assigneeId: z.number().int().positive().nullable(),
-  createdBy: z.number().int().positive(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+La pyramide de tests (Kent Beck) est une heuristique, pas un dogme : plus un test est haut dans la pyramide, plus il est lent, fragile et cher à maintenir.
+
+| Niveau | Part | Outil | Ce qu'on vérifie |
+|--------|------|-------|-----------------|
+| Unit | 60 % | Vitest | logique domaine, validation, cas limites, branches |
+| Intégration | 25 % | Vitest + Supertest + Prisma | contrat HTTP, SQL, middleware auth |
+| E2E | 15 % | Playwright | parcours utilisateur critiques, UX observable |
+
+L'antipattern **pyramide inversée** : couvrir les branches de `InvitationService` avec 30 specs Playwright. La CI dure 30 min, un bug dans le service prend 10 étapes de debug, le feedback est inutilisable.
+
+### Choisir le bon niveau par cas
+
+| Situation | Niveau recommandé | Pourquoi |
+|-----------|------------------|----------|
+| Règle métier (`ALREADY_INVITED`) | Unit | logique pure, rapide, branches isolées |
+| Route API + validation Zod + JWT | Intégration | teste la couche HTTP avec son contexte réel |
+| Formulaire → confirmation dans le browser | E2E | UX observable uniquement avec un vrai navigateur |
+| Email envoyé par le notifier | Unit (mock) | I/O externe → stub/spy, pas E2E |
+
+**Ne pas couvrir la même logique à 3 niveaux.** Si `InvitationService` est couvert en unit, le test d'intégration n'a pas besoin de retester toutes les branches — il vérifie que la couche HTTP + DB fonctionne ensemble.
+
+### Suite maintenable
+
+Quatre règles non négociables :
+
+1. **Isolation totale.** Chaque test peut s'exécuter seul dans n'importe quel ordre. `beforeEach` reconstruit les doubles Vitest ou rollback la DB Prisma. Aucun état partagé entre tests.
+2. **Nommage comportemental.** `it("rejette un email déjà invité sans persister ni notifier")` > `it("test cas doublon")`. Le nom est la documentation du comportement attendu.
+3. **Structure en 3 couches.** `describe('<Feature>')` → `describe('<méthode/route>')` → `it('<comportement observable>')`.
+4. **Reset systématique.** `afterEach(() => vi.clearAllMocks())` (Vitest) ou `await prisma.invitation.deleteMany()` (intégration). Sans reset, les doubles fuient et les tests passent/échouent selon l'ordre.
+
+### Coverage et gates
+
+Coverage = mesure du code exécuté par les tests. Les métriques utiles :
+
+- **Statements** (80 % cible globale) : lignes exécutées.
+- **Branches** (75 % minimum) : `if/else`, ternaires — c'est là que les bugs se cachent.
+- **Functions** (80 %) : toutes les fonctions atteintes.
+
+Configurer le gate dans Vitest :
+
+```ts
+// vitest.config.ts
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    coverage: {
+      provider: 'v8',
+      thresholds: {
+        statements: 80,
+        branches: 75,
+        functions: 80,
+        lines: 80,
+      },
+    },
+  },
 });
-
-export const CreateTaskSchema = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().max(2000).optional(),
-  priority: TaskPrioritySchema.default('medium'),
-  dueDate: z.string().datetime().nullable().optional(),
-  tags: z.array(z.string().max(50)).max(10).default([]),
-  assigneeId: z.number().int().positive().nullable().optional(),
-});
-
-export const UpdateTaskSchema = CreateTaskSchema.partial();
-
-export const TaskFilterSchema = z.object({
-  status: TaskStatusSchema.optional(),
-  priority: TaskPrioritySchema.optional(),
-  assigneeId: z.coerce.number().int().positive().optional(),
-  search: z.string().max(100).optional(),
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  sortBy: z.enum(['createdAt', 'dueDate', 'priority', 'title']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-});
-
-export type Task = z.infer<typeof TaskSchema>;
-export type CreateTask = z.infer<typeof CreateTaskSchema>;
-export type UpdateTask = z.infer<typeof UpdateTaskSchema>;
-export type TaskFilter = z.infer<typeof TaskFilterSchema>;
 ```
 
----
+Si un seuil est franchi, Vitest sort avec **exit code 1** → la CI step échoue → la PR ne peut pas merger. Ne jamais augmenter un seuil sans justification : c'est un contrat d'équipe.
 
-## Les 10 deliverables
+### CI complète
 
-### Deliverable 1 : Document de stratégie de test
+Un pipeline minimal en 4 jobs :
 
-Redigez un document (1-2 pages) decrivant :
-
-```markdown
-# Strategie de test — Task Manager
-
-## Pyramide de tests
-- Unite : ~60% des tests (services, utils, validators)
-- Integration : ~25% des tests (API routes + DB)
-- E2E : ~15% des tests (parcours utilisateur critiques)
-
-## Couverture cible
-- Global : 80% statements, 75% branches
-- Services : 90%+ (logique metier critique)
-- Utils : 95%+ (fonctions pures)
-- Routes : 80%+ (couvert via integration)
-
-## Outils
-- Vitest : unit + integration + composants
-- Playwright : E2E + visual regression
-- MSW : mocking API cote client
-- k6 : performance
-- Zod : contract validation
-- GitHub Actions : CI/CD
-
-## Environnements
-- Local : SQLite in-memory pour les tests
-- CI : GitHub Actions Ubuntu, Node 20
-- Pas de staging automatise (hors scope)
-
-## Conventions
-- Fichiers : `*.test.ts` pour unit, `*.integration.test.ts` pour integration
-- Nommage : describe('<Module>') > describe('<methode>') > it('should ...')
-- Isolation : chaque test reset la DB (transaction rollback)
-- Pas de tests sequentiels (chaque test est independant)
+```yaml
+# .github/workflows/ci.yml (structure)
+#
+# push / PR
+#   ├── lint + typecheck          (2 min, bloquant)
+#   ├── unit + intégration        (5 min, bloquant, coverage gate)
+#   └── e2e (shard 1/2, 2/2)     (15 min, bloquant)
+#          └── upload artifacts
 ```
 
-### Deliverable 2 : Tests unitaires (80%+ coverage)
+Règles de composition :
 
-```typescript
-// tests/unit/services/task.service.test.ts
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { TaskService } from '../../../src/server/services/task.service';
+- **lint/typecheck** bloque tout : inutile de lancer les tests si le code ne compile pas.
+- **unit + intégration** en un seul job Vitest : ils partagent la même config et le coverage se calcule sur les deux.
+- **E2E** après les tests rapides (fail-fast) et en parallèle via sharding (`--shard=1/2`).
+- **Artifacts** : `playwright-report/`, `coverage/lcov.info` uploadés même en cas d'échec (`if: always()`).
 
-describe('TaskService', () => {
-  let taskService: TaskService;
-  let mockDb: {
-    prepare: ReturnType<typeof vi.fn>;
-  };
+### Synthèse des 18 modules
 
-  beforeEach(() => {
-    mockDb = {
-      prepare: vi.fn(),
-    };
-    taskService = new TaskService(mockDb as any);
-  });
+| # | Notion | Outil clé |
+|---|--------|-----------|
+| 01 | Anatomie d'un test, TDD | Vitest |
+| 02 | Vitest fondamentaux | Vitest |
+| 03 | Assertions avancées | Vitest |
+| 04 | Mocking et test doubles | vi.fn / vi.spyOn / vi.mock |
+| 05 | Tests asynchrones | async/await, fake timers |
+| 06 | Fixtures et factories | beforeEach, test.extend |
+| 07 | Tests d'intégration | Supertest |
+| 08 | MSW | msw |
+| 09 | Tests Prisma | Prisma + DB test |
+| 10 | Tests de composants | Testing Library |
+| 11 | E2E Playwright bases | Playwright |
+| 12 | Page Objects et fixtures | Playwright POM |
+| 13 | Visual regression | Playwright screenshots |
+| 14 | Accessibilité | axe-core + Playwright |
+| 15 | Contract tests | Zod |
+| 16 | CI GitHub Actions | GitHub Actions |
+| 17 | Performance testing | k6 |
+| 18 | Projet final (ce module) | tout |
 
-  describe('create', () => {
-    it('should create a task with default values', () => {
-      const mockStmt = {
-        run: vi.fn().mockReturnValue({ lastInsertRowid: 1 }),
-      };
-      const mockGetStmt = {
-        get: vi.fn().mockReturnValue({
-          id: 1,
-          title: 'Test task',
-          status: 'todo',
-          priority: 'medium',
-          tags: '[]',
-          createdBy: 1,
-        }),
-      };
-      mockDb.prepare
-        .mockReturnValueOnce(mockStmt)
-        .mockReturnValueOnce(mockGetStmt);
+## 3. Worked examples
 
-      const task = taskService.create(
-        { title: 'Test task' },
-        1, // userId
-      );
+### Plan de test complet — feature invitation TribuZen
 
-      expect(task.id).toBe(1);
-      expect(task.title).toBe('Test task');
-      expect(task.status).toBe('todo');
-      expect(mockStmt.run).toHaveBeenCalled();
-    });
+La feature à couvrir : un membre d'une famille TribuZen envoie une invitation par email.
 
-    it('should reject empty title', () => {
-      expect(() =>
-        taskService.create({ title: '' }, 1),
-      ).toThrow();
-    });
+#### Couche unit — InvitationService (4 tests)
 
-    it('should reject title longer than 200 characters', () => {
-      expect(() =>
-        taskService.create({ title: 'a'.repeat(201) }, 1),
-      ).toThrow();
-    });
-  });
-
-  describe('updateStatus', () => {
-    it('should update task status', () => {
-      const mockStmt = {
-        run: vi.fn().mockReturnValue({ changes: 1 }),
-      };
-      const mockGetStmt = {
-        get: vi.fn().mockReturnValue({
-          id: 1,
-          title: 'Task',
-          status: 'in-progress',
-          createdBy: 1,
-        }),
-      };
-      mockDb.prepare
-        .mockReturnValueOnce(mockGetStmt) // findById
-        .mockReturnValueOnce(mockStmt)     // update
-        .mockReturnValueOnce(mockGetStmt); // return updated
-
-      const task = taskService.updateStatus(1, 'in-progress', 1);
-      expect(task.status).toBe('in-progress');
-    });
-
-    it('should throw if task does not belong to user', () => {
-      const mockGetStmt = {
-        get: vi.fn().mockReturnValue({
-          id: 1,
-          title: 'Task',
-          status: 'todo',
-          createdBy: 2, // Different user
-        }),
-      };
-      mockDb.prepare.mockReturnValueOnce(mockGetStmt);
-
-      expect(() =>
-        taskService.updateStatus(1, 'done', 999),
-      ).toThrow('Unauthorized');
-    });
-
-    it('should throw for invalid status transition', () => {
-      const mockGetStmt = {
-        get: vi.fn().mockReturnValue({
-          id: 1, title: 'Task', status: 'done', createdBy: 1,
-        }),
-      };
-      mockDb.prepare.mockReturnValueOnce(mockGetStmt);
-
-      // "done" -> "todo" n'est pas autorise
-      expect(() =>
-        taskService.updateStatus(1, 'todo', 1),
-      ).toThrow('Invalid status transition');
-    });
-  });
-
-  describe('list', () => {
-    it('should return paginated results', () => {
-      const mockCountStmt = {
-        get: vi.fn().mockReturnValue({ count: 50 }),
-      };
-      const mockListStmt = {
-        all: vi.fn().mockReturnValue(
-          Array.from({ length: 20 }, (_, i) => ({
-            id: i + 1,
-            title: `Task ${i + 1}`,
-            status: 'todo',
-            tags: '[]',
-          })),
-        ),
-      };
-      mockDb.prepare
-        .mockReturnValueOnce(mockCountStmt)
-        .mockReturnValueOnce(mockListStmt);
-
-      const result = taskService.list({ page: 1, limit: 20 }, 1);
-
-      expect(result.items).toHaveLength(20);
-      expect(result.total).toBe(50);
-      expect(result.page).toBe(1);
-      expect(result.totalPages).toBe(3);
-    });
-
-    it('should filter by status', () => {
-      const mockCountStmt = { get: vi.fn().mockReturnValue({ count: 5 }) };
-      const mockListStmt = { all: vi.fn().mockReturnValue([]) };
-      mockDb.prepare
-        .mockReturnValueOnce(mockCountStmt)
-        .mockReturnValueOnce(mockListStmt);
-
-      taskService.list({ status: 'done', page: 1, limit: 20 }, 1);
-
-      // Verifier que la requete SQL contient le filtre
-      expect(mockDb.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('status = ?'),
-      );
-    });
-  });
-});
-
-// tests/unit/utils/date-formatter.test.ts
+```ts
+// src/invitation/invitation-service.test.ts
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { formatRelativeDate, formatDueDate, isOverdue } from '../../../src/client/utils/date-formatter';
+import { InvitationService } from './invitation-service';
+import type { InvitationRepo, Notifier } from './invitation-service';
 
-describe('date-formatter', () => {
+describe('InvitationService', () => {
+  let repo: InvitationRepo;
+  let notifier: Notifier;
+  let svc: InvitationService;
+
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2025-06-15T12:00:00Z'));
+    // STUB repo : réponses figées, contrôle les entrées
+    repo = {
+      existsPending: vi.fn().mockResolvedValue(false),
+      save: vi.fn().mockResolvedValue({ id: 'inv-1', token: 'tok-abc' }),
+    };
+    // MOCK notifier : on assertera sur les appels (behavior verification)
+    notifier = { sendInvitationEmail: vi.fn().mockResolvedValue(undefined) };
+    svc = new InvitationService(repo, notifier);
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    vi.clearAllMocks(); // efface l'historique, garde les implémentations
   });
 
-  describe('formatRelativeDate', () => {
-    it('should return "just now" for dates less than 1 minute ago', () => {
-      const date = new Date('2025-06-15T11:59:30Z');
-      expect(formatRelativeDate(date)).toBe('just now');
-    });
+  it('persiste et notifie exactement une fois (cas nominal)', async () => {
+    const result = await svc.invite('fam-1', 'bob@tribu.fr');
 
-    it('should return "5 minutes ago"', () => {
-      const date = new Date('2025-06-15T11:55:00Z');
-      expect(formatRelativeDate(date)).toBe('5 minutes ago');
-    });
-
-    it('should return "yesterday"', () => {
-      const date = new Date('2025-06-14T12:00:00Z');
-      expect(formatRelativeDate(date)).toBe('yesterday');
-    });
+    // state verification sur le résultat (stub)
+    expect(result).toEqual({ id: 'inv-1', token: 'tok-abc' });
+    expect(repo.save).toHaveBeenCalledWith('fam-1', 'bob@tribu.fr');
+    // behavior verification : protocole notif
+    expect(notifier.sendInvitationEmail).toHaveBeenCalledOnce();
+    expect(notifier.sendInvitationEmail).toHaveBeenCalledWith('bob@tribu.fr', 'fam-1');
   });
 
-  describe('isOverdue', () => {
-    it('should return true for past due dates', () => {
-      expect(isOverdue('2025-06-14T00:00:00Z')).toBe(true);
-    });
+  it('rejette un doublon sans persister ni notifier', async () => {
+    vi.mocked(repo.existsPending).mockResolvedValue(true);
 
-    it('should return false for future due dates', () => {
-      expect(isOverdue('2025-06-16T00:00:00Z')).toBe(false);
-    });
+    await expect(svc.invite('fam-1', 'bob@tribu.fr')).rejects.toThrow('ALREADY_INVITED');
 
-    it('should return false for null due date', () => {
-      expect(isOverdue(null)).toBe(false);
-    });
-  });
-});
-
-// tests/unit/utils/validators.test.ts
-import { describe, it, expect } from 'vitest';
-import { validateEmail, validatePassword, sanitizeInput } from '../../../src/client/utils/validators';
-
-describe('validators', () => {
-  describe('validateEmail', () => {
-    it.each([
-      ['user@example.com', true],
-      ['name+tag@domain.co.uk', true],
-      ['invalid', false],
-      ['@domain.com', false],
-      ['user@', false],
-      ['', false],
-    ])('validateEmail("%s") should return %s', (email, expected) => {
-      expect(validateEmail(email)).toBe(expected);
-    });
+    // preuve d'absence d'effet de bord
+    expect(repo.save).not.toHaveBeenCalled();
+    expect(notifier.sendInvitationEmail).not.toHaveBeenCalled();
   });
 
-  describe('validatePassword', () => {
-    it('should require minimum 8 characters', () => {
-      expect(validatePassword('Abc123!')).toEqual({
-        valid: false,
-        errors: expect.arrayContaining(['Minimum 8 characters']),
-      });
-    });
+  it("propage une panne SMTP sans masquer l'erreur", async () => {
+    vi.mocked(notifier.sendInvitationEmail).mockRejectedValue(new Error('SMTP_DOWN'));
 
-    it('should require uppercase, lowercase, number, and special char', () => {
-      const result = validatePassword('abcdefgh');
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('At least one uppercase letter');
-      expect(result.errors).toContain('At least one number');
-    });
-
-    it('should accept a strong password', () => {
-      expect(validatePassword('Str0ng!Pass')).toEqual({
-        valid: true,
-        errors: [],
-      });
-    });
+    await expect(svc.invite('fam-1', 'bob@tribu.fr')).rejects.toThrow('SMTP_DOWN');
+    // l'invitation a été persistée AVANT la panne
+    expect(repo.save).toHaveBeenCalledOnce();
   });
 
-  describe('sanitizeInput', () => {
-    it('should strip HTML tags', () => {
-      expect(sanitizeInput('<script>alert("xss")</script>'))
-        .toBe('alert("xss")');
-    });
+  it('rejette un email invalide avant toute I/O', async () => {
+    await expect(svc.invite('fam-1', 'not-an-email')).rejects.toThrow('INVALID_EMAIL');
 
-    it('should trim whitespace', () => {
-      expect(sanitizeInput('  hello  ')).toBe('hello');
-    });
+    // aucune I/O déclenchée : validation en amont
+    expect(repo.existsPending).not.toHaveBeenCalled();
   });
 });
 ```
 
-### Deliverable 3 : Tests d'intégration API
+Pas-à-pas : (1) `beforeEach` reconstruit des doubles frais → isolation garantie ; (2) `clearAllMocks` en `afterEach` efface l'historique sans casser les implémentations ; (3) les 4 tests couvrent nominal, doublon, panne infra, et validation d'entrée — 4 branches, pas 4 fois la même chose.
 
-```typescript
-// tests/integration/tasks.integration.test.ts
+#### Couche intégration — route POST /invitations
+
+```ts
+// src/invitation/invitation.routes.integration.test.ts
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
-import { createApp } from '../../src/server/app';
-import { initDatabase, resetDatabase } from '../../src/server/db/database';
-import type { Express } from 'express';
+import { app } from '../../app';
+import { prisma } from '../../db';
 
-describe('Tasks API Integration', () => {
-  let app: Express;
+describe('POST /invitations', () => {
   let authToken: string;
 
   beforeAll(async () => {
-    const db = initDatabase(':memory:');
-    app = createApp(db);
-
-    // Creer un utilisateur et obtenir un token
-    await request(app)
-      .post('/auth/register')
-      .send({ name: 'Test User', email: 'test@example.com', password: 'Str0ng!Pass' });
-
-    const loginRes = await request(app)
+    // Crée un utilisateur test et récupère un JWT réel
+    const res = await request(app)
       .post('/auth/login')
-      .send({ email: 'test@example.com', password: 'Str0ng!Pass' });
-
-    authToken = loginRes.body.token;
+      .send({ email: 'alice@tribu.fr', password: 'Test1234!' });
+    authToken = res.body.token;
   });
 
-  beforeEach(() => {
-    resetDatabase(); // Transaction rollback
+  beforeEach(async () => {
+    // Reset entre chaque test : efface les invitations créées
+    await prisma.invitation.deleteMany();
   });
 
-  describe('POST /api/tasks', () => {
-    it('should create a task and return 201', async () => {
-      const res = await request(app)
-        .post('/api/tasks')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          title: 'New task',
-          priority: 'high',
-          tags: ['feature', 'v2'],
-        });
-
-      expect(res.status).toBe(201);
-      expect(res.body).toMatchObject({
-        title: 'New task',
-        status: 'todo',
-        priority: 'high',
-        tags: ['feature', 'v2'],
-      });
-      expect(res.body.id).toBeGreaterThan(0);
-    });
-
-    it('should return 400 for missing title', async () => {
-      const res = await request(app)
-        .post('/api/tasks')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({ priority: 'low' });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error).toBeDefined();
-    });
-
-    it('should return 401 without auth token', async () => {
-      const res = await request(app)
-        .post('/api/tasks')
-        .send({ title: 'Unauthorized task' });
-
-      expect(res.status).toBe(401);
-    });
+  afterAll(async () => {
+    await prisma.$disconnect();
   });
 
-  describe('GET /api/tasks', () => {
-    it('should list tasks with pagination', async () => {
-      // Creer 25 taches
-      for (let i = 0; i < 25; i++) {
-        await request(app)
-          .post('/api/tasks')
-          .set('Authorization', `Bearer ${authToken}`)
-          .send({ title: `Task ${i}` });
-      }
+  it('crée une invitation et retourne 201', async () => {
+    const res = await request(app)
+      .post('/invitations')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ email: 'bob@tribu.fr', familyId: 'fam-1' });
 
-      const res = await request(app)
-        .get('/api/tasks?page=1&limit=10')
-        .set('Authorization', `Bearer ${authToken}`);
-
-      expect(res.status).toBe(200);
-      expect(res.body.items).toHaveLength(10);
-      expect(res.body.total).toBe(25);
-      expect(res.body.totalPages).toBe(3);
-    });
-
-    it('should filter by status', async () => {
-      await request(app)
-        .post('/api/tasks')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({ title: 'Todo task' });
-
-      const res = await request(app)
-        .get('/api/tasks?status=todo')
-        .set('Authorization', `Bearer ${authToken}`);
-
-      expect(res.body.items.every((t: any) => t.status === 'todo')).toBe(true);
-    });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ email: 'bob@tribu.fr', status: 'pending' });
+    expect(res.body.id).toBeDefined();
   });
 
-  describe('PUT /api/tasks/:id', () => {
-    it('should update a task', async () => {
-      const createRes = await request(app)
-        .post('/api/tasks')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({ title: 'Original title' });
+  it("retourne 409 si l'email est déjà invité", async () => {
+    // Premier envoi
+    await request(app)
+      .post('/invitations')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ email: 'bob@tribu.fr', familyId: 'fam-1' });
 
-      const updateRes = await request(app)
-        .put(`/api/tasks/${createRes.body.id}`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({ title: 'Updated title', priority: 'urgent' });
+    // Doublon
+    const res = await request(app)
+      .post('/invitations')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ email: 'bob@tribu.fr', familyId: 'fam-1' });
 
-      expect(updateRes.status).toBe(200);
-      expect(updateRes.body.title).toBe('Updated title');
-      expect(updateRes.body.priority).toBe('urgent');
-    });
-
-    it('should return 404 for non-existent task', async () => {
-      const res = await request(app)
-        .put('/api/tasks/99999')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({ title: 'Ghost task' });
-
-      expect(res.status).toBe(404);
-    });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('ALREADY_INVITED');
   });
 
-  describe('DELETE /api/tasks/:id', () => {
-    it('should delete a task and return 204', async () => {
-      const createRes = await request(app)
-        .post('/api/tasks')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({ title: 'To be deleted' });
+  it('retourne 401 sans token auth', async () => {
+    const res = await request(app)
+      .post('/invitations')
+      .send({ email: 'eve@tribu.fr', familyId: 'fam-1' });
 
-      const deleteRes = await request(app)
-        .delete(`/api/tasks/${createRes.body.id}`)
-        .set('Authorization', `Bearer ${authToken}`);
-
-      expect(deleteRes.status).toBe(204);
-
-      // Verifier la suppression
-      const getRes = await request(app)
-        .get(`/api/tasks/${createRes.body.id}`)
-        .set('Authorization', `Bearer ${authToken}`);
-
-      expect(getRes.status).toBe(404);
-    });
+    expect(res.status).toBe(401);
   });
 });
 ```
 
-### Deliverable 4 : Tests de composants
+Ce que ce niveau vérifie en plus de l'unit : le middleware JWT parse le token, Zod valide le body, Prisma persiste correctement, la route retourne le bon status HTTP. La logique `ALREADY_INVITED` n'est pas retestée branche par branche — le test unit couvre ça.
 
-```typescript
-// tests/component/task-list.test.ts
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { JSDOM } from 'jsdom';
-import { TaskList } from '../../src/client/components/task-list';
+#### Couche E2E — parcours invitation Playwright
 
-describe('TaskList component', () => {
-  let dom: JSDOM;
-  let container: HTMLElement;
+```ts
+// e2e/invitation.spec.ts
+import { test, expect } from '@playwright/test';
 
-  beforeEach(() => {
-    dom = new JSDOM('<!DOCTYPE html><html><body><div id="app"></div></body></html>');
-    container = dom.window.document.getElementById('app')!;
+test.describe('Feature invitation', () => {
+  test.beforeEach(async ({ page }) => {
+    // Fixture auth : connecter Alice avant chaque test
+    await page.goto('/login');
+    await page.getByLabel('Email').fill('alice@tribu.fr');
+    await page.getByLabel('Mot de passe').fill('Test1234!');
+    await page.getByRole('button', { name: 'Se connecter' }).click();
+    await page.waitForURL('/famille');
   });
 
-  it('should render a list of tasks', () => {
-    const tasks = [
-      { id: 1, title: 'Task 1', status: 'todo', priority: 'high' },
-      { id: 2, title: 'Task 2', status: 'done', priority: 'low' },
-    ];
+  test('Alice invite Bob et voit la confirmation', async ({ page }) => {
+    await page.getByRole('button', { name: 'Inviter un membre' }).click();
+    await page.getByLabel('Email').fill('bob@tribu.fr');
+    await page.getByRole('button', { name: "Envoyer l'invitation" }).click();
 
-    const taskList = new TaskList(container, dom.window.document);
-    taskList.render(tasks);
-
-    const items = container.querySelectorAll('[data-testid="task-item"]');
-    expect(items.length).toBe(2);
+    await expect(page.getByTestId('invitation-success')).toBeVisible();
+    await expect(page.getByText('bob@tribu.fr')).toBeVisible();
   });
 
-  it('should display empty state when no tasks', () => {
-    const taskList = new TaskList(container, dom.window.document);
-    taskList.render([]);
+  test("formulaire valide l'email avant envoi", async ({ page }) => {
+    await page.getByRole('button', { name: 'Inviter un membre' }).click();
+    await page.getByLabel('Email').fill('pas-un-email');
+    await page.getByRole('button', { name: "Envoyer l'invitation" }).click();
 
-    const emptyState = container.querySelector('[data-testid="empty-state"]');
-    expect(emptyState).not.toBeNull();
-    expect(emptyState!.textContent).toContain('No tasks');
-  });
-
-  it('should highlight overdue tasks', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2025-06-15T12:00:00Z'));
-
-    const tasks = [
-      { id: 1, title: 'Overdue', status: 'todo', dueDate: '2025-06-10T00:00:00Z' },
-    ];
-
-    const taskList = new TaskList(container, dom.window.document);
-    taskList.render(tasks);
-
-    const item = container.querySelector('[data-testid="task-item"]');
-    expect(item!.classList.contains('task--overdue')).toBe(true);
-
-    vi.useRealTimers();
-  });
-
-  it('should emit delete event when delete button clicked', () => {
-    const onDelete = vi.fn();
-    const tasks = [{ id: 1, title: 'Task 1', status: 'todo' }];
-
-    const taskList = new TaskList(container, dom.window.document);
-    taskList.onDelete(onDelete);
-    taskList.render(tasks);
-
-    const deleteBtn = container.querySelector('[data-testid="delete-task-1"]') as HTMLButtonElement;
-    deleteBtn.click();
-
-    expect(onDelete).toHaveBeenCalledWith(1);
+    // Erreur client — aucune requête réseau émise
+    await expect(page.getByTestId('email-error')).toBeVisible();
   });
 });
 ```
 
-### Deliverable 5 : MSW handlers
+Deux specs E2E seulement : le chemin heureux (UX observable end-to-end) et un cas d'erreur côté client. La validation d'email côté serveur est couverte en unit + intégration — pas besoin de la rejouer en E2E.
 
-```typescript
-// tests/mocks/handlers.ts
-import { http, HttpResponse, delay } from 'msw';
-import type { Task, CreateTask } from '../../src/server/schemas/task.schema';
-
-let taskIdCounter = 1;
-let tasks: Task[] = [];
-
-export function resetMockData(): void {
-  taskIdCounter = 1;
-  tasks = [
-    {
-      id: taskIdCounter++,
-      title: 'Setup project',
-      description: 'Initialize the repository',
-      status: 'done',
-      priority: 'high',
-      dueDate: null,
-      tags: ['setup'],
-      assigneeId: null,
-      createdBy: 1,
-      createdAt: '2025-06-01T10:00:00Z',
-      updatedAt: '2025-06-01T10:00:00Z',
-    },
-    {
-      id: taskIdCounter++,
-      title: 'Write tests',
-      description: 'Add unit and integration tests',
-      status: 'in-progress',
-      priority: 'high',
-      dueDate: '2025-06-20T00:00:00Z',
-      tags: ['testing', 'quality'],
-      assigneeId: 1,
-      createdBy: 1,
-      createdAt: '2025-06-10T10:00:00Z',
-      updatedAt: '2025-06-12T14:30:00Z',
-    },
-  ];
-}
-
-resetMockData();
-
-export const handlers = [
-  // Auth
-  http.post('/auth/login', async ({ request }) => {
-    await delay(100);
-    const body = (await request.json()) as { email: string; password: string };
-
-    if (body.email === 'test@example.com' && body.password === 'Str0ng!Pass') {
-      return HttpResponse.json({
-        token: 'mock-jwt-token-123',
-        user: { id: 1, name: 'Test User', email: body.email },
-      });
-    }
-
-    return HttpResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-  }),
-
-  // List tasks
-  http.get('/api/tasks', async ({ request }) => {
-    await delay(50);
-    const url = new URL(request.url);
-    const status = url.searchParams.get('status');
-    const page = Number(url.searchParams.get('page') ?? 1);
-    const limit = Number(url.searchParams.get('limit') ?? 20);
-
-    let filtered = [...tasks];
-    if (status) {
-      filtered = filtered.filter((t) => t.status === status);
-    }
-
-    const start = (page - 1) * limit;
-    const items = filtered.slice(start, start + limit);
-
-    return HttpResponse.json({
-      items,
-      total: filtered.length,
-      page,
-      totalPages: Math.ceil(filtered.length / limit),
-    });
-  }),
-
-  // Get task
-  http.get('/api/tasks/:id', async ({ params }) => {
-    await delay(50);
-    const task = tasks.find((t) => t.id === Number(params.id));
-    if (!task) {
-      return HttpResponse.json({ error: 'Task not found' }, { status: 404 });
-    }
-    return HttpResponse.json(task);
-  }),
-
-  // Create task
-  http.post('/api/tasks', async ({ request }) => {
-    await delay(100);
-    const body = (await request.json()) as CreateTask;
-
-    const newTask: Task = {
-      id: taskIdCounter++,
-      title: body.title,
-      description: body.description ?? '',
-      status: 'todo',
-      priority: body.priority ?? 'medium',
-      dueDate: body.dueDate ?? null,
-      tags: body.tags ?? [],
-      assigneeId: body.assigneeId ?? null,
-      createdBy: 1,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    tasks.push(newTask);
-    return HttpResponse.json(newTask, { status: 201 });
-  }),
-
-  // Delete task
-  http.delete('/api/tasks/:id', async ({ params }) => {
-    await delay(50);
-    const index = tasks.findIndex((t) => t.id === Number(params.id));
-    if (index === -1) {
-      return HttpResponse.json({ error: 'Not found' }, { status: 404 });
-    }
-    tasks.splice(index, 1);
-    return new HttpResponse(null, { status: 204 });
-  }),
-];
-```
-
-### Deliverable 6 : Tests E2E avec Playwright
-
-```typescript
-// tests/e2e/page-objects/login.page.ts
-import type { Page, Locator } from '@playwright/test';
-
-export class LoginPage {
-  readonly emailInput: Locator;
-  readonly passwordInput: Locator;
-  readonly submitButton: Locator;
-  readonly errorMessage: Locator;
-
-  constructor(private page: Page) {
-    this.emailInput = page.getByLabel('Email');
-    this.passwordInput = page.getByLabel('Password');
-    this.submitButton = page.getByRole('button', { name: 'Sign in' });
-    this.errorMessage = page.getByTestId('login-error');
-  }
-
-  async goto(): Promise<void> {
-    await this.page.goto('/login');
-  }
-
-  async login(email: string, password: string): Promise<void> {
-    await this.emailInput.fill(email);
-    await this.passwordInput.fill(password);
-    await this.submitButton.click();
-  }
-}
-
-// tests/e2e/page-objects/tasks.page.ts
-import type { Page, Locator } from '@playwright/test';
-
-export class TasksPage {
-  readonly addButton: Locator;
-  readonly taskList: Locator;
-  readonly emptyState: Locator;
-  readonly filterStatus: Locator;
-  readonly searchInput: Locator;
-
-  constructor(private page: Page) {
-    this.addButton = page.getByRole('button', { name: 'New task' });
-    this.taskList = page.getByTestId('task-list');
-    this.emptyState = page.getByTestId('empty-state');
-    this.filterStatus = page.getByLabel('Status filter');
-    this.searchInput = page.getByPlaceholder('Search tasks...');
-  }
-
-  async goto(): Promise<void> {
-    await this.page.goto('/tasks');
-  }
-
-  async createTask(title: string, priority: string = 'medium'): Promise<void> {
-    await this.addButton.click();
-    await this.page.getByLabel('Title').fill(title);
-    await this.page.getByLabel('Priority').selectOption(priority);
-    await this.page.getByRole('button', { name: 'Create' }).click();
-    await this.page.getByText(title).waitFor();
-  }
-
-  async deleteTask(title: string): Promise<void> {
-    const row = this.page.locator('[data-testid="task-item"]', { hasText: title });
-    await row.getByRole('button', { name: 'Delete' }).click();
-    await this.page.getByRole('button', { name: 'Confirm' }).click();
-    await row.waitFor({ state: 'detached' });
-  }
-
-  taskCount(): Promise<number> {
-    return this.page.locator('[data-testid="task-item"]').count();
-  }
-}
-
-// tests/e2e/fixtures/auth.fixture.ts
-import { test as base } from '@playwright/test';
-import { LoginPage } from '../page-objects/login.page';
-import { TasksPage } from '../page-objects/tasks.page';
-
-type Fixtures = {
-  loginPage: LoginPage;
-  tasksPage: TasksPage;
-  authenticatedPage: TasksPage;
-};
-
-export const test = base.extend<Fixtures>({
-  loginPage: async ({ page }, use) => {
-    await use(new LoginPage(page));
-  },
-
-  tasksPage: async ({ page }, use) => {
-    await use(new TasksPage(page));
-  },
-
-  authenticatedPage: async ({ page }, use) => {
-    // Se connecter avant chaque test
-    const loginPage = new LoginPage(page);
-    await loginPage.goto();
-    await loginPage.login('test@example.com', 'Str0ng!Pass');
-    await page.waitForURL('/tasks');
-
-    await use(new TasksPage(page));
-  },
-});
-
-export { expect } from '@playwright/test';
-
-// tests/e2e/tasks.spec.ts
-import { test, expect } from './fixtures/auth.fixture';
-
-test.describe('Task Management', () => {
-  test('should create a new task', async ({ authenticatedPage }) => {
-    await authenticatedPage.createTask('Write documentation', 'high');
-
-    const count = await authenticatedPage.taskCount();
-    expect(count).toBeGreaterThan(0);
-
-    await expect(
-      authenticatedPage.taskList.getByText('Write documentation'),
-    ).toBeVisible();
-  });
-
-  test('should delete a task', async ({ authenticatedPage }) => {
-    await authenticatedPage.createTask('Temporary task');
-    await authenticatedPage.deleteTask('Temporary task');
-
-    await expect(
-      authenticatedPage.taskList.getByText('Temporary task'),
-    ).not.toBeVisible();
-  });
-
-  test('should filter tasks by status', async ({ authenticatedPage }) => {
-    await authenticatedPage.filterStatus.selectOption('done');
-
-    const tasks = authenticatedPage.taskList.locator('[data-testid="task-item"]');
-    const count = await tasks.count();
-
-    for (let i = 0; i < count; i++) {
-      await expect(tasks.nth(i).getByTestId('task-status')).toHaveText('done');
-    }
-  });
-});
-
-test.describe('Authentication', () => {
-  test('should redirect to login when not authenticated', async ({ page }) => {
-    await page.goto('/tasks');
-    await expect(page).toHaveURL('/login');
-  });
-
-  test('should show error for invalid credentials', async ({ loginPage }) => {
-    await loginPage.goto();
-    await loginPage.login('wrong@example.com', 'wrongpass');
-
-    await expect(loginPage.errorMessage).toBeVisible();
-    await expect(loginPage.errorMessage).toContainText('Invalid credentials');
-  });
-});
-```
-
-### Deliverable 7 : Pipeline CI (GitHub Actions)
+#### Pipeline CI complet
 
 ```yaml
 # .github/workflows/ci.yml
-name: CI Pipeline
+name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  quality:
-    name: Code Quality
+  lint:
+    name: Lint + Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm eslint . --max-warnings 0
+      - run: pnpm tsc --noEmit
+
+  tests:
+    name: Unit + Integration (coverage gate)
+    needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
+        with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm eslint . --max-warnings 0
-      - run: pnpm tsc --noEmit
-
-  unit:
-    name: Unit & Integration Tests
-    needs: quality
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm vitest run --coverage --reporter=junit --outputFile=results/junit.xml
-      - uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          file: ./coverage/lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
+      # exit 1 si thresholds non atteints → bloque la PR
+      - run: pnpm vitest run --coverage
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results
-          path: |
-            results/
-            coverage/
+          name: coverage
+          path: coverage/lcov.info
 
   e2e:
-    name: E2E Tests
-    needs: quality
+    name: E2E Playwright
+    needs: lint
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -1036,303 +381,67 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
+        with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm playwright install --with-deps chromium
       - run: pnpm build
       - run: pnpm playwright test --shard=${{ matrix.shard }}/2
-        env:
-          CI: true
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: traces-${{ matrix.shard }}
-          path: test-results/
-
-  contract:
-    name: Contract Tests
-    needs: quality
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm vitest run tests/contract/
+          name: playwright-traces-${{ matrix.shard }}
+          path: playwright-report/
 ```
 
-### Deliverable 8 : Test de performance k6
+## 4. Pièges & misconceptions
 
-```javascript
-// tests/performance/task-api-load.js
-import http from 'k6/http';
-import { check, sleep, group } from 'k6';
+- **Tout en E2E (pyramide inversée).** Couvrir les 10 branches de `InvitationService` avec des specs Playwright : chaque spec prend 8 s, la CI dure 30 min, un bug dans le service prend 12 étapes de debug pour être localisé. *Correct* : la logique métier en unit (ms), le contrat API en intégration (s), l'UX critique en E2E (s à min). La vitesse de feedback est un critère de design.
+- **Pas de stratégie.** Tests écrits au fur et à mesure, sans plan → redondances entre niveaux, cas limites oubliés, coverage artificiel sur le code "facile" (getters, constructeurs), et trous sur les branches critiques (cas d'erreur). *Correct* : 10 minutes de plan (tableau feature × niveau × cas) avant le premier test. Même un post-it suffit.
+- **Suite non maintenable.** Tests qui partagent un état global (module-level `let task = null`), nommage générique (`it('should work')`), doubles non réinitialisés en `afterEach` → tests qui passent ou échouent selon l'ordre d'exécution, et personne ne sait pourquoi. *Correct* : `beforeEach` reconstruit l'état from scratch, chaque test décrit le comportement attendu en une phrase, `afterEach` nettoie les effets de bord. La suite doit être lisible par quelqu'un qui n'a pas écrit le code.
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
-let authToken = '';
+## 5. Ancrage TribuZen
 
-export const options = {
-  stages: [
-    { duration: '30s', target: 10 },
-    { duration: '1m', target: 10 },
-    { duration: '30s', target: 25 },
-    { duration: '1m', target: 25 },
-    { duration: '30s', target: 0 },
-  ],
-  thresholds: {
-    http_req_duration: ['p(95)<500', 'avg<200'],
-    http_req_failed: ['rate<0.01'],
-    'http_req_duration{group:::Task CRUD}': ['p(95)<800'],
-  },
-};
+Couche fil-rouge : **tester intégralement la feature invitation TribuZen — unit + intégration + e2e + CI** (`smaurier/tribuzen`).
 
-export function setup() {
-  const loginRes = http.post(`${BASE_URL}/auth/login`, JSON.stringify({
-    email: 'perf@example.com',
-    password: 'Str0ng!Pass',
-  }), { headers: { 'Content-Type': 'application/json' } });
+En session, on part de `InvitationService` déjà testé en unit (module 04), on ajoute :
 
-  return { token: JSON.parse(loginRes.body).token };
-}
+1. Les tests d'intégration de `POST /invitations` avec Prisma et une DB test isolée (module 09).
+2. Le spec Playwright du parcours invitation — Alice ouvre le formulaire, saisit l'email de Bob, voit la confirmation (module 12).
+3. La config `vitest.config.ts` avec `thresholds` à 80/75 et le workflow CI en 3 jobs.
 
-export default function (data) {
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${data.token}`,
-  };
+C'est exactement ce que fait un dev senior qui livre une feature : pyramide + gate + CI = **feature done**. La PR ne merge pas si la CI est rouge.
 
-  group('Task CRUD', () => {
-    // Create
-    const createRes = http.post(`${BASE_URL}/api/tasks`, JSON.stringify({
-      title: `Perf task ${Date.now()}`,
-      priority: 'medium',
-    }), { headers });
+## 6. Points clés
 
-    check(createRes, {
-      'create: 201': (r) => r.status === 201,
-      'create < 500ms': (r) => r.timings.duration < 500,
-    });
+1. Définir la stratégie avant les tests : quelle partie de la feature, quel niveau, pourquoi — même un tableau de 10 lignes.
+2. Pyramide pratique : 60 % unit, 25 % intégration, 15 % E2E — heuristique de feedback et maintenabilité, pas un dogme.
+3. Choisir le niveau par ce qu'on teste : logique domaine → unit, contrat HTTP/SQL → intégration, UX critique → E2E.
+4. Suite maintenable = isolation totale + nommage comportemental + reset systématique en `afterEach`.
+5. Coverage gates : `thresholds` dans `vitest.config.ts` (statements 80 %, branches 75 %) — exit 1 si non atteint, CI bloque la PR.
+6. Pipeline CI : lint → unit+intégration (gate coverage) → E2E (sharding) → artifacts.
+7. Ne jamais couvrir la même logique à 3 niveaux : chaque test a une raison d'exister à son niveau.
+8. Ce cours a couvert 18 modules : anatomie, Vitest, mocks, async, fixtures, intégration, MSW, Prisma, composants, Playwright, visual, a11y, contract, CI, performance — tout s'assemble ici.
 
-    if (createRes.status === 201) {
-      const taskId = JSON.parse(createRes.body).id;
+## 7. Seeds Anki
 
-      // Read
-      const getRes = http.get(`${BASE_URL}/api/tasks/${taskId}`, { headers });
-      check(getRes, { 'get: 200': (r) => r.status === 200 });
-
-      // Delete
-      const delRes = http.del(`${BASE_URL}/api/tasks/${taskId}`, null, { headers });
-      check(delRes, { 'delete: 204': (r) => r.status === 204 });
-    }
-  });
-
-  group('Task Listing', () => {
-    const listRes = http.get(`${BASE_URL}/api/tasks?page=1&limit=20`, { headers });
-    check(listRes, {
-      'list: 200': (r) => r.status === 200,
-      'list < 300ms': (r) => r.timings.duration < 300,
-    });
-  });
-
-  sleep(Math.random() * 2 + 0.5);
-}
+```
+Quelle est la distribution pratique de la pyramide de tests ?|60 % unit, 25 % intégration, 15 % E2E
+Comment configurer un coverage gate dans Vitest qui bloque la CI ?|thresholds dans vitest.config.ts (statements/branches/functions/lines) — Vitest sort avec exit code 1 si un seuil est franchi
+Quand choisir un test d'intégration plutôt qu'un test unitaire ?|Quand on veut vérifier le contrat HTTP, la persistance SQL ou le middleware auth avec leur vraie couche
+Qu'est-ce qu'une suite maintenable ?|Tests isolés (beforeEach reconstruit l'état), nommage comportemental, reset afterEach, aucune dépendance entre tests
+Antipattern "pyramide inversée" — quel est le problème concret ?|CI lente (30+ min), feedback lent, bugs difficiles à localiser dans un scénario de 12 étapes
+À quel niveau tester la règle ALREADY_INVITED de InvitationService ?|En unit — logique domaine pure, isolation totale, toutes les branches couvertes en quelques ms
+Pourquoi rédiger une stratégie de test avant de coder ?|Pour éviter redondances entre niveaux, trous sur les cas limites, et coverage artificiel sur le code facile
 ```
 
-### Deliverable 9 : Tests de contrat Zod
+## Pont vers le lab
 
-```typescript
-// tests/contract/task-schema.test.ts
-import { describe, it, expect } from 'vitest';
-import {
-  TaskSchema,
-  CreateTaskSchema,
-  UpdateTaskSchema,
-  TaskFilterSchema,
-} from '../../src/server/schemas/task.schema';
-
-describe('Task Contract Tests', () => {
-  describe('TaskSchema', () => {
-    it('should validate a complete task', () => {
-      const result = TaskSchema.safeParse({
-        id: 1,
-        title: 'Test task',
-        description: 'A description',
-        status: 'todo',
-        priority: 'high',
-        dueDate: '2025-06-20T00:00:00Z',
-        tags: ['feature'],
-        assigneeId: 1,
-        createdBy: 1,
-        createdAt: '2025-06-15T10:00:00Z',
-        updatedAt: '2025-06-15T10:00:00Z',
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it('should reject invalid status', () => {
-      const result = TaskSchema.safeParse({
-        id: 1,
-        title: 'Test',
-        status: 'invalid-status',
-        priority: 'high',
-        tags: [],
-        createdBy: 1,
-        createdAt: '2025-06-15T10:00:00Z',
-        updatedAt: '2025-06-15T10:00:00Z',
-      });
-      expect(result.success).toBe(false);
-    });
-
-    it('should reject tags exceeding limit', () => {
-      const result = CreateTaskSchema.safeParse({
-        title: 'Test',
-        tags: Array.from({ length: 11 }, (_, i) => `tag-${i}`),
-      });
-      expect(result.success).toBe(false);
-    });
-  });
-
-  describe('API response shape', () => {
-    it('should match the expected list response shape', () => {
-      const ListResponseSchema = TaskFilterSchema.transform(() => null); // Just for validation
-
-      // Simuler une reponse API
-      const apiResponse = {
-        items: [
-          {
-            id: 1,
-            title: 'Task 1',
-            status: 'todo',
-            priority: 'medium',
-            tags: [],
-            createdBy: 1,
-            createdAt: '2025-06-15T10:00:00Z',
-            updatedAt: '2025-06-15T10:00:00Z',
-          },
-        ],
-        total: 1,
-        page: 1,
-        totalPages: 1,
-      };
-
-      // Valider chaque item
-      for (const item of apiResponse.items) {
-        const result = TaskSchema.safeParse(item);
-        expect(result.success).toBe(true);
-      }
-    });
-  });
-});
-```
-
-### Deliverable 10 : Documentation
-
-Le dernier deliverable est un README dans le dossier `tests/` qui explique :
-
-- Comment lancer chaque type de tests
-- Les conventions de nommage
-- La structure des dossiers de tests
-- Les commandes disponibles
-
-```json
-{
-  "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:unit": "vitest run tests/unit/",
-    "test:integration": "vitest run tests/integration/",
-    "test:component": "vitest run tests/component/",
-    "test:contract": "vitest run tests/contract/",
-    "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed",
-    "test:e2e:debug": "playwright test --debug",
-    "test:perf": "k6 run tests/performance/task-api-load.js",
-    "test:all": "pnpm test:coverage && pnpm test:e2e"
-  }
-}
-```
-
----
-
-## Criteres de notation
-
-| Deliverable | Points | Criteres |
-|-------------|--------|----------|
-| 1. Stratégie de test | 5 | Complete, realiste, justifiee |
-| 2. Tests unitaires | 15 | 80%+ coverage, cas limites, isolation |
-| 3. Tests intégration API | 15 | CRUD complet, auth, erreurs, DB rollback |
-| 4. Tests composants | 10 | Rendu, events, états, isolation DOM |
-| 5. MSW handlers | 5 | Realistes, coherents, resetables |
-| 6. Tests E2E | 15 | Page Objects, fixtures auth, parcours complets |
-| 7. Pipeline CI | 15 | Jobs paralleles, caching, artifacts, sharding |
-| 8. Test perf k6 | 5 | Scenarios, thresholds, checks |
-| 9. Contract tests Zod | 10 | Schemas complets, cas invalides |
-| 10. Documentation | 5 | Claire, commandes fonctionnelles |
-| **Total** | **100** | |
-
-### Bonus (jusqu'a 20 points supplementaires)
-
-| Bonus | Points | Description |
-|-------|--------|-------------|
-| Mutation testing | +5 | Stryker configure, 80%+ mutation score sur les services |
-| Visual regression | +5 | Playwright screenshots comparaison |
-| Accessibilité (a11y) | +5 | axe-core dans les tests E2E |
-| Flaky detection | +5 | Script de detection + quarantaine CI |
-
----
-
-## Conseils
-
-1. **Commencez par la stratégie** : définir ce que vous allez tester avant de coder
-2. **Tests unitaires d'abord** : ils sont les plus rapides à écrire et a debugger
-3. **Testez les cas d'erreur** : les chemins d'erreur sont souvent les plus critiques
-4. **Isolez chaque test** : aucun test ne doit dépendre d'un autre
-5. **Nommez clairement** : `it('should return 401 when token is expired')` pas `it('test auth')`
-6. **Ne visez pas 100%** : 80% de couverture avec des tests de qualite > 100% de couverture superficielle
-7. **CI d'abord** : configurez le pipeline tot, puis ajoutez les tests au fur et à mesure
-8. **Commitez souvent** : chaque deliverable = un commit minimum
+> Lab associé : `06-testing/labs/lab-18-projet-final/`. Capstone : tu écris la suite complète de la feature invitation TribuZen — unit (Vitest, doubles DI), intégration (Supertest + Prisma), E2E (Playwright Page Object) — et tu configures le pipeline CI avec coverage gate.
 
 ---
 
 ## Navigation
 
-| Précédent | Suivant |
-|-----------|---------|
-| [17 - Performance testing](./17-performance-testing) | -- (fin de la formation) |
-
----
-
-## Ressources
-
-- [Quiz 18 : Testez vos connaissances](../quizzes/quiz-18-projet-final.html)
-- [Lab 18 : Projet final](../labs/lab-18-projet-final/)
-- [Vitest Documentation](https://vitest.dev/)
-- [Playwright Documentation](https://playwright.dev/)
-- [MSW Documentation](https://mswjs.io/)
-- [k6 Documentation](https://k6.io/docs/)
-- [Zod Documentation](https://zod.dev/)
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
-
----
-
-<!-- parcours-recommande -->
-
-::: tip Parcours recommandé
-1. **Screencast** : [screencast 18 projet final](../screencasts/screencast-18-projet-final.md)
-2. **Lab** : [lab-18-projet-final](../labs/lab-18-projet-final/README)
-3. **Quiz** : [quiz 18 projet final](../quizzes/quiz-18-projet-final.html)
-:::
-
----
-
-<!-- navigation-inter-cours -->
-
-::: info Cours suivant
-Bravo, tu as termine le cours **Testing** ! 
-Le prochain cours du curriculum est **NestJS**.
-
-[Commencer NestJS →](../../05-nestjs/modules/00-prerequis-et-monde-backend.md)
-:::
+| Précédent | Note |
+|-----------|------|
+| [17 — Performance testing](17-performance-testing.md) | Dernier module du parcours 06-testing |

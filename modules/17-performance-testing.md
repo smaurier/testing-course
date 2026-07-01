@@ -1,1031 +1,358 @@
-# Module 17 — Performance testing
-
-| Difficulte | Duree estimee | Lab | Quiz |
-|------------|---------------|-----|------|
-| 5/5        | 90 min        | [Lab 17](../labs/lab-17-performance/) | [Quiz 17](../quizzes/quiz-17-performance.html) |
-
-## Objectifs
-
-- Distinguer les types de tests de performance (load, stress, spike, soak)
-- Maîtriser k6 (scripts, VUs, scenarios, thresholds, checks)
-- Utiliser vitest bench pour le benchmarking de fonctions
-- Mesurer les performances frontend (Lighthouse CI, Web Vitals)
-- Detecter les fuites mémoire
-- Mettre en place une baseline et détecter les regressions
-
+---
+titre: Performance testing
+cours: 06-testing
+notions: [types load stress soak spike, métriques latence débit p95 p99, outil k6, seuils et budgets de performance, tests de perf en CI, interpréter les résultats, vs tests fonctionnels]
+outcomes: [distinguer les types de tests de performance, définir des seuils et budgets, écrire un test de charge avec k6, intégrer un budget perf en CI et interpréter les résultats]
+prerequis: [16-contract-testing]
+next: 18-projet-final
+libs: [{ name: k6, version: latest }]
+tribuzen: test de charge sur l'endpoint d'invitation TribuZen (k6, seuil p95)
+last-reviewed: 2026-07
 ---
 
-## Types de tests de performance
+# Performance testing
 
-### Vue d'ensemble
+> **Outcomes — tu sauras FAIRE :** distinguer load/stress/soak/spike, définir un budget p95/p99, écrire un script k6 avec stages et thresholds, l'intégrer en CI et interpréter la sortie.
+> **Difficulté :** :star::star::star:
 
-```
-  Charge (VUs)
-  ▲
-  │          ┌──────┐
-  │    Spike │      │
-  │          │      │     Stress
-  │    ┌─────┤      ├────────────────┐
-  │    │     │      │                │
-  │    │     └──────┘     Load       │
-  │ ┌──┤                             │
-  │ │  │  ────────────────────────── │  Soak
-  │ │  │                             │  (longue duree)
-  │ │  │                             │
-  ──┴──┴─────────────────────────────┴──► Temps
-```
+## 1. Cas concret d'abord
 
-| Type | Objectif | Duree | Charge |
-|------|----------|-------|--------|
-| **Load** | Vérifier le comportement sous charge normale | 5-15 min | Attendue (ex: 100 VUs) |
-| **Stress** | Trouver les limites du système | 10-30 min | Croissante jusqu'à la rupture |
-| **Spike** | Tester un pic soudain de trafic | 2-5 min | Pic brutal puis retour |
-| **Soak** | Detecter les fuites (mémoire, connexions) | 1-4 heures | Constante et moderee |
+Dans TribuZen, un utilisateur envoie une invitation à un proche via `POST /api/invitations`. Lors du lancement beta, 100 familles s'inscrivent en simultané et chacune envoie plusieurs invitations. **Est-ce que l'endpoint tient 100 req/s avec un temps de réponse p95 inférieur à 500 ms ?**
 
----
-
-## k6 : tests de charge HTTP
-
-### Installation
+Contrairement à un test fonctionnel (`InvitationService.invite` retourne le bon id), cette question ne peut pas être répondue par Vitest : elle demande de mesurer le comportement du système **sous charge réelle**. On a besoin d'un outil qui génère plusieurs utilisateurs virtuels en parallèle, mesure la latence de chaque requête, et vérifie des seuils.
 
 ```bash
-# macOS
-brew install k6
-
-# Windows (winget)
-winget install k6 --source winget
-
-# Docker
-docker run --rm -i grafana/k6 run - < script.js
-
-# npm (pour l'integration CI)
-pnpm add -D @grafana/k6
+k6 run tests/perf/invitation-load.js
 ```
 
-### Script de base
+```
+✓ status 201
+✓ durée < 500ms
 
-```javascript
-// tests/performance/load-test.js
+http_req_duration............: avg=142ms  p(95)=487ms  p(99)=612ms
+http_req_failed..............: 0.00%
+http_reqs....................: 6 120   102/s
+```
+
+Le résultat dit : p95 = 487 ms (sous le seuil de 500 ms), débit = 102 req/s. L'endpoint tient. Mais que se passe-t-il si 300 familles s'inscrivent ? Pour le savoir il faut un stress test. La suite donne les concepts, l'outil, et comment automatiser la réponse.
+
+## 2. Théorie complète, concise
+
+### Types de tests de performance
+
+Quatre types, distincts par **l'intention** et le **profil de charge** :
+
+| Type | Question posée | Profil charge | Durée typique |
+|------|---------------|---------------|---------------|
+| **Load** | L'API se comporte-t-elle normalement sous charge nominale ? | Charge constante ou rampe douce jusqu'au pic attendu | 5-30 min |
+| **Stress** | Où est la limite du système ? | Montée progressive jusqu'à la rupture | 15-60 min |
+| **Spike** | L'API survit-elle à un pic brutal et se rétablit-elle ? | Pic soudain ×5-×10 puis retour immédiat | 2-10 min |
+| **Soak** | La mémoire ou les connexions fuient-elles ? | Charge constante modérée sur une longue durée | 1-4 h |
+
+Règle : toujours faire le **load test** en premier. Le stress test et le spike test sur un système déjà dégradé ne mesurent rien d'utile.
+
+### Métriques clés — latence, débit, percentiles
+
+**Latence** : temps entre l'envoi d'une requête et la réception de la réponse. Mesurée en ms.
+
+**Débit (throughput)** : nombre de requêtes réussies par seconde (req/s ou RPS). Une API rapide mais plafonnée à 10 req/s ne tient pas la charge.
+
+**Pourquoi p95 et p99, pas la moyenne ?**
+
+La moyenne masque les outliers. Si 95 requêtes répondent en 10 ms et 5 en 2 000 ms, la moyenne est ~110 ms — une valeur qui semble raisonnable. p95 = 2 000 ms, ce qui révèle le vrai problème.
+
+- **p95** : 95 % des requêtes sont en dessous de cette valeur. Seuil standard pour les SLOs.
+- **p99** : 99 % en dessous. Révèle les pires cas ; utile pour les endpoints critiques (paiement, auth).
+- **max** : dangereux en isolation — un seul pic fausse tout. À lire en contexte du p99.
+
+### k6 — structure d'un script
+
+k6 s'écrit en JavaScript ES6. La structure canonique :
+
+```js
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
-// Configuration
+// options : tout ce qui concerne la charge et les seuils
 export const options = {
-  // Stages : montee en charge progressive
   stages: [
-    { duration: '30s', target: 20 },   // Montee a 20 VUs en 30s
-    { duration: '1m', target: 20 },    // Maintenir 20 VUs pendant 1 min
-    { duration: '30s', target: 50 },   // Montee a 50 VUs
-    { duration: '1m', target: 50 },    // Maintenir 50 VUs
-    { duration: '30s', target: 0 },    // Descente a 0
+    { duration: '30s', target: 20 },  // montée à 20 VUs en 30 s
+    { duration: '1m',  target: 20 },  // maintien 1 min
+    { duration: '30s', target: 0  },  // descente
   ],
-
-  // Seuils de reussite
   thresholds: {
-    http_req_duration: ['p(95)<500'],       // 95% des requetes < 500ms
-    http_req_failed: ['rate<0.01'],         // Moins de 1% d'erreurs
-    http_req_duration: ['avg<200', 'max<2000'], // Moyenne < 200ms, max < 2s
+    http_req_duration: ['p(95)<500'],  // seuil : p95 < 500 ms
+    http_req_failed:   ['rate<0.01'],  // taux d'erreur < 1 %
   },
 };
 
+// fonction par défaut : exécutée en boucle par chaque VU
 export default function () {
-  // Chaque VU execute cette fonction en boucle
-  const response = http.get('http://localhost:3000/api/products');
-
-  // Verifications
-  check(response, {
-    'status is 200': (r) => r.status === 200,
-    'response time < 500ms': (r) => r.timings.duration < 500,
-    'body contains products': (r) => {
-      const body = JSON.parse(r.body);
-      return Array.isArray(body) && body.length > 0;
-    },
-  });
-
-  // Pause entre les requetes (simuler un vrai utilisateur)
-  sleep(1);
-}
-```
-
-### Lancer le test
-
-```bash
-# Execution simple
-k6 run tests/performance/load-test.js
-
-# Avec sortie JSON pour CI
-k6 run --out json=results.json tests/performance/load-test.js
-
-# Avec un nombre de VUs specifique (override)
-k6 run --vus 10 --duration 30s tests/performance/load-test.js
-```
-
-### Sortie k6
-
-```
-          /\      |‾‾| /‾‾/   /‾‾/
-     /\  /  \     |  |/  /   /  /
-    /  \/    \    |     (   /   ‾‾\
-   /          \   |  |\  \ |  (‾)  |
-  / __________ \  |__| \__\ \_____/ .io
-
-  execution: local
-     script: load-test.js
-     output: -
-
-  scenarios: (100.00%) 1 scenario, 50 max VUs, 3m30s max duration
-
-     ✓ status is 200
-     ✓ response time < 500ms
-     ✓ body contains products
-
-     checks.........................: 100.00% ✓ 4520  ✗ 0
-     data_received..................: 12 MB   56 kB/s
-     data_sent......................: 420 kB  2.0 kB/s
-     http_req_blocked...............: avg=1.2ms    min=0s      max=45ms
-     http_req_duration..............: avg=82.3ms   min=12ms    max=892ms
-       { expected_response:true }...: avg=82.3ms   min=12ms    max=892ms
-   ✓ http_req_duration..............: avg=82.3ms   p(95)=245ms
-   ✓ http_req_failed................: 0.00%   ✓ 0     ✗ 4520
-     http_reqs......................: 4520    21.5/s
-     iteration_duration.............: avg=1.08s    min=1.01s   max=1.89s
-     iterations.....................: 4520    21.5/s
-     vus............................: 1       min=1   max=50
-     vus_max........................: 50      min=50  max=50
-```
-
-### Scenarios avances
-
-```javascript
-// tests/performance/scenarios.js
-import http from 'k6/http';
-import { check, sleep } from 'k6';
-
-export const options = {
-  scenarios: {
-    // Scenario 1 : navigation (beaucoup de GET)
-    browse: {
-      executor: 'ramping-vus',
-      startVUs: 0,
-      stages: [
-        { duration: '1m', target: 30 },
-        { duration: '2m', target: 30 },
-        { duration: '30s', target: 0 },
-      ],
-      exec: 'browseProducts',
-      tags: { scenario: 'browse' },
-    },
-
-    // Scenario 2 : achat (POST critiques)
-    purchase: {
-      executor: 'constant-arrival-rate',
-      rate: 10,             // 10 iterations par seconde
-      timeUnit: '1s',
-      duration: '2m',
-      preAllocatedVUs: 20,
-      maxVUs: 50,
-      exec: 'purchaseFlow',
-      tags: { scenario: 'purchase' },
-    },
-
-    // Scenario 3 : pic soudain
-    spike: {
-      executor: 'ramping-arrival-rate',
-      startRate: 1,
-      timeUnit: '1s',
-      stages: [
-        { duration: '10s', target: 1 },
-        { duration: '5s', target: 100 },   // Pic brutal !
-        { duration: '30s', target: 100 },
-        { duration: '10s', target: 1 },
-      ],
-      preAllocatedVUs: 100,
-      maxVUs: 200,
-      exec: 'browseProducts',
-      startTime: '3m',     // Commence apres 3 min
-      tags: { scenario: 'spike' },
-    },
-  },
-
-  thresholds: {
-    'http_req_duration{scenario:browse}': ['p(95)<300'],
-    'http_req_duration{scenario:purchase}': ['p(95)<1000'],
-    'http_req_failed{scenario:purchase}': ['rate<0.05'],
-  },
-};
-
-export function browseProducts() {
-  const productsRes = http.get('http://localhost:3000/api/products');
-  check(productsRes, { 'products: 200': (r) => r.status === 200 });
-
-  // Simuler la consultation d'un produit aleatoire
-  if (productsRes.status === 200) {
-    const products = JSON.parse(productsRes.body);
-    if (products.length > 0) {
-      const randomId = products[Math.floor(Math.random() * products.length)].id;
-      const detailRes = http.get(`http://localhost:3000/api/products/${randomId}`);
-      check(detailRes, { 'detail: 200': (r) => r.status === 200 });
-    }
-  }
-
-  sleep(Math.random() * 3 + 1); // 1-4 secondes de pause
-}
-
-export function purchaseFlow() {
-  // 1. Ajouter au panier
-  const addRes = http.post(
-    'http://localhost:3000/api/cart/items',
-    JSON.stringify({ productId: 1, quantity: 1 }),
-    { headers: { 'Content-Type': 'application/json' } },
-  );
-  check(addRes, { 'add to cart: 201': (r) => r.status === 201 });
-
-  sleep(0.5);
-
-  // 2. Checkout
-  const checkoutRes = http.post(
-    'http://localhost:3000/api/orders',
-    JSON.stringify({ paymentMethod: 'card' }),
-    { headers: { 'Content-Type': 'application/json' } },
-  );
-  check(checkoutRes, {
-    'checkout: 201': (r) => r.status === 201,
-    'checkout < 1s': (r) => r.timings.duration < 1000,
-  });
-
-  sleep(1);
-}
-```
-
-### Tags et groupes
-
-```javascript
-import http from 'k6/http';
-import { group, check } from 'k6';
-
-export default function () {
-  group('Homepage', () => {
-    const res = http.get('http://localhost:3000/', {
-      tags: { page: 'home' },
-    });
-    check(res, { 'home: 200': (r) => r.status === 200 });
-  });
-
-  group('Product Listing', () => {
-    const res = http.get('http://localhost:3000/api/products', {
-      tags: { page: 'products', type: 'api' },
-    });
-    check(res, { 'products: 200': (r) => r.status === 200 });
-  });
-}
-```
-
-### Rapports et export
-
-```bash
-# Export CSV
-k6 run --out csv=results.csv tests/performance/load-test.js
-
-# Export JSON
-k6 run --out json=results.json tests/performance/load-test.js
-
-# Export vers InfluxDB (pour dashboards Grafana)
-k6 run --out influxdb=http://localhost:8086/k6 tests/performance/load-test.js
-
-# Export vers Grafana Cloud k6
-K6_CLOUD_TOKEN=xxx k6 run --out cloud tests/performance/load-test.js
-```
-
----
-
-## vitest bench : benchmarking de fonctions
-
-### Configuration
-
-```typescript
-// vitest.config.ts
-export default defineConfig({
-  test: {
-    benchmark: {
-      include: ['**/*.bench.ts'],
-      reporters: ['default'],
-    },
-  },
-});
-```
-
-### Benchmark de base
-
-```typescript
-// src/utils/sort.bench.ts
-import { bench, describe } from 'vitest';
-
-function bubbleSort(arr: number[]): number[] {
-  const result = [...arr];
-  for (let i = 0; i < result.length; i++) {
-    for (let j = 0; j < result.length - i - 1; j++) {
-      if (result[j] > result[j + 1]) {
-        [result[j], result[j + 1]] = [result[j + 1], result[j]];
-      }
-    }
-  }
-  return result;
-}
-
-function quickSort(arr: number[]): number[] {
-  if (arr.length <= 1) return arr;
-  const pivot = arr[Math.floor(arr.length / 2)];
-  const left = arr.filter((x) => x < pivot);
-  const middle = arr.filter((x) => x === pivot);
-  const right = arr.filter((x) => x > pivot);
-  return [...quickSort(left), ...middle, ...quickSort(right)];
-}
-
-// Donnees de test
-const smallArray = Array.from({ length: 100 }, () => Math.random() * 1000);
-const largeArray = Array.from({ length: 10000 }, () => Math.random() * 1000);
-
-describe('Sorting algorithms — small array (100 items)', () => {
-  bench('Array.sort (native)', () => {
-    [...smallArray].sort((a, b) => a - b);
-  });
-
-  bench('bubbleSort', () => {
-    bubbleSort(smallArray);
-  });
-
-  bench('quickSort', () => {
-    quickSort(smallArray);
-  });
-});
-
-describe('Sorting algorithms — large array (10000 items)', () => {
-  bench('Array.sort (native)', () => {
-    [...largeArray].sort((a, b) => a - b);
-  });
-
-  bench('bubbleSort', () => {
-    bubbleSort(largeArray);
-  });
-
-  bench('quickSort', () => {
-    quickSort(largeArray);
-  });
-});
-```
-
-### Lancer les benchmarks
-
-```bash
-pnpm vitest bench
-
-# Sortie :
-# ✓ src/utils/sort.bench.ts
-#   Sorting algorithms — small array (100 items)
-#     name                hz        min        max       mean       p75       p99
-#     Array.sort      152,340    0.0054     0.0215    0.0066    0.0068    0.0142
-#     bubbleSort       12,450    0.0672     0.2340    0.0803    0.0810    0.1950
-#     quickSort        98,230    0.0087     0.0456    0.0102    0.0105    0.0312
-#
-#   Sorting algorithms — large array (10000 items)
-#     name                hz        min        max       mean       p75       p99
-#     Array.sort        1,245    0.7210     1.4560    0.8032    0.8450    1.2100
-#     bubbleSort            2  412.0000   523.0000  467.5000  489.0000  520.0000
-#     quickSort           890    0.9800     2.1200    1.1236    1.1500    1.8900
-```
-
-### Benchmark de fonctions reelles
-
-```typescript
-// src/services/search.bench.ts
-import { bench, describe } from 'vitest';
-
-// Deux implementations a comparer
-function linearSearch(items: string[], query: string): string[] {
-  return items.filter((item) =>
-    item.toLowerCase().includes(query.toLowerCase()),
-  );
-}
-
-function indexedSearch(index: Map<string, string[]>, query: string): string[] {
-  const normalizedQuery = query.toLowerCase();
-  const results: string[] = [];
-  for (const [key, values] of index) {
-    if (key.includes(normalizedQuery)) {
-      results.push(...values);
-    }
-  }
-  return results;
-}
-
-// Preparer les donnees
-const items = Array.from({ length: 50000 }, (_, i) => `Product ${i} - ${randomWords()}`);
-const index = buildSearchIndex(items);
-
-function randomWords(): string {
-  const words = ['laptop', 'phone', 'tablet', 'camera', 'headphones', 'speaker', 'monitor'];
-  return words[Math.floor(Math.random() * words.length)];
-}
-
-function buildSearchIndex(items: string[]): Map<string, string[]> {
-  const index = new Map<string, string[]>();
-  for (const item of items) {
-    const words = item.toLowerCase().split(/\s+/);
-    for (const word of words) {
-      if (!index.has(word)) index.set(word, []);
-      index.get(word)!.push(item);
-    }
-  }
-  return index;
-}
-
-describe('Search performance (50k items)', () => {
-  bench('linearSearch', () => {
-    linearSearch(items, 'laptop');
-  });
-
-  bench('indexedSearch', () => {
-    indexedSearch(index, 'laptop');
-  });
-});
-```
-
----
-
-## Frontend performance
-
-### Lighthouse CI
-
-```bash
-# Installation
-pnpm add -D @lhci/cli
-```
-
-```javascript
-// lighthouserc.js
-module.exports = {
-  ci: {
-    collect: {
-      url: ['http://localhost:3000/', 'http://localhost:3000/products'],
-      numberOfRuns: 3, // 3 runs par URL pour la fiabilite
-      startServerCommand: 'pnpm preview',
-      startServerReadyPattern: 'Local',
-    },
-    assert: {
-      assertions: {
-        'categories:performance': ['error', { minScore: 0.9 }],
-        'categories:accessibility': ['error', { minScore: 0.95 }],
-        'categories:best-practices': ['warn', { minScore: 0.9 }],
-        'first-contentful-paint': ['error', { maxNumericValue: 2000 }],
-        'largest-contentful-paint': ['error', { maxNumericValue: 2500 }],
-        'cumulative-layout-shift': ['error', { maxNumericValue: 0.1 }],
-        'total-blocking-time': ['error', { maxNumericValue: 300 }],
-      },
-    },
-    upload: {
-      target: 'filesystem',
-      outputDir: './lighthouse-results',
-    },
-  },
-};
-```
-
-```bash
-# Lancer Lighthouse CI
-pnpm lhci autorun
-```
-
-### Web Vitals avec Playwright
-
-```typescript
-// tests/performance/web-vitals.spec.ts
-import { test, expect } from '@playwright/test';
-
-test.describe('Web Vitals', () => {
-  test('homepage should meet performance thresholds', async ({ page }) => {
-    // Injecter le script web-vitals
-    await page.addInitScript(() => {
-      (window as any).__webVitals = {};
-
-      // Observer LCP
-      new PerformanceObserver((list) => {
-        const entries = list.getEntries();
-        (window as any).__webVitals.lcp = entries[entries.length - 1].startTime;
-      }).observe({ type: 'largest-contentful-paint', buffered: true });
-
-      // Observer CLS
-      let clsValue = 0;
-      new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          if (!(entry as any).hadRecentInput) {
-            clsValue += (entry as any).value;
-          }
-        }
-        (window as any).__webVitals.cls = clsValue;
-      }).observe({ type: 'layout-shift', buffered: true });
-    });
-
-    await page.goto('http://localhost:3000/');
-    await page.waitForLoadState('networkidle');
-
-    // Attendre que les metriques soient collectees
-    await page.waitForTimeout(3000);
-
-    const vitals = await page.evaluate(() => (window as any).__webVitals);
-
-    console.log('Web Vitals:', vitals);
-
-    // Assertions
-    expect(vitals.lcp).toBeLessThan(2500); // LCP < 2.5s
-    expect(vitals.cls).toBeLessThan(0.1);  // CLS < 0.1
-  });
-
-  test('should have fast Time to First Byte', async ({ page }) => {
-    const startTime = Date.now();
-    const response = await page.goto('http://localhost:3000/');
-    const ttfb = Date.now() - startTime;
-
-    expect(response?.status()).toBe(200);
-    expect(ttfb).toBeLessThan(600); // TTFB < 600ms
-  });
-});
-```
-
-### Performance API dans Playwright
-
-```typescript
-// tests/performance/navigation.spec.ts
-import { test, expect } from '@playwright/test';
-
-test('should load products page within performance budget', async ({ page }) => {
-  await page.goto('http://localhost:3000/products');
-  await page.waitForLoadState('networkidle');
-
-  // Recuperer les metriques Navigation Timing
-  const metrics = await page.evaluate(() => {
-    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
-    return {
-      // Temps de connexion
-      dns: nav.domainLookupEnd - nav.domainLookupStart,
-      tcp: nav.connectEnd - nav.connectStart,
-      ttfb: nav.responseStart - nav.requestStart,
-
-      // Temps de chargement
-      download: nav.responseEnd - nav.responseStart,
-      domParse: nav.domInteractive - nav.responseEnd,
-      domContentLoaded: nav.domContentLoadedEventEnd - nav.navigationStart,
-      load: nav.loadEventEnd - nav.navigationStart,
-
-      // Taille
-      transferSize: nav.transferSize,
-      decodedBodySize: nav.decodedBodySize,
-    };
-  });
-
-  console.table(metrics);
-
-  // Budget de performance
-  expect(metrics.ttfb).toBeLessThan(500);
-  expect(metrics.domContentLoaded).toBeLessThan(2000);
-  expect(metrics.load).toBeLessThan(3000);
-  expect(metrics.transferSize).toBeLessThan(500 * 1024); // < 500 KB
-});
-
-test('should not have too many network requests', async ({ page }) => {
-  const requests: string[] = [];
-
-  page.on('request', (req) => {
-    requests.push(req.url());
-  });
-
-  await page.goto('http://localhost:3000/products');
-  await page.waitForLoadState('networkidle');
-
-  console.log(`Total requests: ${requests.length}`);
-
-  // Budget : maximum 30 requetes pour charger la page
-  expect(requests.length).toBeLessThan(30);
-
-  // Pas de requetes vers des CDN tiers non prevus
-  const thirdParty = requests.filter(
-    (url) => !url.includes('localhost:3000'),
-  );
-  expect(thirdParty.length).toBeLessThan(5);
-});
-```
-
----
-
-## Detection des fuites mémoire
-
-### Avec Node.js (backend)
-
-```typescript
-// tests/performance/memory-leak.test.ts
-import { describe, it, expect } from 'vitest';
-
-describe('Memory leak detection', () => {
-  it('should not leak memory on repeated operations', () => {
-    const iterations = 10000;
-
-    // Forcer le garbage collection avant de mesurer
-    if (global.gc) global.gc();
-    const baselineMemory = process.memoryUsage().heapUsed;
-
-    // Executer l'operation de nombreuses fois
-    for (let i = 0; i < iterations; i++) {
-      const cache = new Map<string, string>();
-      for (let j = 0; j < 100; j++) {
-        cache.set(`key-${j}`, `value-${j}`);
-      }
-      // Le cache devrait etre GC'd a chaque iteration
-    }
-
-    if (global.gc) global.gc();
-    const finalMemory = process.memoryUsage().heapUsed;
-
-    const memoryGrowth = finalMemory - baselineMemory;
-    const growthMB = memoryGrowth / 1024 / 1024;
-
-    console.log(`Memory growth: ${growthMB.toFixed(2)} MB`);
-
-    // La memoire ne devrait pas grandir de plus de 10 MB
-    expect(growthMB).toBeLessThan(10);
-  });
-});
-```
-
-```json
-{
-  "scripts": {
-    "test:memory": "node --expose-gc node_modules/.bin/vitest run tests/performance/memory-leak.test.ts"
-  }
-}
-```
-
-### Avec k6 (charge soutenue)
-
-```javascript
-// tests/performance/soak-test.js
-import http from 'k6/http';
-import { check, sleep } from 'k6';
-
-export const options = {
-  // Soak test : charge constante pendant longtemps
-  stages: [
-    { duration: '2m', target: 20 },    // Montee
-    { duration: '30m', target: 20 },   // Maintien (30 minutes)
-    { duration: '2m', target: 0 },     // Descente
-  ],
-
-  thresholds: {
-    // Le temps de reponse ne doit pas se degrader
-    http_req_duration: ['p(95)<500'],
-    // Les erreurs ne doivent pas augmenter
-    http_req_failed: ['rate<0.01'],
-  },
-};
-
-export default function () {
-  const res = http.get('http://localhost:3000/api/products');
+  const res = http.get('http://localhost:3000/api/status');
   check(res, {
     'status 200': (r) => r.status === 200,
-    'response < 500ms': (r) => r.timings.duration < 500,
   });
-  sleep(1);
-}
-
-// Si le temps de reponse augmente progressivement
-// pendant le soak test → probable fuite memoire ou connexions
-```
-
-### Avec Playwright (frontend)
-
-```typescript
-// tests/performance/memory-frontend.spec.ts
-import { test, expect } from '@playwright/test';
-
-test('should not leak memory during repeated navigation', async ({ page }) => {
-  // Mesure initiale
-  await page.goto('http://localhost:3000/');
-  await page.waitForLoadState('networkidle');
-
-  const initialMetrics = await page.evaluate(() => {
-    return (performance as any).memory?.usedJSHeapSize ?? 0;
-  });
-
-  // Naviguer 20 fois entre les pages
-  for (let i = 0; i < 20; i++) {
-    await page.goto('http://localhost:3000/products');
-    await page.waitForLoadState('networkidle');
-    await page.goto('http://localhost:3000/');
-    await page.waitForLoadState('networkidle');
-  }
-
-  const finalMetrics = await page.evaluate(() => {
-    return (performance as any).memory?.usedJSHeapSize ?? 0;
-  });
-
-  const growthMB = (finalMetrics - initialMetrics) / 1024 / 1024;
-  console.log(`JS Heap growth: ${growthMB.toFixed(2)} MB`);
-
-  // La memoire ne devrait pas croitre de plus de 20 MB
-  expect(growthMB).toBeLessThan(20);
-});
-```
-
----
-
-## Database query performance
-
-```typescript
-// tests/performance/db-queries.bench.ts
-import { bench, describe, beforeAll, afterAll } from 'vitest';
-import { createPool, type Pool } from 'mysql2/promise';
-
-let pool: Pool;
-
-beforeAll(async () => {
-  pool = createPool({
-    host: 'localhost',
-    user: 'test',
-    password: 'test',
-    database: 'testdb',
-    connectionLimit: 10,
-  });
-
-  // Seeder des donnees de test
-  await seedTestData(pool, 100000); // 100k lignes
-});
-
-afterAll(async () => {
-  await pool.end();
-});
-
-async function seedTestData(pool: Pool, count: number): Promise<void> {
-  // ... seeder les donnees
-}
-
-describe('Database query performance', () => {
-  bench('SELECT by primary key (indexed)', async () => {
-    await pool.query('SELECT * FROM users WHERE id = ?', [
-      Math.floor(Math.random() * 100000) + 1,
-    ]);
-  });
-
-  bench('SELECT by email (indexed)', async () => {
-    await pool.query('SELECT * FROM users WHERE email = ?', [
-      `user${Math.floor(Math.random() * 100000)}@example.com`,
-    ]);
-  });
-
-  bench('SELECT by name (non-indexed)', async () => {
-    await pool.query('SELECT * FROM users WHERE name LIKE ?', [
-      `User ${Math.floor(Math.random() * 100000)}%`,
-    ]);
-  });
-
-  bench('SELECT with JOIN (orders)', async () => {
-    await pool.query(
-      `SELECT u.name, COUNT(o.id) as order_count
-       FROM users u
-       LEFT JOIN orders o ON u.id = o.user_id
-       WHERE u.id = ?
-       GROUP BY u.id`,
-      [Math.floor(Math.random() * 100000) + 1],
-    );
-  });
-
-  bench('INSERT single row', async () => {
-    await pool.query(
-      'INSERT INTO logs (user_id, action, created_at) VALUES (?, ?, NOW())',
-      [Math.floor(Math.random() * 100000) + 1, 'benchmark-test'],
-    );
-  });
-});
-```
-
----
-
-## Regression detection : baseline et comparaison
-
-### Sauvegarder une baseline
-
-```javascript
-// tests/performance/baseline.js
-import http from 'k6/http';
-import { check, sleep } from 'k6';
-import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.3/index.js';
-
-export const options = {
-  stages: [
-    { duration: '30s', target: 20 },
-    { duration: '1m', target: 20 },
-    { duration: '30s', target: 0 },
-  ],
-  thresholds: {
-    http_req_duration: ['p(95)<500'],
-  },
-};
-
-export default function () {
-  const res = http.get('http://localhost:3000/api/products');
-  check(res, { 'status 200': (r) => r.status === 200 });
-  sleep(1);
-}
-
-export function handleSummary(data) {
-  return {
-    'baseline.json': JSON.stringify(data, null, 2),
-    stdout: textSummary(data, { indent: ' ', enableColors: true }),
-  };
+  sleep(1); // pause entre requêtes (simule un vrai utilisateur)
 }
 ```
 
-### Comparer avec la baseline
+**VUs (Virtual Users)** : goroutines légères qui exécutent chacune la fonction `default` en boucle. 100 VUs = 100 utilisateurs fictifs en parallèle.
 
-```typescript
-// scripts/compare-perf.ts
-import { readFileSync } from 'node:fs';
+**Stages** : liste d'objets `{ duration, target }`. k6 interpole linéairement entre `target` d'une étape à l'autre. Permet de modéliser la montée en charge, le maintien, et la descente.
 
-interface K6Summary {
-  metrics: {
-    http_req_duration: {
-      values: {
-        avg: number;
-        'p(95)': number;
-        'p(99)': number;
-        max: number;
-      };
-    };
-    http_req_failed: {
-      values: {
-        rate: number;
-      };
-    };
-  };
-}
+**Checks** : assertions inline sur la réponse (status, body, durée). Ils n'arrêtent pas le test, ils comptent les succès/échecs. Ce sont les **thresholds** qui décident du code de sortie.
 
-function compareSummaries(baselinePath: string, currentPath: string): void {
-  const baseline = JSON.parse(readFileSync(baselinePath, 'utf-8')) as K6Summary;
-  const current = JSON.parse(readFileSync(currentPath, 'utf-8')) as K6Summary;
+**Thresholds** : critères de réussite. Si un seuil est violé, k6 sort avec exit code 1 — ce qui fait échouer la CI.
 
-  const metrics = [
-    {
-      name: 'Avg response time',
-      baseline: baseline.metrics.http_req_duration.values.avg,
-      current: current.metrics.http_req_duration.values.avg,
-      unit: 'ms',
-      threshold: 0.2, // 20% de degradation max
-    },
-    {
-      name: 'p95 response time',
-      baseline: baseline.metrics.http_req_duration.values['p(95)'],
-      current: current.metrics.http_req_duration.values['p(95)'],
-      unit: 'ms',
-      threshold: 0.2,
-    },
-    {
-      name: 'Error rate',
-      baseline: baseline.metrics.http_req_failed.values.rate,
-      current: current.metrics.http_req_failed.values.rate,
-      unit: '%',
-      threshold: 0.5,
-    },
-  ];
-
-  let hasRegression = false;
-
-  console.log('\nPerformance Comparison:');
-  console.log('─'.repeat(70));
-
-  for (const m of metrics) {
-    const change = m.baseline > 0
-      ? ((m.current - m.baseline) / m.baseline) * 100
-      : 0;
-    const status = change > m.threshold * 100 ? 'REGRESSION' : 'OK';
-    const icon = status === 'OK' ? 'PASS' : 'FAIL';
-
-    console.log(
-      `[${icon}] ${m.name}: ${m.baseline.toFixed(2)}${m.unit} -> ${m.current.toFixed(2)}${m.unit} (${change > 0 ? '+' : ''}${change.toFixed(1)}%)`,
-    );
-
-    if (status === 'REGRESSION') hasRegression = true;
-  }
-
-  console.log('─'.repeat(70));
-
-  if (hasRegression) {
-    console.error('\nPerformance regression detected!');
-    process.exit(1);
-  }
-
-  console.log('\nNo regression detected.');
-}
-
-compareSummaries('baseline.json', 'current.json');
+```js
+thresholds: {
+  'http_req_duration':                ['p(95)<500', 'p(99)<1000'],
+  'http_req_failed':                  ['rate<0.01'],
+  // tag par endpoint
+  'http_req_duration{endpoint:invite}': ['p(95)<400'],
+},
 ```
 
-### Intégration CI
+### Métriques k6 intégrées
+
+| Métrique | Type | Description |
+|----------|------|-------------|
+| `http_req_duration` | Trend | Durée totale de la requête HTTP (ms) |
+| `http_req_failed` | Rate | Proportion de requêtes ayant échoué |
+| `http_reqs` | Counter | Nombre total de requêtes |
+| `http_req_blocked` | Trend | Temps bloqué avant connexion (DNS, TCP) |
+| `vus` | Gauge | Nombre de VUs actifs |
+| `iteration_duration` | Trend | Durée d'une itération complète |
+
+### Seuils et budgets de performance
+
+Un **budget de performance** = ensemble de seuils définis **avant** le développement, pas après avoir vu les résultats. Il formalise les attentes sous forme de contraintes testables :
+
+```js
+thresholds: {
+  http_req_duration: ['p(95)<500'],  // SLO métier : 95 % des req < 500 ms
+  http_req_failed:   ['rate<0.01'],  // fiabilité : < 1 % d'erreurs
+},
+```
+
+Règle : le seuil doit correspondre à un **SLO** (Service Level Objective) explicite, pas à « ce que le système fait aujourd'hui ». Sinon on mesure sans s'engager à rien.
+
+### Tests de perf en CI
+
+Intégrer le budget en CI permet de détecter les régressions **avant** de merger :
 
 ```yaml
 # .github/workflows/perf.yml
-name: Performance Tests
+- name: Install k6
+  run: |
+    sudo gpg --no-default-keyring \
+      --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+      --keyserver hkp://keyserver.ubuntu.com:80 \
+      --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D68
+    echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] \
+      https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+    sudo apt-get update && sudo apt-get install k6
 
-on:
-  pull_request:
+- name: Start server
+  run: pnpm build && pnpm preview &
 
-jobs:
-  performance:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Install k6
-        run: |
-          sudo gpg -k
-          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D68
-          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
-          sudo apt-get update && sudo apt-get install k6
-
-      - name: Build and start server
-        run: |
-          pnpm build
-          pnpm preview &
-          sleep 5
-
-      - name: Run performance tests
-        run: k6 run --out json=current.json tests/performance/load-test.js
-
-      - name: Compare with baseline
-        run: pnpm tsx scripts/compare-perf.ts
-
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: perf-results
-          path: "*.json"
+- name: Run load test
+  run: k6 run --out json=results.json tests/perf/invitation-load.js
 ```
 
----
+Si un threshold est violé, k6 sort avec exit code 1 → la CI échoue → la PR est bloquée. Aucun script de comparaison à écrire : les thresholds sont le budget automatisé.
 
-## Checklist du module
+**Contrainte CI** : les tests soak (1-4 h) ne tournent pas sur chaque PR. Réserver un pipeline dédié (nightly ou pré-prod), avec charge plus légère (5-10 min) en PR.
 
-- [ ] Je distingue les 4 types de tests de performance
-- [ ] Je sais écrire un script k6 avec stages, thresholds et checks
-- [ ] J'utilise vitest bench pour comparer des implementations
-- [ ] Je mesure les Web Vitals avec Playwright
-- [ ] Je sais configurer Lighthouse CI
-- [ ] Je détecté les fuites mémoire (Node, frontend)
-- [ ] J'ai une baseline de performance et un script de comparaison
-- [ ] Mon pipeline CI inclut des tests de performance
+### Interpréter les résultats
 
----
+Sortie k6 à la fin d'un run :
 
-## Exercice pratique
+```
+checks.........................: 98.20% ✓ 6003  ✗ 109
+http_req_duration..............: avg=142ms   p(95)=487ms   p(99)=812ms  max=2341ms
+  { endpoint:invite }.........: avg=198ms   p(95)=491ms
+http_req_failed................: 1.77%   ✗ 109
+http_reqs......................: 6112    101.8/s
+✗ http_req_failed................: rate<0.01  rate=0.018 — THRESHOLD FAILED
+```
 
-1. Ecrivez un script k6 avec 3 scenarios (browse, purchase, spike)
-2. Definissez des thresholds realistes
-3. Creez un benchmark vitest bench comparant deux fonctions de tri
-4. Mesurez les Web Vitals de votre page d'accueil avec Playwright
-5. Sauvegardez une baseline et verifiez l'absence de regression
+Lecture méthodique :
+1. **Checks** : combien ont passé ? 98 % ici → 2 % de réponses inattendues.
+2. **p95 vs seuil** : 487 ms < 500 ms → threshold OK.
+3. **http_req_failed** : 1,77 % > 1 % → threshold FAILED → exit code 1.
+4. **Débit** : 101,8 req/s → l'objectif 100 req/s est atteint.
+5. **max** : 2 341 ms → pic isolé, pas de panique si p99 reste acceptable.
 
-> Solution dans le [Lab 17](../labs/lab-17-performance/)
+Le threshold `http_req_failed` a échoué : des requêtes renvoient une erreur HTTP. C'est ça qu'on investigate — pas le p95.
 
----
+### vs tests fonctionnels
 
-## Navigation
+| Dimension | Test fonctionnel (Vitest) | Test de performance (k6) |
+|-----------|--------------------------|--------------------------|
+| Question | « Le code fait-il ce qu'il doit ? » | « Le système tient-il sous charge ? » |
+| Portée | Unitaire / intégration | Système entier (API + DB + infra) |
+| Concurrence | 1 exécution à la fois | N VUs en parallèle |
+| Environnement | Local, rapide | Staging ou prod-like |
+| Feedback | Pass/Fail par assertion | Métriques + seuils |
+| Moment | Sur chaque commit | Sur PR critique, nightly, avant release |
 
-| Précédent | Suivant |
-|-----------|---------|
-| [16 - Contract testing](./16-contract-testing) | [18 - Projet final](./18-projet-final) |
+Les deux sont complémentaires. Un endpoint qui passe les tests fonctionnels peut s'effondrer à 50 req/s si la requête SQL n'est pas indexée.
 
----
+## 3. Worked examples
 
-## Ressources
+### Exemple A — script de load test invitation TribuZen (avec thresholds p95)
 
-- [Quiz 17 : Testez vos connaissances](../quizzes/quiz-17-performance.html)
-- [Lab 17 : Performance testing](../labs/lab-17-performance/)
-- [k6 Documentation](https://k6.io/docs/)
-- [Vitest Benchmarking](https://vitest.dev/guide/features.html#benchmarking)
-- [Lighthouse CI](https://github.com/GoogleChrome/lighthouse-ci)
-- [Web Vitals](https://web.dev/vitals/)
+Objectif : vérifier que `POST /api/invitations` tient 100 VUs, p95 < 500 ms, taux d'erreur < 1 %.
 
----
+```js
+// tests/perf/invitation-load.js
+import http from 'k6/http';
+import { check, sleep } from 'k6';
 
-<!-- parcours-recommande -->
+// Budget de performance — défini AVANT d'écrire le test
+export const options = {
+  stages: [
+    { duration: '30s', target: 50  }, // montée progressive : évite le thundering herd
+    { duration: '1m',  target: 100 }, // charge cible
+    { duration: '30s', target: 0   }, // descente : observe la récupération
+  ],
+  thresholds: {
+    // SLO principal : 95 % des requêtes < 500 ms
+    'http_req_duration':                  ['p(95)<500'],
+    // SLO fiabilité : moins de 1 % d'erreurs
+    'http_req_failed':                    ['rate<0.01'],
+    // SLO par endpoint tagué
+    'http_req_duration{endpoint:invite}': ['p(95)<400'],
+  },
+};
 
-::: tip Parcours recommandé
-1. **Screencast** : [screencast 17 performance](../screencasts/screencast-17-performance.md)
-2. **Lab** : [lab-17-performance](../labs/lab-17-performance/README)
-3. **Quiz** : [quiz 17 performance](../quizzes/quiz-17-performance.html)
-:::
+// Payload réaliste : simule un utilisateur TribuZen réel
+const PAYLOAD = JSON.stringify({ email: 'guest@tribu.fr', familyId: 'fam-beta-1' });
+const HEADERS = { 'Content-Type': 'application/json', 'Authorization': 'Bearer test-token' };
+
+export default function () {
+  // Tag l'endpoint pour filtrer les métriques dans les thresholds
+  const res = http.post(
+    'http://localhost:3000/api/invitations',
+    PAYLOAD,
+    { headers: HEADERS, tags: { endpoint: 'invite' } },
+  );
+
+  // check : assertions inline, ne bloquent pas le test mais comptent
+  check(res, {
+    'status 201': (r) => r.status === 201,
+    'id présent':  (r) => {
+      try { return Boolean(JSON.parse(r.body).id); }
+      catch { return false; }
+    },
+  });
+
+  // Pause de 1 s : modélise le temps entre deux actions utilisateur
+  sleep(1);
+}
+```
+
+Pas-à-pas : (1) `stages` modélise la montée progressive — monter directement à 100 VUs est un spike, pas un load test ; (2) les thresholds définissent le budget avant d'avoir vu les chiffres ; (3) `tags: { endpoint: 'invite' }` permet un seuil p95 spécifique à cet endpoint ; (4) `check` valide le contrat fonctionnel **pendant** la charge ; (5) `sleep(1)` évite que k6 sature artificiellement le serveur.
+
+Lancer :
+
+```bash
+k6 run tests/perf/invitation-load.js
+```
+
+### Exemple B — spike test (lecture de sortie et diagnostic)
+
+Un spike test avec 10 VUs → pic brutal à 500 VUs → retour :
+
+```js
+// tests/perf/invitation-spike.js
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+
+export const options = {
+  stages: [
+    { duration: '10s', target: 10  }, // baseline
+    { duration: '5s',  target: 500 }, // pic brutal
+    { duration: '30s', target: 500 }, // maintien du pic
+    { duration: '10s', target: 10  }, // retour à la normale
+    { duration: '10s', target: 0   },
+  ],
+  thresholds: {
+    // On accepte une dégradation sous pic, mais pas l'effondrement
+    'http_req_duration': ['p(95)<2000'],
+    'http_req_failed':   ['rate<0.05'],
+  },
+};
+
+export default function () {
+  const res = http.post(
+    'http://localhost:3000/api/invitations',
+    JSON.stringify({ email: `user${__VU}@tribu.fr`, familyId: 'fam-1' }),
+    { headers: { 'Content-Type': 'application/json' } },
+  );
+  check(res, { 'non-5xx': (r) => r.status < 500 });
+  sleep(1);
+}
+```
+
+Sortie à analyser :
+
+```
+http_req_duration..: avg=892ms  p(95)=1 847ms  p(99)=3 201ms  max=8 450ms
+http_req_failed....: 3.20%   ✗ 480
+✓ http_req_duration: p(95)<2000 — OK (1847ms)
+✓ http_req_failed..: rate<0.05  — OK (0.032)
+```
+
+Lecture : p95 = 1 847 ms < 2 000 ms → sous le seuil assoupli pour le spike. Taux d'erreur 3,2 % < 5 %. Le système survit au pic mais se dégrade fortement. Next step : augmenter les connexions du pool de base ou ajouter un rate limiter en entrée.
+
+## 4. Pièges & misconceptions
+
+- **Utiliser la moyenne à la place de p95.** La moyenne additionne les temps de réponse et divise par N. Un seul timeout à 30 s sur 1 000 requêtes rapides ne dégrade la moyenne que de 30 ms — imperceptible. p95 = 30 000 ms le trahit immédiatement. *Correct* : toujours contractualiser sur p95 ou p99, jamais sur la moyenne seule.
+
+- **Tester en local et publier les chiffres comme référence.** Un laptop développeur n'a pas les mêmes CPU, mémoire, latence réseau, limites de fichiers ouverts qu'un serveur en staging. Les résultats locaux sont 3-10× meilleurs. *Correct* : les tests de charge tournent sur une infrastructure proche de la prod (staging), pas sur le poste du développeur.
+
+- **Pas de seuil explicite.** Lancer k6 et observer les chiffres sans threshold revient à peser un patient sans donner de poids de référence. Le test ne peut pas échouer. *Correct* : définir les thresholds avant de lancer le premier run, idéalement dans un fichier de configuration versionné.
+
+- **Confondre test fonctionnel et test de performance.** Écrire des checks k6 très détaillés (body exact, champs précis) duplique la couverture Vitest et alourdit le script. k6 checks = contrat minimal (status code, présence d'un id) ; la sémantique fine = tests fonctionnels. *Correct* : les deux couches sont complémentaires, pas substituables.
+
+- **Confondre spike test et stress test.** Un stress test monte graduellement jusqu'à la rupture (on cherche la limite). Un spike test monte brutalement à une charge prédéfinie et observe la récupération (on cherche la résilience). *Correct* : stress → `stages` avec target croissant sans plafond ; spike → pic brutal puis retour, seuils assouplis.
+
+- **Interpréter max comme seuil.** Un max à 5 000 ms peut être un cas isolé (cold start, GC pause). Alerter sur le max → faux positifs en cascade. *Correct* : max = signal d'investigation, pas seuil. Utiliser p99 pour les cas limites.
+
+## 5. Ancrage TribuZen
+
+Couche fil-rouge : **test de charge sur l'endpoint d'invitation TribuZen (k6, seuil p95)** (`smaurier/tribuzen`).
+
+En session, le script `tests/perf/invitation-load.js` de l'Exemple A tourne contre le vrai serveur NestJS TribuZen en local ou staging. Le SLO p95 < 500 ms correspond à l'engagement beta : une invitation confirmée en moins d'une seconde pour 95 % des familles. Si le threshold échoue, les coupables probables sont la requête Prisma `create` sans index, ou le call notifier synchrone bloquant le thread — deux leviers d'optimisation identifiés directement par la sortie k6.
+
+Le workflow CI associé (`.github/workflows/perf.yml`) bloque le merge si le budget est violé. On ne livre pas un endpoint d'invitation dégradé en production.
+
+## 6. Points clés
+
+1. Load = charge nominale ; stress = jusqu'à rupture ; spike = pic brutal + récupération ; soak = durée longue pour détecter les fuites.
+2. p95 et p99 sont les métriques contractuelles ; la moyenne masque les outliers et ne doit pas servir de seuil.
+3. Un VU k6 est un utilisateur virtuel qui exécute la fonction `default` en boucle ; `stages` pilote l'évolution du nombre de VUs dans le temps.
+4. `thresholds` = budget de performance : si un seuil est violé, k6 sort exit 1 et la CI échoue.
+5. Définir les thresholds avant le premier run, pas après avoir vu les chiffres.
+6. `check` = assertion inline sur la réponse (ne fait pas échouer le test) ; `threshold` = critère de sortie (fait échouer la CI).
+7. Tags (`tags: { endpoint: 'invite' }`) permettent des thresholds par endpoint dans le même run.
+8. Les tests de charge tournent sur une infra proche de la prod (pas le laptop développeur).
+
+## 7. Seeds Anki
+
+```
+Quels sont les 4 types de tests de performance et leur question respective ?|Load = charge nominale ; Stress = où est la limite ; Spike = survie + récupération après pic brutal ; Soak = fuite mémoire ou connexions sur durée longue
+Pourquoi utiliser p95 plutôt que la moyenne comme seuil de performance ?|La moyenne masque les outliers : 5 timeouts à 30 s sur 1000 requêtes rapides élèvent la moyenne de seulement 150 ms. p95 les révèle immédiatement.
+Quelle est la différence entre un check et un threshold en k6 ?|check = assertion inline qui compte les succès/échecs sans arrêter le test. threshold = critère de sortie : si violé, k6 sort exit 1 et la CI échoue.
+Qu'est-ce qu'un VU dans k6 et que fait-il ?|Virtual User — goroutine légère qui exécute la fonction default en boucle. 100 VUs = 100 utilisateurs fictifs en parallèle.
+À quoi servent les stages dans options k6 ?|Ils définissent l'évolution du nombre de VUs dans le temps via une liste de { duration, target }. k6 interpole linéairement entre chaque cible.
+Quand définir les thresholds de performance — avant ou après le premier run ?|Avant. Les définir après revient à adapter le budget au résultat observé, ce qui vide le test de sens.
+Différence entre spike test et stress test ?|Stress = montée progressive jusqu'à rupture (cherche la limite du système). Spike = pic brutal prédéfini puis retour à la normale (cherche la résilience et la récupération).
+Pourquoi ne pas baser les seuils sur le max k6 ?|Le max peut être un cas isolé (cold start, GC pause). Alerter dessus génère des faux positifs. Utiliser p99 pour les cas limites, le max pour l'investigation.
+```
+
+## Pont vers le lab
+
+> Lab associé : `06-testing/labs/lab-17-performance/README.md`. Tu y écris, en **k6 réel**, le test de charge de l'endpoint d'invitation TribuZen — stages, thresholds p95, checks, tag par endpoint — et tu l'intègres en CI. Corrigé complet commenté + variante J+30 dans le README du lab.
