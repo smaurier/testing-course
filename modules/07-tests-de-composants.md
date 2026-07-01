@@ -1,1181 +1,342 @@
-# Module 07 — Tests de composants
-
-| Difficulte | Duree estimee | Lab | Quiz |
-|------------|---------------|-----|------|
-| 3/5        | 90 min        | [Lab 07](../labs/lab-07-tests-composants/) | [Quiz 07](../quizzes/quiz-07-composants.html) |
-
-## Objectifs
-
-- Comprendre ce qu'est un test de composant et sa place dans la pyramide des tests
-- Adopter la philosophie "tester le comportement, pas l'implementation"
-- Maîtriser les stratégies de rendu : full mount vs shallow mount
-- Écrire des tests centres sur l'utilisateur avec la bonne priorite de selecteurs
-- Tester props, events, slots, rendu conditionnel, listes, formulaires et états asynchrones
-- Comparer les approches Vue Test Utils, React Testing Library et Angular TestBed
-
+---
+titre: Tests de composants
+cours: 06-testing
+notions: [monter un composant en test, requêtes par rôle accessible getByRole, simuler une interaction utilisateur, tester le comportement pas l'implémentation, props et événements émis, états asynchrones dans un composant, Testing Library vs Vue Test Utils]
+outcomes: [monter et interroger un composant en test, simuler une interaction et vérifier l'effet observable, tester le comportement plutôt que les détails internes]
+prerequis: [06-architecture-testable]
+next: 08-msw-mock-service-worker
+libs: [{ name: vitest, version: ^4.1.9 }, { name: "@vue/test-utils", version: ^2 }]
+tribuzen: tester le composant FamilyCard TribuZen (props famille, émission select au clic, état vide)
+last-reviewed: 2026-07
 ---
 
-## Qu'est-ce qu'un test de composant ?
+# Tests de composants
 
-Un test de composant se situe entre le test unitaire pur et le test d'intégration. Il teste un composant UI de manière isolee, mais avec son rendu réel dans un DOM (réel ou simule).
+> **Outcomes — tu sauras FAIRE :** monter et interroger un composant Vue en test sans navigateur réel, simuler une interaction utilisateur et vérifier l'effet observable, tester le comportement plutôt que les détails internes d'implémentation.
+> **Difficulté :** :star::star::star:
 
-```
-                     Test unitaire
-                         |
-                         v
-     Fonction pure  →  Composant isole  →  Plusieurs composants
-                         ^                        ^
-                    Test de composant       Test d'integration
-                         |
-                         v
-                  Full mount (DOM)
-```
+## 1. Cas concret d'abord
 
-### Comparaison avec les autres niveaux
+Dans TribuZen, le composant `FamilyCard` affiche une carte famille — nom, nombre de membres, bouton « Rejoindre ». Si aucune famille n'est fournie, il affiche un état vide. Un clic sur « Rejoindre » émet l'id de la famille au composant parent.
 
-```typescript
-// Test unitaire : fonction pure, pas de DOM
-import { describe, it, expect } from 'vitest';
-import { formatCurrency } from './formatCurrency';
+Comment prouver que ce composant fonctionne — sans ouvrir un navigateur, sans Cypress, sans screenshot ? Tu veux :
 
-describe('formatCurrency', () => {
-  it('should format euros correctly', () => {
-    expect(formatCurrency(1234.5, 'EUR')).toBe('1 234,50 €');
-  });
-});
+1. Vérifier que la prop `family` se reflète dans le DOM rendu.
+2. Vérifier qu'un clic déclenche l'émission de l'id correct.
+3. Vérifier que l'état vide s'affiche quand `family` est absent.
 
-// Test de composant : rendu dans un DOM, interactions simulees
-// (pseudo-code generique, framework-agnostic)
-describe('PriceDisplay component', () => {
-  it('should render formatted price with currency symbol', () => {
-    const element = render(PriceDisplay, { props: { amount: 1234.5, currency: 'EUR' } });
-    expect(element.textContent).toContain('1 234,50 €');
-  });
-});
+La réponse : **`@vue/test-utils`** — tu montes le composant dans un DOM virtuel (jsdom), interagis avec lui comme un utilisateur, et tu assertes sur ce qui est visible.
 
-// Test d'integration : plusieurs composants + store + router
-describe('ProductPage integration', () => {
-  it('should add product to cart and update header count', () => {
-    const page = renderWithProviders(ProductPage, { store, router });
-    clickButton(page, 'Ajouter au panier');
-    expect(getHeaderCartCount(page)).toBe('1');
-  });
-});
-```
-
-### Quand écrire un test de composant ?
-
-| Situation | Type recommande |
-|-----------|----------------|
-| Logique metier pure (calculs, transformations) | Test unitaire |
-| Un composant avec ses props/events | **Test de composant** |
-| Un composant avec ses enfants directs | **Test de composant** |
-| Flux utilisateur complet (login → dashboard) | Test E2E |
-| Composant + store + API réelle | Test d'intégration |
-
----
-
-## Philosophie : tester le comportement, pas l'implementation
-
-Le principe fondamental est de tester ce que l'utilisateur voit et fait, pas comment le composant fonctionne en interne.
-
-### Anti-pattern : tester l'implementation
-
-```typescript
-// MAUVAIS — couplage a l'implementation interne
-describe('Counter', () => {
-  it('should increment internal state', () => {
-    const wrapper = mount(Counter);
-
-    // On accede a l'etat interne du composant
-    expect(wrapper.vm.count).toBe(0);
-
-    // On appelle une methode interne directement
-    wrapper.vm.increment();
-
-    // On verifie l'etat interne
-    expect(wrapper.vm.count).toBe(1);
-  });
-});
-```
-
-### Bonne pratique : tester le comportement
-
-```typescript
-// BON — on teste comme un utilisateur
-describe('Counter', () => {
-  it('should display incremented value after clicking the button', () => {
-    const wrapper = mount(Counter);
-
-    // On verifie ce que l'utilisateur voit
-    expect(wrapper.getByRole('status')).toHaveTextContent('0');
-
-    // On interagit comme un utilisateur
-    wrapper.getByRole('button', { name: /incrementer/i }).click();
-
-    // On verifie ce que l'utilisateur voit apres l'interaction
-    expect(wrapper.getByRole('status')).toHaveTextContent('1');
-  });
-});
-```
-
-### Le principe de Kent C. Dodds
-
-> "The more your tests resemble the way your software is used,
-> the more confidence they can give you."
-
-Cela signifie :
-- Pas d'acces a `wrapper.vm` ou `component.instance`
-- Pas d'appel direct aux méthodes internes
-- Chercher les éléments par leur role, label, ou texte visible
-- Interagir via click, type, submit — pas via des appels programmatiques
-
----
-
-## Full mount vs shallow mount
-
-### Full mount (deep rendering)
-
-Le composant et tous ses enfants sont rendus integralement.
-
-```typescript
-import { mount } from '@vue/test-utils'; // Vue
-import { render } from '@testing-library/react'; // React
-
-// Vue — full mount
-const wrapper = mount(ProductCard, {
-  props: {
-    product: { id: 1, name: 'Laptop', price: 999, image: '/laptop.jpg' },
-  },
-});
-
-// Le composant enfant <PriceDisplay> est rendu avec son HTML complet
-expect(wrapper.html()).toContain('999,00 €');
-```
-
-### Shallow mount (rendu superficiel)
-
-Les composants enfants sont remplaces par des stubs (placeholders).
-
-```typescript
-import { shallowMount } from '@vue/test-utils';
-
-const wrapper = shallowMount(ProductCard, {
-  props: {
-    product: { id: 1, name: 'Laptop', price: 999, image: '/laptop.jpg' },
-  },
-});
-
-// <PriceDisplay> est remplace par <price-display-stub>
-// On ne peut pas verifier le formatage du prix
-expect(wrapper.find('price-display-stub').exists()).toBe(true);
-```
-
-### Comparaison
-
-| Critere | Full mount | Shallow mount |
-|---------|-----------|---------------|
-| Realisme | Rendu complet, proche de la realite | Stubs pour les enfants |
-| Vitesse | Plus lent (plus de DOM a créer) | Plus rapide |
-| Isolation | Moins isole (depend des enfants) | Plus isole |
-| Confiance | Plus de confiance | Moins de confiance |
-| Fragilite | Peut casser si un enfant change | Isole des changements enfants |
-| Recommandation | Prefere par Testing Library | Traditionnel mais en declin |
-
-### Recommandation actuelle
-
-La tendance est au **full mount** car :
-- Il teste ce que l'utilisateur voit réellement
-- Il détecté les regressions dans les composants enfants
-- Il est plus proche du comportement réel de l'application
-- Les gains de vitesse du shallow mount sont negligeables avec les outils modernes
-
-```typescript
-// Recommande : full mount avec isolation selective
-import { mount } from '@vue/test-utils';
-
-const wrapper = mount(ProductCard, {
-  props: { product },
-  global: {
-    // On ne stub que les dependances externes lourdes
-    stubs: {
-      // Remplacer un composant tiers lourd par un stub
-      HeavyChartLibrary: { template: '<div data-testid="chart-stub" />' },
-    },
-    // Fournir les plugins necessaires
-    plugins: [createTestPinia()],
-  },
-});
-```
-
----
-
-## Priorite des selecteurs
-
-L'ordre de priorite pour trouver un élément dans le DOM teste reflete l'accessibilité et la robustesse :
-
-### 1. getByRole — meilleur choix
-
-```typescript
-// Bouton
-screen.getByRole('button', { name: /sauvegarder/i });
-
-// Champ de saisie avec label
-screen.getByRole('textbox', { name: /adresse email/i });
-
-// Lien
-screen.getByRole('link', { name: /voir le profil/i });
-
-// Case a cocher
-screen.getByRole('checkbox', { name: /accepter les conditions/i });
-
-// Titre
-screen.getByRole('heading', { name: /bienvenue/i, level: 1 });
-
-// Zone de navigation
-screen.getByRole('navigation');
-
-// Element de liste
-screen.getByRole('listitem');
-```
-
-### 2. getByLabelText — pour les champs de formulaire
-
-```typescript
-// Input avec <label for="email">Adresse email</label>
-screen.getByLabelText(/adresse email/i);
-
-// Input avec aria-label
-screen.getByLabelText(/rechercher/i);
-
-// Select avec label
-screen.getByLabelText(/pays/i);
-```
-
-### 3. getByText — pour le contenu textuel
-
-```typescript
-// Paragraphe, span, ou tout element contenant ce texte
-screen.getByText(/aucun resultat trouve/i);
-
-// Message d'erreur
-screen.getByText(/ce champ est obligatoire/i);
-
-// Texte dans un element non-interactif
-screen.getByText(/derniere mise a jour :/i);
-```
-
-### 4. getByTestId — dernier recours
-
-```typescript
-// Quand aucune autre query ne fonctionne
-// Element sans texte visible, sans role semantique
-screen.getByTestId('loading-spinner');
-screen.getByTestId('avatar-placeholder');
-```
-
-### Tableau récapitulatif
-
-| Priorite | Query | Quand l'utiliser |
-|----------|-------|------------------|
-| 1 | `getByRole` | Éléments interactifs, headings, landmarks |
-| 2 | `getByLabelText` | Champs de formulaire |
-| 3 | `getByPlaceholderText` | Si pas de label (deconseille mais pragmatique) |
-| 4 | `getByText` | Contenu textuel non-interactif |
-| 5 | `getByDisplayValue` | Valeur actuelle d'un input |
-| 6 | `getByAltText` | Images |
-| 7 | `getByTitle` | Attribut title (peu accessible) |
-| 8 | `getByTestId` | Dernier recours, aucune semantique |
-
----
-
-## Patterns de test : rendu et vérification
-
-### Pattern 1 : Render + Verify
-
-Le pattern le plus simple — rendre le composant et vérifier le contenu affiche.
-
-```typescript
-// Illustration avec le DOM natif (sans framework)
-import { describe, it, expect } from 'vitest';
-import { JSDOM } from 'jsdom';
-
-function createUserCard(user: { name: string; email: string; role: string }): HTMLElement {
-  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
-  const document = dom.window.document;
-
-  const card = document.createElement('article');
-  card.setAttribute('role', 'article');
-
-  card.innerHTML = `
-    <h2>${user.name}</h2>
-    <p data-field="email">${user.email}</p>
-    <span class="badge badge--${user.role}">${user.role}</span>
-  `;
-
-  return card;
+```vue
+<!-- src/components/FamilyCard.vue -->
+<script setup lang="ts">
+export interface Family {
+  id: string
+  name: string
+  memberCount: number
 }
 
-describe('UserCard (vanilla DOM)', () => {
-  it('should render user information', () => {
-    const card = createUserCard({
-      name: 'Alice Martin',
-      email: 'alice@example.com',
-      role: 'admin',
-    });
+const props = defineProps<{ family?: Family | null }>()
+const emit = defineEmits<{ select: [id: string] }>()
+</script>
 
-    expect(card.querySelector('h2')?.textContent).toBe('Alice Martin');
-    expect(card.querySelector('[data-field="email"]')?.textContent).toBe('alice@example.com');
-    expect(card.querySelector('.badge')?.textContent).toBe('admin');
-    expect(card.querySelector('.badge')?.classList.contains('badge--admin')).toBe(true);
-  });
-
-  it('should have article role for accessibility', () => {
-    const card = createUserCard({ name: 'Bob', email: 'bob@test.com', role: 'user' });
-    expect(card.getAttribute('role')).toBe('article');
-  });
-});
+<template>
+  <article v-if="props.family" aria-label="Carte famille">
+    <h2>{{ props.family.name }}</h2>
+    <p>{{ props.family.memberCount }} membres</p>
+    <button @click="emit('select', props.family.id)">Rejoindre</button>
+  </article>
+  <p v-else role="status">Aucune famille disponible</p>
+</template>
 ```
 
-### Pattern 2 : framework Vue avec Testing Library
+Question centrale : comment tester ces trois cas sans base de données ni navigateur réel ? La suite répond.
 
-```typescript
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/vue';
-import UserCard from './UserCard.vue';
+## 2. Théorie complète, concise
 
-describe('UserCard', () => {
-  const defaultUser = {
-    name: 'Alice Martin',
-    email: 'alice@example.com',
-    role: 'admin' as const,
-    avatar: '/avatars/alice.jpg',
-  };
+### Monter un composant en test
 
-  it('should render user name as heading', () => {
-    render(UserCard, { props: { user: defaultUser } });
+`mount(Component, options)` est le point d'entrée de Vue Test Utils. Il crée une application Vue en mémoire, rend le composant dans un DOM jsdom, et retourne un **wrapper** — objet qui expose des méthodes pour interagir et interroger le composant.
 
-    expect(screen.getByRole('heading', { name: /alice martin/i })).toBeTruthy();
-  });
+```ts
+import { mount } from '@vue/test-utils'
+import FamilyCard from './FamilyCard.vue'
 
-  it('should render email address', () => {
-    render(UserCard, { props: { user: defaultUser } });
-
-    expect(screen.getByText('alice@example.com')).toBeTruthy();
-  });
-
-  it('should render role badge with correct variant', () => {
-    render(UserCard, { props: { user: defaultUser } });
-
-    const badge = screen.getByText('admin');
-    expect(badge.classList.contains('badge--admin')).toBe(true);
-  });
-
-  it('should render avatar with alt text', () => {
-    render(UserCard, { props: { user: defaultUser } });
-
-    const img = screen.getByRole('img', { name: /alice martin/i });
-    expect(img.getAttribute('src')).toBe('/avatars/alice.jpg');
-  });
-});
+const wrapper = mount(FamilyCard, {
+  props: { family: { id: 'fam-1', name: 'Les Martin', memberCount: 4 } },
+})
 ```
 
----
+`mount` rend le composant **et tous ses enfants** (full mount). `shallowMount(Component)` — alias de `mount(Component, { shallow: true })` — remplace les composants enfants par des stubs. Préférer `mount` par défaut : il teste ce que l'utilisateur voit réellement et détecte les régressions dans les enfants.
 
-## Simuler des interactions utilisateur
+Options utiles de `mount` :
 
-### Clics
+| Option | Usage |
+|---|---|
+| `props` | Passer des props au composant |
+| `slots` | Fournir du contenu aux slots |
+| `global.plugins` | Injecter Pinia, Router, i18n |
+| `global.stubs` | Stubber un enfant lourd précis |
+| `attachTo` | Attacher au `document.body` (nécessaire pour focus/blur) |
 
-```typescript
-import { render, screen } from '@testing-library/vue';
-import { userEvent } from '@testing-library/user-event';
+### Requêtes par rôle accessible
 
-describe('ToggleButton', () => {
-  it('should toggle state on click', async () => {
-    const user = userEvent.setup();
-    render(ToggleButton, { props: { label: 'Mode sombre' } });
+Vue Test Utils expose `wrapper.find(selector)` et `wrapper.get(selector)` avec des sélecteurs CSS standard. C'est fonctionnel, mais un sélecteur CSS `.family-card__title` est **fragile** : il se casse si on renomme la classe.
 
-    const button = screen.getByRole('button', { name: /mode sombre/i });
-    expect(button.getAttribute('aria-pressed')).toBe('false');
+La meilleure stratégie : interroger par **rôle ARIA accessible** — `wrapper.get('[role="status"]')`, `wrapper.get('button')`, `wrapper.get('h2')` — ou, avec `@testing-library/vue`, via `screen.getByRole('button', { name: /rejoindre/i })`.
 
-    await user.click(button);
-    expect(button.getAttribute('aria-pressed')).toBe('true');
+**Lien RGAA :** cibler un élément par son rôle accessible (`button`, `heading`, `article`, `status`, `alert`, `progressbar`) force le composant à avoir une sémantique HTML correcte. Un test qui utilise `getByRole('button', { name: /rejoindre/i })` échoue si le bouton n'a pas de libellé accessible — il détecte les problèmes d'accessibilité avant qu'ils n'atteignent la production. Tester par rôle = auditer l'accessibilité gratuitement à chaque run CI.
 
-    await user.click(button);
-    expect(button.getAttribute('aria-pressed')).toBe('false');
-  });
-});
+Hiérarchie des sélecteurs (du plus robuste au moins) :
+
+| Priorité | Approche | Exemple |
+|---|---|---|
+| 1 | Rôle accessible | `getByRole('button', { name: /rejoindre/i })` |
+| 2 | Label de formulaire | `getByLabelText(/email/i)` |
+| 3 | Texte visible | `getByText(/aucune famille/i)` |
+| 4 | data-testid | `get('[data-testid="spinner"]')` |
+
+### Simuler une interaction utilisateur
+
+`trigger(eventName, options?)` déclenche un événement DOM sur un wrapper. Il retourne une **Promise** — toujours `await` pour laisser Vue mettre à jour le DOM avant d'asserter.
+
+```ts
+await wrapper.get('button').trigger('click')
+await wrapper.get('input').trigger('input')
 ```
 
-### Saisie de texte
+`setValue(value)` combine `element.value = value` + `trigger('input')` + `trigger('change')` — pratique pour les champs de formulaire :
 
-```typescript
-describe('SearchInput', () => {
-  it('should emit search event on Enter', async () => {
-    const user = userEvent.setup();
-    const { emitted } = render(SearchInput);
-
-    const input = screen.getByRole('searchbox');
-    await user.type(input, 'testing library');
-    await user.keyboard('{Enter}');
-
-    expect(emitted().search).toBeTruthy();
-    expect(emitted().search[0]).toEqual(['testing library']);
-  });
-
-  it('should clear input when clicking reset button', async () => {
-    const user = userEvent.setup();
-    render(SearchInput);
-
-    const input = screen.getByRole('searchbox');
-    await user.type(input, 'some text');
-    expect(input).toHaveValue('some text');
-
-    await user.click(screen.getByRole('button', { name: /effacer/i }));
-    expect(input).toHaveValue('');
-  });
-});
+```ts
+await wrapper.get('input').setValue('alice@tribu.fr')
 ```
 
-### Selection dans un dropdown
+Pour simuler la frappe réelle avec focus, keydown, keyup, `@testing-library/user-event` est plus fidèle au comportement navigateur. Pour les interactions simples (clic, saisie), `trigger` de Vue Test Utils suffit.
 
-```typescript
-describe('LanguageSelector', () => {
-  it('should update selected language', async () => {
-    const user = userEvent.setup();
-    render(LanguageSelector, {
-      props: { languages: ['Francais', 'English', 'Nederlands'] },
-    });
+### Tester le comportement, pas l'implémentation
 
-    const select = screen.getByRole('combobox', { name: /langue/i });
-    await user.selectOptions(select, 'English');
+La règle centrale (Kent C. Dodds) : « The more your tests resemble the way your software is used, the more confidence they can give you. »
 
-    expect(select).toHaveValue('English');
-  });
-});
+Concrètement :
+
+| Interdit — implémentation | Correct — comportement observable |
+|---|---|
+| `wrapper.vm.count` | `wrapper.get('[role="status"]').text()` |
+| `wrapper.vm.handleClick()` | `await wrapper.get('button').trigger('click')` |
+| `wrapper.vm.$options.methods` | `wrapper.emitted('select')` |
+| `.find('.internal-class')` | `.get('[role="article"]')` ou `.get('h2')` |
+
+Un test qui accède à `wrapper.vm` se casse à chaque refactor interne même si le comportement visible est inchangé. Un test qui interroge le DOM visible survit aux refactors internes.
+
+### Props et événements émis
+
+**Passer des props au montage :**
+
+```ts
+const wrapper = mount(FamilyCard, {
+  props: { family: { id: 'fam-1', name: 'Les Martin', memberCount: 4 } },
+})
 ```
 
----
+**Mettre à jour les props après montage :**
 
-## Rendu conditionnel
-
-```typescript
-interface AlertProps {
-  type: 'success' | 'error' | 'warning' | 'info';
-  message: string;
-  dismissible?: boolean;
-}
-
-describe('AlertBanner', () => {
-  it('should render message with correct type', () => {
-    render(AlertBanner, {
-      props: { type: 'error', message: 'Une erreur est survenue' },
-    });
-
-    const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent('Une erreur est survenue');
-    expect(alert.classList.contains('alert--error')).toBe(true);
-  });
-
-  it('should show dismiss button only when dismissible', () => {
-    // Sans dismissible
-    const { unmount } = render(AlertBanner, {
-      props: { type: 'info', message: 'Information', dismissible: false },
-    });
-
-    expect(screen.queryByRole('button', { name: /fermer/i })).toBeNull();
-    unmount();
-
-    // Avec dismissible
-    render(AlertBanner, {
-      props: { type: 'info', message: 'Information', dismissible: true },
-    });
-
-    expect(screen.getByRole('button', { name: /fermer/i })).toBeTruthy();
-  });
-
-  it('should hide alert when dismiss button is clicked', async () => {
-    const user = userEvent.setup();
-    render(AlertBanner, {
-      props: { type: 'warning', message: 'Attention', dismissible: true },
-    });
-
-    expect(screen.getByRole('alert')).toBeTruthy();
-
-    await user.click(screen.getByRole('button', { name: /fermer/i }));
-
-    expect(screen.queryByRole('alert')).toBeNull();
-  });
-});
+```ts
+await wrapper.setProps({ family: null })
+// DOM mis à jour → on peut asserter l'état vide
 ```
 
----
+**Vérifier les événements émis :** `wrapper.emitted(eventName)` retourne un tableau des appels à cet événement. Chaque entrée est un tableau des arguments passés lors de cet appel. Retourne `undefined` si l'événement n'a jamais été émis.
 
-## Tester des listes
+```ts
+await wrapper.get('button').trigger('click')
 
-```typescript
-interface Task {
-  id: string;
-  title: string;
-  completed: boolean;
-  priority: 'low' | 'medium' | 'high';
-}
-
-describe('TaskList', () => {
-  const tasks: Task[] = [
-    { id: '1', title: 'Ecrire les tests', completed: false, priority: 'high' },
-    { id: '2', title: 'Refactorer le code', completed: true, priority: 'medium' },
-    { id: '3', title: 'Deployer en production', completed: false, priority: 'low' },
-  ];
-
-  it('should render all tasks', () => {
-    render(TaskList, { props: { tasks } });
-
-    const items = screen.getAllByRole('listitem');
-    expect(items).toHaveLength(3);
-  });
-
-  it('should display task titles', () => {
-    render(TaskList, { props: { tasks } });
-
-    expect(screen.getByText('Ecrire les tests')).toBeTruthy();
-    expect(screen.getByText('Refactorer le code')).toBeTruthy();
-    expect(screen.getByText('Deployer en production')).toBeTruthy();
-  });
-
-  it('should mark completed tasks with strikethrough', () => {
-    render(TaskList, { props: { tasks } });
-
-    const completedTask = screen.getByText('Refactorer le code');
-    expect(completedTask.closest('[data-completed="true"]')).toBeTruthy();
-  });
-
-  it('should render empty state when no tasks', () => {
-    render(TaskList, { props: { tasks: [] } });
-
-    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
-    expect(screen.getByText(/aucune tache/i)).toBeTruthy();
-  });
-
-  it('should sort tasks by priority', () => {
-    render(TaskList, { props: { tasks, sortBy: 'priority' } });
-
-    const items = screen.getAllByRole('listitem');
-    expect(items[0]).toHaveTextContent('Ecrire les tests');       // high
-    expect(items[1]).toHaveTextContent('Refactorer le code');      // medium
-    expect(items[2]).toHaveTextContent('Deployer en production');  // low
-  });
-});
+// wrapper.emitted('select') = [['fam-1']] si un seul clic
+expect(wrapper.emitted('select')).toHaveLength(1)          // un seul appel
+expect(wrapper.emitted('select')![0]).toEqual(['fam-1'])   // args du 1er appel
+expect(wrapper.emitted('select')).toBeUndefined()          // jamais émis
 ```
 
----
+### États asynchrones dans un composant
 
-## Tester des formulaires
+Deux types d'asynchronisme dans les composants :
 
-```typescript
-interface ContactFormData {
-  name: string;
-  email: string;
-  subject: string;
-  message: string;
-}
+**1. Réactivité Vue** — après un `trigger` ou `setProps`, Vue met à jour le DOM de façon asynchrone via `nextTick`. Vue Test Utils retourne déjà une Promise depuis `trigger` et `setProps`, donc `await` suffit dans la grande majorité des cas :
 
-describe('ContactForm', () => {
-  it('should submit form with valid data', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn();
-    render(ContactForm, { props: { onSubmit } });
-
-    await user.type(screen.getByLabelText(/nom/i), 'Alice Martin');
-    await user.type(screen.getByLabelText(/email/i), 'alice@example.com');
-    await user.selectOptions(screen.getByLabelText(/sujet/i), 'Support technique');
-    await user.type(screen.getByLabelText(/message/i), 'Bonjour, j\'ai un probleme...');
-
-    await user.click(screen.getByRole('button', { name: /envoyer/i }));
-
-    expect(onSubmit).toHaveBeenCalledWith({
-      name: 'Alice Martin',
-      email: 'alice@example.com',
-      subject: 'Support technique',
-      message: 'Bonjour, j\'ai un probleme...',
-    });
-  });
-
-  it('should display validation errors for empty required fields', async () => {
-    const user = userEvent.setup();
-    render(ContactForm, { props: { onSubmit: vi.fn() } });
-
-    // Soumettre sans remplir les champs
-    await user.click(screen.getByRole('button', { name: /envoyer/i }));
-
-    expect(screen.getByText(/le nom est obligatoire/i)).toBeTruthy();
-    expect(screen.getByText(/l'email est obligatoire/i)).toBeTruthy();
-  });
-
-  it('should display error for invalid email format', async () => {
-    const user = userEvent.setup();
-    render(ContactForm, { props: { onSubmit: vi.fn() } });
-
-    await user.type(screen.getByLabelText(/email/i), 'invalid-email');
-    await user.click(screen.getByRole('button', { name: /envoyer/i }));
-
-    expect(screen.getByText(/format d'email invalide/i)).toBeTruthy();
-  });
-
-  it('should disable submit button while submitting', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn(() => new Promise((resolve) => setTimeout(resolve, 1000)));
-    render(ContactForm, { props: { onSubmit } });
-
-    // Remplir tous les champs obligatoires
-    await user.type(screen.getByLabelText(/nom/i), 'Alice');
-    await user.type(screen.getByLabelText(/email/i), 'alice@test.com');
-    await user.type(screen.getByLabelText(/message/i), 'Hello');
-
-    const submitButton = screen.getByRole('button', { name: /envoyer/i });
-    await user.click(submitButton);
-
-    expect(submitButton).toBeDisabled();
-    expect(screen.getByText(/envoi en cours/i)).toBeTruthy();
-  });
-});
+```ts
+await wrapper.get('button').trigger('click')
+// DOM déjà mis à jour ici
 ```
 
----
+**2. Promesses internes** (appel API dans `onMounted`, `setTimeout`) — il faut attendre que toutes les promesses en attente se résolvent avec `flushPromises` :
 
-## Etats de chargement asynchrone
+```ts
+import { flushPromises } from '@vue/test-utils'
 
-```typescript
-describe('UserProfile', () => {
-  it('should show loading spinner initially', () => {
-    render(UserProfile, { props: { userId: '123' } });
-
-    expect(screen.getByRole('progressbar')).toBeTruthy();
-    expect(screen.queryByRole('heading')).toBeNull();
-  });
-
-  it('should display user data after loading', async () => {
-    render(UserProfile, { props: { userId: '123' } });
-
-    // Attendre que le contenu apparaisse
-    const heading = await screen.findByRole('heading', { name: /alice martin/i });
-    expect(heading).toBeTruthy();
-
-    // Le spinner doit avoir disparu
-    expect(screen.queryByRole('progressbar')).toBeNull();
-  });
-
-  it('should display error message on fetch failure', async () => {
-    // Simuler une erreur API (via MSW ou mock)
-    server.use(
-      http.get('/api/users/123', () => {
-        return HttpResponse.json(
-          { error: 'User not found' },
-          { status: 404 },
-        );
-      }),
-    );
-
-    render(UserProfile, { props: { userId: '123' } });
-
-    const errorMessage = await screen.findByRole('alert');
-    expect(errorMessage).toHaveTextContent(/utilisateur non trouve/i);
-  });
-
-  it('should retry on clicking retry button', async () => {
-    const user = userEvent.setup();
-    let callCount = 0;
-
-    server.use(
-      http.get('/api/users/123', () => {
-        callCount++;
-        if (callCount === 1) {
-          return HttpResponse.json({ error: 'Server error' }, { status: 500 });
-        }
-        return HttpResponse.json({ id: '123', name: 'Alice Martin' });
-      }),
-    );
-
-    render(UserProfile, { props: { userId: '123' } });
-
-    // Premiere tentative : erreur
-    const errorAlert = await screen.findByRole('alert');
-    expect(errorAlert).toBeTruthy();
-
-    // Cliquer sur "Reessayer"
-    await user.click(screen.getByRole('button', { name: /reessayer/i }));
-
-    // Deuxieme tentative : succes
-    const heading = await screen.findByRole('heading', { name: /alice martin/i });
-    expect(heading).toBeTruthy();
-  });
-});
+const wrapper = mount(FamilyCard, { props: { familyId: 'fam-1' } })
+// Le composant lance un fetch dans onMounted — pas encore résolu
+await flushPromises() // résout toutes les promesses en attente
+expect(wrapper.get('h2').text()).toBe('Les Martin')
 ```
 
----
+Pour asserter sur un élément qui **apparaît** après un délai, `@testing-library/vue` expose `findByRole(...)` — une Promise qui retente automatiquement jusqu'à ce que l'élément existe (avec timeout configurable).
 
-## Tester les props
+### Testing Library vs Vue Test Utils
 
-```typescript
-describe('Badge component', () => {
-  it('should render with default variant', () => {
-    render(Badge, { props: { label: 'Nouveau' } });
+Ces deux outils ont des philosophies différentes et peuvent cohabiter :
 
-    const badge = screen.getByText('Nouveau');
-    expect(badge.classList.contains('badge--default')).toBe(true);
-  });
+| Critère | Vue Test Utils | @testing-library/vue |
+|---|---|---|
+| Approche | API orientée composant (`wrapper`) | API orientée DOM (`screen`) |
+| Requêtes | CSS selectors, `.vm` accessible | `getByRole`, `findByText`, accessibilité first |
+| Interactions | `trigger('click')`, `setValue` | `userEvent.click()`, `userEvent.type()` (plus fidèle) |
+| Async | `flushPromises`, `await trigger` | `findBy*` avec retry automatique |
+| Emits Vue | `wrapper.emitted('select')` | Callback prop mocké (`vi.fn()`) |
+| Slots | `slots: { default: '...' }` | JSX dans `render()` |
+| Shallow | `shallowMount` / `{ shallow: true }` | Non recommandé |
+| Idéal pour | Emits, slots, v-model, lifecycle Vue | Tests orientés accessibilité, comportement utilisateur |
 
-  it('should apply variant class', () => {
-    const variants = ['success', 'warning', 'error', 'info'] as const;
+En pratique, les deux s'installent ensemble et partagent le même jsdom : Vue Test Utils gère les spécificités Vue (`emitted`, slots, `setProps`), Testing Library fournit des requêtes `getByRole` ergonomiques et AccessibilityTree-aware.
 
-    variants.forEach((variant) => {
-      const { unmount } = render(Badge, {
-        props: { label: `Test ${variant}`, variant },
-      });
+## 3. Worked examples
 
-      const badge = screen.getByText(`Test ${variant}`);
-      expect(badge.classList.contains(`badge--${variant}`)).toBe(true);
-      unmount();
-    });
-  });
+### Exemple A — Props, texte visible et état vide
 
-  it('should render as pill when rounded prop is true', () => {
-    render(Badge, {
-      props: { label: 'Pill', rounded: true },
-    });
+Objectif : prouver que `FamilyCard` affiche les bonnes données selon la prop `family`, et bascule vers l'état vide quand elle est absente.
 
-    const badge = screen.getByText('Pill');
-    expect(badge.classList.contains('badge--rounded')).toBe(true);
-  });
+```ts
+// src/components/FamilyCard.test.ts
+import { describe, it, expect } from 'vitest'
+import { mount } from '@vue/test-utils'
+import FamilyCard from './FamilyCard.vue'
 
-  it('should render icon when provided', () => {
-    render(Badge, {
-      props: { label: 'Avec icone', icon: 'check' },
-    });
+const mockFamily = { id: 'fam-1', name: 'Les Martin', memberCount: 4 }
 
-    expect(screen.getByRole('img', { name: /check/i })).toBeTruthy();
-    expect(screen.getByText('Avec icone')).toBeTruthy();
-  });
-});
+describe('FamilyCard — affichage', () => {
+  it('affiche le nom et le nombre de membres quand family est fournie', () => {
+    const wrapper = mount(FamilyCard, {
+      props: { family: mockFamily },
+    })
+
+    // .get() throw immédiatement si l'élément est absent — fail rapide et message clair
+    expect(wrapper.get('h2').text()).toBe('Les Martin')
+    // .text() sur le wrapper racine inclut tout le texte rendu dans le composant
+    expect(wrapper.text()).toContain('4 membres')
+    expect(wrapper.get('button').text()).toBe('Rejoindre')
+  })
+
+  it('affiche l\'état vide quand family est absent', () => {
+    const wrapper = mount(FamilyCard)
+
+    // role="status" annonce l'état vide aux technologies d'assistance (RGAA)
+    expect(wrapper.get('[role="status"]').text()).toBe('Aucune famille disponible')
+    // .find().exists() pour asserter l'ABSENCE sans throw
+    expect(wrapper.find('button').exists()).toBe(false)
+    expect(wrapper.find('article').exists()).toBe(false)
+  })
+
+  it('bascule vers l\'état vide après setProps', async () => {
+    const wrapper = mount(FamilyCard, { props: { family: mockFamily } })
+
+    // setProps met à jour la prop ET attend le nextTick — toujours await
+    await wrapper.setProps({ family: null })
+
+    expect(wrapper.find('h2').exists()).toBe(false)
+    expect(wrapper.get('[role="status"]').text()).toContain('Aucune famille')
+  })
+})
 ```
 
----
+Pas-à-pas : (1) `mount` avec `props` injecte les données sans backend ni store ; (2) `.get('h2')` throw si absent — préférable à `.find().text()` silencieux ; (3) `.find(...).exists()` pour asserter l'absence sans lever d'erreur ; (4) `setProps` + `await` pour tester la transition d'état réactive.
 
-## Tester les events
+### Exemple B — Émission d'événement au clic
 
-```typescript
-// Vue Test Utils
-describe('ColorPicker (Vue)', () => {
-  it('should emit color-change event on selection', async () => {
-    const wrapper = mount(ColorPicker, {
-      props: {
-        colors: ['#FF0000', '#00FF00', '#0000FF'],
-        modelValue: '#FF0000',
-      },
-    });
+Objectif : prouver que cliquer sur « Rejoindre » émet `select` avec le bon id, et qu'en état vide aucune émission n'est possible.
 
-    await wrapper.find('[data-color="#00FF00"]').trigger('click');
+```ts
+describe('FamilyCard — émission', () => {
+  it('émet select avec l\'id famille au clic sur Rejoindre', async () => {
+    const wrapper = mount(FamilyCard, {
+      props: { family: mockFamily },
+    })
 
-    expect(wrapper.emitted('update:modelValue')).toBeTruthy();
-    expect(wrapper.emitted('update:modelValue')![0]).toEqual(['#00FF00']);
-  });
+    // trigger retourne une Promise résolue après nextTick → toujours await
+    await wrapper.get('button').trigger('click')
 
-  it('should emit multiple events in sequence', async () => {
-    const wrapper = mount(ColorPicker, {
-      props: {
-        colors: ['#FF0000', '#00FF00', '#0000FF'],
-        modelValue: '#FF0000',
-      },
-    });
+    // wrapper.emitted('select') = [['fam-1']] pour un seul clic
+    // Structure : tableau d'appels, chaque appel est un tableau d'arguments
+    expect(wrapper.emitted('select')).toHaveLength(1)
+    expect(wrapper.emitted('select')![0]).toEqual(['fam-1'])
+  })
 
-    await wrapper.find('[data-color="#00FF00"]').trigger('click');
-    await wrapper.find('[data-color="#0000FF"]').trigger('click');
+  it('n\'émet rien si family est absent — le bouton n\'existe pas', () => {
+    const wrapper = mount(FamilyCard)
 
-    const emitted = wrapper.emitted('update:modelValue')!;
-    expect(emitted).toHaveLength(2);
-    expect(emitted[0]).toEqual(['#00FF00']);
-    expect(emitted[1]).toEqual(['#0000FF']);
-  });
-});
+    // emitted() retourne undefined si l'événement n'a jamais été émis
+    expect(wrapper.emitted('select')).toBeUndefined()
+  })
 
-// Testing Library (framework-agnostic pattern)
-describe('ColorPicker (Testing Library)', () => {
-  it('should call onChange handler when color is selected', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
+  it('émet select à chaque clic (double clic = deux émissions)', async () => {
+    const wrapper = mount(FamilyCard, { props: { family: mockFamily } })
 
-    render(ColorPicker, {
-      props: {
-        colors: ['#FF0000', '#00FF00', '#0000FF'],
-        value: '#FF0000',
-        onChange,
-      },
-    });
+    await wrapper.get('button').trigger('click')
+    await wrapper.get('button').trigger('click')
 
-    await user.click(screen.getByRole('radio', { name: /vert/i }));
-
-    expect(onChange).toHaveBeenCalledWith('#00FF00');
-  });
-});
+    // Deux appels enregistrés
+    expect(wrapper.emitted('select')).toHaveLength(2)
+    expect(wrapper.emitted('select')![1]).toEqual(['fam-1'])
+  })
+})
 ```
 
----
+Pas-à-pas : (1) `trigger('click')` est `await`-é — après cette ligne le DOM et les émissions sont à jour ; (2) `wrapper.emitted('select')![0]` — le `!` dit à TypeScript que ce n'est pas `undefined` (on vient de vérifier `toHaveLength(1)`) ; (3) `toBeUndefined()` pour l'état vide confirme qu'aucune émission n'a eu lieu ; (4) deux clics successifs = deux entrées dans le tableau `emitted`.
 
-## Tester les slots / children
+## 4. Pièges & misconceptions
 
-```typescript
-// Vue — testing slots
-describe('Card component (Vue)', () => {
-  it('should render default slot content', () => {
-    const wrapper = mount(Card, {
-      slots: {
-        default: '<p>Contenu principal</p>',
-      },
-    });
+- **Accéder à `wrapper.vm` (tester l'implémentation).** `expect(wrapper.vm.isSelected).toBe(false)` se casse au premier refactor interne même si le comportement visible n'a pas changé. *Correct* : asserter sur le DOM — `expect(wrapper.find('[aria-selected="true"]').exists()).toBe(false)`. L'accès à `wrapper.vm` n'est acceptable qu'en dernier recours pour une valeur sans représentation DOM.
 
-    expect(wrapper.html()).toContain('Contenu principal');
-  });
+- **Sélecteurs CSS fragiles.** `wrapper.get('.family-card__title')` se brise si on renomme la classe BEM ou change la structure interne. *Correct* : cibler par sémantique — `wrapper.get('h2')`, `wrapper.get('[role="status"]')`, ou avec `@testing-library/vue` : `screen.getByRole('heading', { name: /les martin/i })`. Bonus RGAA : un sélecteur par rôle qui échoue signale une régression d'accessibilité.
 
-  it('should render named slots', () => {
-    const wrapper = mount(Card, {
-      slots: {
-        header: '<h2>Titre de la carte</h2>',
-        default: '<p>Contenu de la carte</p>',
-        footer: '<button>Action</button>',
-      },
-    });
+- **Oublier `await` sur `trigger` et `setProps`.** Sans `await`, l'assertion s'exécute avant que Vue ait mis à jour le DOM via `nextTick`. *Symptôme* : le test passe dans un sens mais échoue de façon aléatoire, ou passe toujours parce que la réactivité est synchrone dans ce cas précis. *Correct* : `await wrapper.get('button').trigger('click')` — `trigger` retourne une Promise résolue après `nextTick`.
 
-    expect(wrapper.find('.card__header h2').text()).toBe('Titre de la carte');
-    expect(wrapper.find('.card__body p').text()).toBe('Contenu de la carte');
-    expect(wrapper.find('.card__footer button').text()).toBe('Action');
-  });
+- **Confondre `find` et `get`.** `wrapper.find(sel)` retourne un `ErrorWrapper` silencieux quand l'élément est absent — appeler `.text()` dessus retourne `''` sans erreur, masquant le bug. `wrapper.get(sel)` lève une erreur immédiate avec un message clair si l'élément est introuvable. *Règle* : `get` pour asserter la **présence** (fail rapide) ; `find().exists()` pour asserter l'**absence** sans throw.
 
-  it('should render scoped slot with provided data', () => {
-    const wrapper = mount(DataTable, {
-      props: {
-        items: [
-          { id: 1, name: 'Alice', score: 95 },
-          { id: 2, name: 'Bob', score: 82 },
-        ],
-        columns: ['name', 'score'],
-      },
-      slots: {
-        'cell-score': `
-          <template #cell-score="{ value }">
-            <span class="score" :class="{ 'score--high': value >= 90 }">
-              {{ value }}
-            </span>
-          </template>
-        `,
-      },
-    });
+- **Oublier `flushPromises` pour l'async interne.** Si le composant fait un appel API dans `onMounted`, `mount(...)` retourne avant que la promesse soit résolue. `await trigger(...)` ne résout que la réactivité Vue, pas les promesses applicatives. *Correct* : `await flushPromises()` après le montage pour résoudre toutes les promesses en attente avant d'asserter sur le contenu chargé.
 
-    const scores = wrapper.findAll('.score');
-    expect(scores).toHaveLength(2);
-    expect(scores[0].classes()).toContain('score--high');
-    expect(scores[1].classes()).not.toContain('score--high');
-  });
-});
+## 5. Ancrage TribuZen
 
-// React — testing children and render props
-describe('Card component (React pattern)', () => {
-  it('should render children', () => {
-    render(
-      <Card>
-        <p>Contenu de la carte</p>
-      </Card>
-    );
+Couche fil-rouge : **tester le composant `FamilyCard` TribuZen — props famille, émission `select` au clic, état vide** (`smaurier/tribuzen`).
 
-    expect(screen.getByText('Contenu de la carte')).toBeTruthy();
-  });
+En session de travail concret :
 
-  it('should render header and footer via props', () => {
-    render(
-      <Card
-        header={<h2>Mon titre</h2>}
-        footer={<button>Valider</button>}
-      >
-        <p>Contenu</p>
-      </Card>
-    );
+- `FamilyCard.vue` est le premier composant Vue de l'interface TribuZen. Il reçoit une prop `family` (type `Family` — id, nom, nombre de membres) et émet `select` quand l'utilisateur clique « Rejoindre ».
+- Les trois cas à couvrir — données visibles, état vide, émission — correspondent directement aux comportements que l'utilisateur final expérimente.
+- Le `role="status"` sur l'état vide est un choix sémantique RGAA : l'attribut annonce l'état vide aux lecteurs d'écran. Le test qui cible `[role="status"]` échoue si cet attribut est absent — c'est une exigence d'accessibilité automatiquement vérifiée à chaque run CI.
+- La liste des familles (`FamilyList.vue`) passera plus tard en test d'intégration avec Pinia — `FamilyCard` isolé se teste parfaitement ici, sans store, grâce à la DI par props.
 
-    expect(screen.getByRole('heading', { name: /mon titre/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /valider/i })).toBeTruthy();
-  });
-});
+## 6. Points clés
+
+1. `mount(Component, { props })` monte le composant dans jsdom et retourne un `VueWrapper` pour interagir et asserter — `shallowMount` stubbe les enfants, mais `mount` est recommandé par défaut.
+2. `wrapper.get(sel)` throw si l'élément est absent (fail rapide et message clair) ; `wrapper.find(sel).exists()` pour asserter l'absence sans throw.
+3. Cibler par rôle ARIA (`[role="status"]`, `button`, `h2`) rend les tests robustes aux refactors CSS et aligne avec le RGAA — sélecteur fragile = classe CSS interne.
+4. `trigger(eventName)` retourne une Promise — toujours `await` pour avoir le DOM à jour avant d'asserter.
+5. `wrapper.emitted('select')` retourne `[['fam-1']]` pour un seul clic avec l'id `'fam-1'` ; `undefined` si l'événement n'a jamais été émis.
+6. `setProps({ ... })` met à jour les props après montage et attend le `nextTick` — `await` obligatoire.
+7. `await flushPromises()` résout toutes les promesses JS en attente dans le composant (appels API `onMounted`, `setTimeout`) — distinct de `await trigger` qui ne couvre que la réactivité Vue.
+8. Vue Test Utils est idéal pour les spécificités Vue (`emitted`, `slots`, `setProps`, `vm`) ; Testing Library (`@testing-library/vue`) complète avec des requêtes `getByRole` ergonomiques et AccessibilityTree-aware — les deux cohabitent sur le même jsdom.
+
+## 7. Seeds Anki
+
+```
+Quelle fonction de @vue/test-utils monte un composant Vue dans jsdom ?|mount(Component, { props, slots, global }) — retourne un VueWrapper
+Différence entre wrapper.get() et wrapper.find() ?|get() throw si l'élément est absent (fail rapide) ; find() retourne un ErrorWrapper silencieux — utiliser find().exists() pour asserter l'absence
+Comment vérifier qu'un composant a émis select avec l'id fam-1 ?|expect(wrapper.emitted('select')![0]).toEqual(['fam-1'])
+Pourquoi await est obligatoire après trigger() et setProps() ?|Ces méthodes retournent une Promise résolue après le nextTick de Vue — sans await on asserterait avant que le DOM soit mis à jour
+Qu'est-ce que flushPromises() résout ?|Toutes les promesses JS en attente dans le composant (fetch onMounted, setTimeout) — trigger seul ne suffit pas pour l'async interne
+Pourquoi cibler par rôle accessible plutôt que par classe CSS ?|Le rôle est stable aux refactors internes et force une sémantique HTML correcte — bonus RGAA : un test getByRole détecte les régressions d'accessibilité gratuitement
+Différence entre mount et shallowMount ?|mount rend le composant ET ses enfants (full, recommandé) ; shallowMount remplace les enfants par des stubs (isolation maximale, moins de fidélité)
+Que retourne wrapper.emitted('select') si l'événement n'a jamais été émis ?|undefined — utiliser toBeUndefined() pour asserter l'absence d'émission
 ```
 
----
+## Pont vers le lab
 
-## Illustration vanilla DOM complete
-
-Pour comprendre ce qui se passe "sous le capot", voici un composant et ses tests en pur TypeScript avec jsdom :
-
-```typescript
-// counter.ts — composant vanilla
-export interface CounterOptions {
-  initialValue?: number;
-  min?: number;
-  max?: number;
-  step?: number;
-}
-
-export function createCounter(container: HTMLElement, options: CounterOptions = {}): {
-  getValue: () => number;
-  destroy: () => void;
-} {
-  const { initialValue = 0, min = -Infinity, max = Infinity, step = 1 } = options;
-  let value = initialValue;
-
-  // Creer le DOM
-  const display = document.createElement('output');
-  display.setAttribute('role', 'status');
-  display.setAttribute('aria-live', 'polite');
-  display.textContent = String(value);
-
-  const decrementBtn = document.createElement('button');
-  decrementBtn.setAttribute('aria-label', 'Diminuer');
-  decrementBtn.textContent = '-';
-  decrementBtn.disabled = value <= min;
-
-  const incrementBtn = document.createElement('button');
-  incrementBtn.setAttribute('aria-label', 'Augmenter');
-  incrementBtn.textContent = '+';
-  incrementBtn.disabled = value >= max;
-
-  function updateDisplay(): void {
-    display.textContent = String(value);
-    decrementBtn.disabled = value <= min;
-    incrementBtn.disabled = value >= max;
-  }
-
-  decrementBtn.addEventListener('click', () => {
-    if (value > min) {
-      value = Math.max(min, value - step);
-      updateDisplay();
-    }
-  });
-
-  incrementBtn.addEventListener('click', () => {
-    if (value < max) {
-      value = Math.min(max, value + step);
-      updateDisplay();
-    }
-  });
-
-  container.append(decrementBtn, display, incrementBtn);
-
-  return {
-    getValue: () => value,
-    destroy: () => {
-      container.innerHTML = '';
-    },
-  };
-}
-```
-
-```typescript
-// counter.test.ts
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createCounter } from './counter';
-
-describe('createCounter (vanilla DOM)', () => {
-  let container: HTMLDivElement;
-
-  beforeEach(() => {
-    container = document.createElement('div');
-    document.body.appendChild(container);
-  });
-
-  it('should render with initial value', () => {
-    createCounter(container, { initialValue: 5 });
-
-    const output = container.querySelector('[role="status"]');
-    expect(output?.textContent).toBe('5');
-  });
-
-  it('should increment on click', () => {
-    createCounter(container);
-
-    const incrementBtn = container.querySelector('[aria-label="Augmenter"]') as HTMLButtonElement;
-    const output = container.querySelector('[role="status"]');
-
-    incrementBtn.click();
-    expect(output?.textContent).toBe('1');
-
-    incrementBtn.click();
-    expect(output?.textContent).toBe('2');
-  });
-
-  it('should decrement on click', () => {
-    createCounter(container, { initialValue: 10 });
-
-    const decrementBtn = container.querySelector('[aria-label="Diminuer"]') as HTMLButtonElement;
-    const output = container.querySelector('[role="status"]');
-
-    decrementBtn.click();
-    expect(output?.textContent).toBe('9');
-  });
-
-  it('should respect min boundary', () => {
-    createCounter(container, { initialValue: 0, min: 0 });
-
-    const decrementBtn = container.querySelector('[aria-label="Diminuer"]') as HTMLButtonElement;
-    const output = container.querySelector('[role="status"]');
-
-    expect(decrementBtn.disabled).toBe(true);
-    decrementBtn.click();
-    expect(output?.textContent).toBe('0');
-  });
-
-  it('should respect max boundary', () => {
-    createCounter(container, { initialValue: 10, max: 10 });
-
-    const incrementBtn = container.querySelector('[aria-label="Augmenter"]') as HTMLButtonElement;
-    expect(incrementBtn.disabled).toBe(true);
-  });
-
-  it('should use custom step', () => {
-    createCounter(container, { initialValue: 0, step: 5 });
-
-    const incrementBtn = container.querySelector('[aria-label="Augmenter"]') as HTMLButtonElement;
-    const output = container.querySelector('[role="status"]');
-
-    incrementBtn.click();
-    expect(output?.textContent).toBe('5');
-
-    incrementBtn.click();
-    expect(output?.textContent).toBe('10');
-  });
-});
-```
-
----
-
-## Comparaison cross-framework
-
-| Fonctionnalite | Vue Test Utils | React Testing Library | Angular TestBed |
-|----------------|---------------|----------------------|-----------------|
-| **Rendu** | `mount(Comp, { props })` | `render(<Comp prop={v} />)` | `TestBed.createComponent(Comp)` |
-| **Shallow render** | `shallowMount(Comp)` | Non recommande | `NO_ERRORS_SCHEMA` |
-| **Trouver élément** | `wrapper.find('.class')` | `screen.getByRole(...)` | `fixture.debugElement.query(By.css(...))` |
-| **Clic** | `wrapper.trigger('click')` | `userEvent.click(el)` | `el.triggerEventHandler('click')` |
-| **Saisie texte** | `wrapper.setValue('text')` | `userEvent.type(el, 'text')` | `input.value = 'text'; dispatchEvent(...)` |
-| **Vérifier events** | `wrapper.emitted('event')` | `vi.fn()` callback prop | `spyOn(comp.eventEmitter, 'emit')` |
-| **Attente async** | `await nextTick()` | `await findBy...()` | `fixture.detectChanges()` |
-| **Props** | `wrapper.setProps({...})` | `rerender(<Comp newProp />)` | `comp.input = val; detectChanges()` |
-| **Slots / Children** | `slots: { default: '...' }` | JSX children | `<ng-content>` + wrapper comp |
-| **Store intégration** | `createTestPinia()` | `<Provider store={store}>` | `provideMockStore()` |
-| **Router** | `global: { plugins: [router] }` | `<MemoryRouter>` | `RouterTestingModule` |
-| **Philosophie** | Acces au `wrapper.vm` possible | Interdit acces interne | Mixte (DI accessible) |
-
-### Exemple comparatif — même composant, 3 frameworks
-
-```typescript
-// === VUE TEST UTILS ===
-import { mount } from '@vue/test-utils';
-
-it('should add item to todo list', async () => {
-  const wrapper = mount(TodoApp);
-
-  await wrapper.find('input[type="text"]').setValue('Nouveau todo');
-  await wrapper.find('form').trigger('submit');
-
-  expect(wrapper.findAll('[data-testid="todo-item"]')).toHaveLength(1);
-  expect(wrapper.text()).toContain('Nouveau todo');
-});
-
-// === REACT TESTING LIBRARY ===
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-
-it('should add item to todo list', async () => {
-  const user = userEvent.setup();
-  render(<TodoApp />);
-
-  await user.type(screen.getByRole('textbox'), 'Nouveau todo');
-  await user.click(screen.getByRole('button', { name: /ajouter/i }));
-
-  expect(screen.getAllByRole('listitem')).toHaveLength(1);
-  expect(screen.getByText('Nouveau todo')).toBeTruthy();
-});
-
-// === ANGULAR TESTBED ===
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-
-it('should add item to todo list', () => {
-  const fixture: ComponentFixture<TodoAppComponent> = TestBed.createComponent(TodoAppComponent);
-  fixture.detectChanges();
-
-  const input = fixture.nativeElement.querySelector('input[type="text"]');
-  input.value = 'Nouveau todo';
-  input.dispatchEvent(new Event('input'));
-  fixture.detectChanges();
-
-  const form = fixture.nativeElement.querySelector('form');
-  form.dispatchEvent(new Event('submit'));
-  fixture.detectChanges();
-
-  const items = fixture.nativeElement.querySelectorAll('[data-testid="todo-item"]');
-  expect(items.length).toBe(1);
-  expect(fixture.nativeElement.textContent).toContain('Nouveau todo');
-});
-```
-
----
-
-## Bonnes pratiques — résumé
-
-1. **Tester le comportement** : ce que l'utilisateur voit et fait
-2. **Preferer getByRole** : meilleur pour l'accessibilité et la robustesse
-3. **Full mount par defaut** : plus realiste, plus de confiance
-4. **userEvent > fireEvent** : simule mieux le comportement réel (hover, focus, etc.)
-5. **Un seul concept par test** : facile a diagnostiquer en cas d'echec
-6. **Noms descriptifs** : le nom du test doit decrire le scenario
-7. **Pas de `wrapper.vm`** : ne pas acceder a l'état interne du composant
-8. **findBy pour l'async** : utiliser `findByRole`, `findByText` pour les éléments qui apparaissent après un delai
-9. **cleanup automatique** : Testing Library nettoie le DOM entre chaque test
-10. **Pas de snapshots DOM** : fragiles et peu informatifs, préférer des assertions explicites
-
----
-
-## Exercice pratique
-
-Creez les tests de composant pour un composant `ProductCard` qui :
-- Affiche le nom, le prix, l'image et la description d'un produit
-- A un bouton "Ajouter au panier" qui emet un événement avec le produit
-- Affiche "En rupture de stock" si `stock === 0` et désactivé le bouton
-- Affiche un badge "Promotion" si `discount > 0`
-- Le prix barre et le prix remise doivent s'afficher correctement
-
-> Solution dans le [Lab 07](../labs/lab-07-tests-composants/)
-
----
-
-## Navigation
-
-| Précédent | Suivant |
-|-----------|---------|
-| [06 - Architecture testable](./06-architecture-testable) | [08 - MSW Mock Service Worker](./08-msw-mock-service-worker) |
-
----
-
-## Ressources
-
-- [Quiz 07 : Testez vos connaissances](../quizzes/quiz-07-composants.html)
-- [Lab 07 : Tests de composants](../labs/lab-07-tests-composants/)
-- Kent C. Dodds — [Testing Implementation Details](https://kentcdodds.com/blog/testing-implementation-details)
-- Testing Library — [Guiding Principles](https://testing-library.com/docs/guiding-principles)
-- Testing Library — [Which Query Should I Use?](https://testing-library.com/docs/queries/about#priority)
-- Vue Test Utils — [Documentation](https://test-utils.vuejs.org/)
-- Angular — [Component Testing](https://angular.dev/guide/testing/components-scenarios)
-
----
-
-<!-- parcours-recommande -->
-
-::: tip Parcours recommandé
-1. **Screencast** : [screencast 07 composants](../screencasts/screencast-07-composants.md)
-2. **Lab** : [lab-07-tests-composants](../labs/lab-07-tests-composants/README)
-3. **Quiz** : [quiz 07 composants](../quizzes/quiz-07-composants.html)
-:::
+> Lab associé : `06-testing/labs/lab-07-tests-composants/`. Tu y montes `FamilyCard` en **Vitest + @vue/test-utils réels**, testes les trois cas (props, état vide, émission au clic) et gères l'async avec `flushPromises`. Corrigé complet commenté + variante J+30 dans le README du lab.

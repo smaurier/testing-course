@@ -1,438 +1,95 @@
-# Module 08 — MSW (Mock Service Worker)
-
-| Difficulte | Duree estimee | Lab | Quiz |
-|------------|---------------|-----|------|
-| 3/5        | 90 min        | [Lab 08](../labs/lab-08-msw/) | [Quiz 08](../quizzes/quiz-08-msw.html) |
-
-## Objectifs
-
-- Comprendre pourquoi intercepter au niveau réseau plutot que mocker les modules
-- Installer et configurer MSW pour Node (tests) et navigateur (dev)
-- Écrire des handlers pour GET, POST, PUT, DELETE
-- Gérer les paramètres dynamiques (path, query, body)
-- Maîtriser le cycle de vie du serveur MSW
-- Écrire des overrides per-test pour les cas d'erreur
-- Appliquer MSW a des patterns de tests réels (CRUD, pagination, retry)
-
+---
+titre: MSW — Mock Service Worker
+cours: 06-testing
+notions: [interception réseau vs mock de fetch, handlers http get post, setupServer pour les tests, HttpResponse et réponses dynamiques, erreurs et latence delay, override de handler par test, resetHandlers lifecycle, MSW en dev avec setupWorker]
+outcomes: [mocker une API au niveau réseau avec MSW 2, brancher setupServer dans Vitest avec le bon lifecycle, simuler erreurs et latence, overrider un handler pour un test précis]
+prerequis: [07-tests-de-composants]
+next: 09-tests-integration
+libs: [{ name: vitest, version: ^4.1.9 }, { name: msw, version: ^2 }]
+tribuzen: mocker l'API famille/invitation TribuZen avec MSW pour tester le front sans backend réel
+last-reviewed: 2026-07
 ---
 
-## Pourquoi MSW ?
+# MSW — Mock Service Worker
 
-### Le problème des mocks traditionnels
+> **Outcomes — tu sauras FAIRE :** mocker une API REST au niveau réseau avec MSW 2 (`http`/`HttpResponse`), brancher `setupServer` dans Vitest avec le bon lifecycle, simuler erreurs HTTP et latence, et overrider un handler pour un seul test.
+> **Difficulté :** :star::star::star:
 
-Quand on teste du code qui fait des appels HTTP, on a plusieurs options :
+## 1. Cas concret d'abord
 
-```typescript
-// Option 1 : vi.mock() — mock au niveau module
-vi.mock('./api/userApi', () => ({
-  getUsers: vi.fn().mockResolvedValue([{ id: 1, name: 'Alice' }]),
-}));
-
-// Probleme : on ne teste pas le vrai code de fetch/axios
-// Si l'URL change, le header manque, ou le parsing echoue, le test passe quand meme
-```
+Dans TribuZen, le composant `InvitationList` fait un appel `GET /api/invitations?familyId=fam-1` pour afficher les invitations en attente. Le backend n'est pas encore prêt. La tentation : mocker `fetch` à la main avec `vi.stubGlobal('fetch', vi.fn())`. Le problème : le test devient couplé à la **fonction** `fetch` elle-même — si tu changes de client HTTP (axios, ky, wretch), le test casse sans que le comportement ait changé. Et si l'URL est mal construite, le mock ne le voit pas.
 
 ```typescript
-// Option 2 : axios interceptors ou mock d'axios
-vi.mock('axios', () => ({
-  default: {
-    get: vi.fn().mockResolvedValue({ data: [{ id: 1, name: 'Alice' }] }),
-    create: vi.fn(() => ({
-      get: vi.fn().mockResolvedValue({ data: [] }),
-    })),
-  },
-}));
-
-// Probleme : couple au client HTTP (impossible de migrer d'axios a fetch)
-// Probleme : syntaxe complexe pour recreer l'API d'axios
-```
-
-### La solution MSW : interception au niveau réseau
-
-MSW intercepte les requêtes **au niveau de la couche réseau**, pas au niveau du code.
-
-```
-Votre code  →  fetch() / axios  →  [MSW intercepte ici]  →  Reponse simulee
-                                          ↑
-                                  Pas besoin de mocker
-                                  fetch ou axios
-```
-
-Avantages :
-- Le vrai code de `fetch()` ou `axios` est exécuté
-- Les headers, l'URL, le body sont réellement construits et envoyes
-- Si vous changez de client HTTP, les tests continuent de fonctionner
-- Les handlers sont réutilisables entre tests Node et navigateur
-
-### Comparaison des approches
-
-| Critere | `vi.mock()` | Axios mock | MSW |
-|---------|-------------|------------|-----|
-| Niveau d'interception | Module | Client HTTP | Réseau |
-| Teste le vrai fetch/axios | Non | Non | Oui |
-| Agnostique du client HTTP | Non | Non | Oui |
-| Reutilisable navigateur/Node | Non | Non | Oui |
-| Complexite de setup | Faible | Moyenne | Moyenne (initiale) |
-| Realisme | Faible | Moyen | Eleve |
-| Maintenance | Fragile | Moyenne | Robuste |
-| Supporte REST + GraphQL | Manuel | Manuel | Natif |
-
----
-
-## Installation
-
-```bash
-# Avec pnpm
-pnpm add -D msw
-
-# Avec npm
-npm install --save-dev msw
-
-# Avec yarn
-yarn add --dev msw
-```
-
-### Structure de fichiers recommandee
-
-```
-src/
-  mocks/
-    handlers.ts       # handlers par defaut (happy path)
-    server.ts         # configuration du serveur Node (tests)
-    browser.ts        # configuration du worker navigateur (dev)
-    fixtures/
-      users.ts        # donnees de test reutilisables
-      products.ts
-```
-
----
-
-## Handlers : les bases
-
-Un handler MSW définit comment repondre à une requête HTTP donnee.
-
-### Import et syntaxe de base
-
-```typescript
-// src/mocks/handlers.ts
-import { http, HttpResponse } from 'msw';
-
-// Structure d'un handler :
-// http.<method>('<url>', ({ request, params, cookies }) => {
-//   return HttpResponse.json(data, { status, headers });
-// });
-```
-
-### GET — récupérer des donnees
-
-```typescript
-import { http, HttpResponse } from 'msw';
-
-interface User {
-  id: number;
-  name: string;
+// src/api/invitationApi.ts — le code à tester (ne pas toucher)
+export interface Invitation {
+  id: string;
   email: string;
-  role: 'admin' | 'user';
+  status: 'pending' | 'accepted' | 'declined';
+  familyId: string;
 }
 
-const users: User[] = [
-  { id: 1, name: 'Alice Martin', email: 'alice@example.com', role: 'admin' },
-  { id: 2, name: 'Bob Dupont', email: 'bob@example.com', role: 'user' },
-  { id: 3, name: 'Charlie Durand', email: 'charlie@example.com', role: 'user' },
-];
-
-export const handlers = [
-  // GET /api/users — liste de tous les utilisateurs
-  http.get('/api/users', () => {
-    return HttpResponse.json(users);
-  }),
-
-  // GET /api/users/:id — un utilisateur par ID
-  http.get('/api/users/:id', ({ params }) => {
-    const { id } = params;
-    const user = users.find((u) => u.id === Number(id));
-
-    if (!user) {
-      return HttpResponse.json(
-        { error: 'User not found' },
-        { status: 404 },
-      );
-    }
-
-    return HttpResponse.json(user);
-  }),
-];
+export async function fetchInvitations(familyId: string): Promise<Invitation[]> {
+  const res = await fetch(`/api/invitations?familyId=${familyId}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
 ```
 
-### POST — créer une ressource
+Question centrale : comment tester `fetchInvitations` sans backend réel et sans mocker `fetch` ? Réponse : **MSW intercepte au niveau réseau**, sous `fetch`, sous axios, sous tout client HTTP. Le vrai `fetch` s'exécute — l'URL est réellement construite — et MSW renvoie une réponse simulée à la couche réseau.
+
+## 2. Théorie complète, concise
+
+### Interception réseau vs mock de fetch
+
+`vi.stubGlobal('fetch', vi.fn())` remplace la **fonction** `fetch`. Le code de construction de la requête (URL, headers, body) ne s'exécute plus. Si l'URL est mal formée ou si un header d'auth est oublié, le test reste vert.
+
+MSW intercepte **en aval** de `fetch` et d'axios, au niveau du module `http`/`https` de Node (en test) ou d'un Service Worker (en navigateur). Le vrai `fetch` s'exécute ; MSW intercepte la requête sortante et renvoie une réponse simulée. Le code de production est entièrement exercé.
+
+| Critère | `vi.stubGlobal('fetch')` | MSW |
+|---------|--------------------------|-----|
+| Niveau | Remplacement de `fetch` | Couche réseau |
+| Vrai `fetch` exécuté | Non | Oui |
+| URL/headers vérifiés | Non | Oui |
+| Agnostique du client HTTP | Non | Oui |
+| Réutilisable navigateur/Node | Non | Oui |
+
+### Handlers — `http.get` / `http.post`
+
+Un handler MSW associe une méthode + une URL pattern à un **résolveur** qui renvoie une `HttpResponse`.
 
 ```typescript
-export const handlers = [
-  // ...GET handlers
+import { http, HttpResponse } from 'msw';
 
-  http.post('/api/users', async ({ request }) => {
-    const body = await request.json() as Omit<User, 'id'>;
-
-    // Valider le body
-    if (!body.name || !body.email) {
-      return HttpResponse.json(
-        { error: 'Name and email are required' },
-        { status: 400 },
-      );
-    }
-
-    const newUser: User = {
-      id: users.length + 1,
-      name: body.name,
-      email: body.email,
-      role: body.role ?? 'user',
-    };
-
-    return HttpResponse.json(newUser, { status: 201 });
-  }),
-];
-```
-
-### PUT — mettre a jour une ressource
-
-```typescript
-http.put('/api/users/:id', async ({ params, request }) => {
-  const { id } = params;
-  const body = await request.json() as Partial<User>;
-  const userIndex = users.findIndex((u) => u.id === Number(id));
-
-  if (userIndex === -1) {
-    return HttpResponse.json(
-      { error: 'User not found' },
-      { status: 404 },
-    );
-  }
-
-  const updatedUser: User = {
-    ...users[userIndex],
-    ...body,
-    id: Number(id), // Ne pas permettre de changer l'ID
-  };
-
-  return HttpResponse.json(updatedUser);
-}),
-```
-
-### DELETE — supprimer une ressource
-
-```typescript
-http.delete('/api/users/:id', ({ params }) => {
-  const { id } = params;
-  const user = users.find((u) => u.id === Number(id));
-
-  if (!user) {
-    return HttpResponse.json(
-      { error: 'User not found' },
-      { status: 404 },
-    );
-  }
-
-  // Retourner 204 No Content
-  return new HttpResponse(null, { status: 204 });
-}),
-```
-
----
-
-## Handlers dynamiques
-
-### Parametres de chemin (path params)
-
-```typescript
-// Route : /api/organizations/:orgId/teams/:teamId/members
-http.get('/api/organizations/:orgId/teams/:teamId/members', ({ params }) => {
-  const { orgId, teamId } = params;
-
-  // params est type comme Record<string, string | readonly string[]>
-  const members = getMembersForTeam(String(orgId), String(teamId));
-
-  return HttpResponse.json({
-    orgId,
-    teamId,
-    members,
-    count: members.length,
-  });
-}),
-```
-
-### Parametres de requête (query params)
-
-```typescript
-// URL : /api/users?page=2&limit=10&sort=name&role=admin
-http.get('/api/users', ({ request }) => {
+http.get('/api/invitations', ({ request }) => {
   const url = new URL(request.url);
-  const page = Number(url.searchParams.get('page') ?? '1');
-  const limit = Number(url.searchParams.get('limit') ?? '10');
-  const sort = url.searchParams.get('sort') ?? 'id';
-  const roleFilter = url.searchParams.get('role');
-
-  let filteredUsers = [...users];
-
-  // Filtrer par role si specifie
-  if (roleFilter) {
-    filteredUsers = filteredUsers.filter((u) => u.role === roleFilter);
-  }
-
-  // Trier
-  filteredUsers.sort((a, b) => {
-    const aVal = a[sort as keyof User];
-    const bVal = b[sort as keyof User];
-    return String(aVal).localeCompare(String(bVal));
-  });
-
-  // Paginer
-  const start = (page - 1) * limit;
-  const paginatedUsers = filteredUsers.slice(start, start + limit);
-
-  return HttpResponse.json({
-    data: paginatedUsers,
-    pagination: {
-      page,
-      limit,
-      total: filteredUsers.length,
-      totalPages: Math.ceil(filteredUsers.length / limit),
-    },
-  });
-}),
-```
-
-### Corps de requête (request body)
-
-```typescript
-interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-interface LoginResponse {
-  token: string;
-  user: User;
-  expiresAt: string;
-}
-
-http.post('/api/auth/login', async ({ request }) => {
-  const { email, password } = await request.json() as LoginRequest;
-
-  // Simuler une verification
-  if (email === 'alice@example.com' && password === 'correct-password') {
-    const response: LoginResponse = {
-      token: 'fake-jwt-token-abc123',
-      user: { id: 1, name: 'Alice Martin', email, role: 'admin' },
-      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
-    };
-    return HttpResponse.json(response);
-  }
-
-  return HttpResponse.json(
-    { error: 'Invalid credentials' },
-    { status: 401 },
-  );
-}),
-```
-
----
-
-## HttpResponse : types de réponse
-
-### JSON
-
-```typescript
-// Reponse JSON standard
-HttpResponse.json({ data: 'value' });
-
-// Avec status personnalise
-HttpResponse.json({ id: 1 }, { status: 201 });
-
-// Avec headers personnalises
-HttpResponse.json(
-  { data: 'value' },
-  {
-    status: 200,
-    headers: {
-      'X-Total-Count': '42',
-      'X-Request-Id': 'req-abc-123',
-    },
-  },
-);
-```
-
-### Texte brut
-
-```typescript
-// Reponse texte
-HttpResponse.text('Hello, World!');
-
-// CSV
-HttpResponse.text('name,email\nAlice,alice@test.com\nBob,bob@test.com', {
-  headers: { 'Content-Type': 'text/csv' },
+  const familyId = url.searchParams.get('familyId');
+  return HttpResponse.json([
+    { id: 'inv-1', email: 'bob@tribu.fr', status: 'pending', familyId },
+  ]);
 });
 ```
 
-### Erreurs réseau
+Le résolveur reçoit `{ request, params, cookies }` :
+- `request` — `Request` standard Fetch API (headers, body, url, method)
+- `params` — path params extraits du pattern (`:id` → `params.id`)
+- `cookies` — cookies de la requête
+
+`HttpResponse.json(data, init?)` construit une réponse JSON avec `Content-Type: application/json`. `init` accepte `{ status, statusText, headers }`.
 
 ```typescript
-import { HttpResponse, http } from 'msw';
+// Status personnalisé
+HttpResponse.json({ error: 'Not found' }, { status: 404 });
 
-// Erreur reseau (pas de reponse du serveur)
-http.get('/api/unreachable', () => {
-  return HttpResponse.error();
-  // Provoque un TypeError: Failed to fetch
-});
-
-// Erreurs HTTP classiques
-http.get('/api/forbidden', () => {
-  return HttpResponse.json(
-    { error: 'Forbidden', message: 'You do not have access' },
-    { status: 403 },
-  );
-});
-
-http.get('/api/server-error', () => {
-  return HttpResponse.json(
-    { error: 'Internal Server Error' },
-    { status: 500 },
-  );
+// Headers personnalisés
+HttpResponse.json(data, {
+  status: 200,
+  headers: { 'X-Total-Count': '42' },
 });
 ```
 
-### Simulation de delai
+### `setupServer` + lifecycle dans Vitest
 
-```typescript
-import { http, HttpResponse, delay } from 'msw';
-
-http.get('/api/slow-endpoint', async () => {
-  // Simuler une latence de 2 secondes
-  await delay(2000);
-
-  return HttpResponse.json({ data: 'finally loaded' });
-}),
-
-// Delai aleatoire realiste
-http.get('/api/realistic-endpoint', async () => {
-  // Delai aleatoire entre 100ms et 500ms
-  await delay();
-
-  return HttpResponse.json({ data: 'loaded' });
-}),
-
-// Reponse qui ne se termine jamais (pour tester les timeouts)
-http.get('/api/timeout-endpoint', async () => {
-  await delay('infinite');
-
-  return HttpResponse.json({ data: 'never reached' });
-}),
-```
-
----
-
-## Configuration du serveur (Node / tests)
-
-### Setup du serveur
+`setupServer` (importé de `msw/node`) crée le serveur d'interception pour Node.js :
 
 ```typescript
 // src/mocks/server.ts
@@ -442,202 +99,145 @@ import { handlers } from './handlers';
 export const server = setupServer(...handlers);
 ```
 
-### Intégration avec Vitest
+Le **lifecycle** est canonique et non négociable :
 
 ```typescript
-// src/setupTests.ts (ou vitest.setup.ts)
-import { beforeAll, afterAll, afterEach } from 'vitest';
-import { server } from './mocks/server';
+// vitest.setup.ts
+import { beforeAll, afterEach, afterAll } from 'vitest';
+import { server } from './src/mocks/server';
 
-// Demarrer le serveur avant tous les tests
-beforeAll(() => {
-  server.listen({
-    onUnhandledRequest: 'error', // Erreur si une requete n'a pas de handler
-  });
-});
-
-// Reinitialiser les handlers apres chaque test
-// (supprime les overrides ajoutes via server.use())
-afterEach(() => {
-  server.resetHandlers();
-});
-
-// Arreter le serveur apres tous les tests
-afterAll(() => {
-  server.close();
-});
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
 ```
 
 ```typescript
 // vitest.config.ts
 import { defineConfig } from 'vitest/config';
-
 export default defineConfig({
-  test: {
-    setupFiles: ['./src/setupTests.ts'],
-    environment: 'jsdom', // ou 'happy-dom'
-  },
+  test: { setupFiles: ['./vitest.setup.ts'] },
 });
 ```
 
-### Cycle de vie du serveur
+Pourquoi chaque hook ?
+- `beforeAll` / `server.listen()` — active l'interception avant la suite
+- `afterEach` / `server.resetHandlers()` — retire les overrides per-test (`server.use(...)`), les handlers de base restent
+- `afterAll` / `server.close()` — coupe l'interception proprement
 
-```
-beforeAll  →  server.listen()     // Demarrer l'interception
-                                   //
-  test 1   →  (handlers par defaut)
-  afterEach →  server.resetHandlers()  // Supprimer les overrides
-                                   //
-  test 2   →  server.use(override) // Ajouter un override temporaire
-  afterEach →  server.resetHandlers()  // Retour aux handlers par defaut
-                                   //
-  test 3   →  (handlers par defaut)
-  afterEach →  server.resetHandlers()
-                                   //
-afterAll   →  server.close()      // Arreter l'interception
-```
+`onUnhandledRequest: 'error'` : tout appel réseau sans handler lève une erreur — détecte les appels imprévus avant qu'ils ne passent en production.
 
-### Options de `server.listen()`
+### Réponses dynamiques
+
+Le résolveur lit la requête et répond de façon dynamique :
 
 ```typescript
-server.listen({
-  // Que faire si une requete n'a pas de handler ?
-  onUnhandledRequest: 'error',   // Lever une erreur (recommande pour les tests)
-  // onUnhandledRequest: 'warn', // Afficher un warning
-  // onUnhandledRequest: 'bypass', // Laisser passer (requete reelle)
-
-  // Ou une fonction personnalisee
-  // onUnhandledRequest(request, print) {
-  //   if (request.url.includes('cdn.')) return; // Ignorer les CDN
-  //   print.error();
-  // },
+// Path params
+http.get('/api/invitations/:id', ({ params }) => {
+  const { id } = params; // string | string[]
+  if (id === 'inv-missing') {
+    return HttpResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+  return HttpResponse.json({ id, email: 'bob@tribu.fr', status: 'pending' });
 });
-```
 
----
-
-## Overrides per-test avec `server.use()`
-
-Le mécanisme le plus puissant de MSW : pouvoir redefinir un handler pour un test spécifique.
-
-### Pattern de base
-
-```typescript
-import { http, HttpResponse } from 'msw';
-import { server } from '../mocks/server';
-
-describe('UserList', () => {
-  // Ce test utilise les handlers par defaut (happy path)
-  it('should display list of users', async () => {
-    render(UserList);
-
-    const users = await screen.findAllByRole('listitem');
-    expect(users).toHaveLength(3); // handlers par defaut retournent 3 users
-  });
-
-  // Ce test override le handler GET /api/users pour ce test uniquement
-  it('should display empty state when no users', async () => {
-    server.use(
-      http.get('/api/users', () => {
-        return HttpResponse.json([]);
-      }),
-    );
-
-    render(UserList);
-
-    expect(await screen.findByText(/aucun utilisateur/i)).toBeTruthy();
-  });
-
-  // Ce test override pour simuler une erreur
-  it('should display error message on API failure', async () => {
-    server.use(
-      http.get('/api/users', () => {
-        return HttpResponse.json(
-          { error: 'Internal Server Error' },
-          { status: 500 },
-        );
-      }),
-    );
-
-    render(UserList);
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      /erreur lors du chargement/i,
-    );
-  });
-
-  // Ce test override pour simuler une erreur reseau
-  it('should handle network failure', async () => {
-    server.use(
-      http.get('/api/users', () => {
-        return HttpResponse.error();
-      }),
-    );
-
-    render(UserList);
-
-    expect(await screen.findByText(/connexion impossible/i)).toBeTruthy();
-  });
-
-  // Apres chaque test, afterEach -> server.resetHandlers()
-  // Les overrides sont automatiquement supprimes
+// Query params
+http.get('/api/invitations', ({ request }) => {
+  const url = new URL(request.url);
+  const familyId = url.searchParams.get('familyId') ?? 'unknown';
+  return HttpResponse.json([{ id: 'inv-1', email: 'bob@tribu.fr', familyId }]);
 });
-```
 
-### Override avec delai pour tester le loading state
-
-```typescript
-it('should show loading spinner while fetching', async () => {
-  server.use(
-    http.get('/api/users', async () => {
-      await delay(1000); // Delai long pour voir le loading
-      return HttpResponse.json(users);
-    }),
+// Body POST
+http.post('/api/invitations', async ({ request }) => {
+  const body = await request.json() as { email: string; familyId: string };
+  if (!body.email) {
+    return HttpResponse.json({ error: 'email required' }, { status: 400 });
+  }
+  return HttpResponse.json(
+    { id: 'inv-new', ...body, status: 'pending' },
+    { status: 201 },
   );
-
-  render(UserList);
-
-  // Le spinner doit etre visible immediatement
-  expect(screen.getByRole('progressbar')).toBeTruthy();
-
-  // Attendre que les donnees arrivent
-  await screen.findAllByRole('listitem');
-
-  // Le spinner doit avoir disparu
-  expect(screen.queryByRole('progressbar')).toBeNull();
 });
 ```
 
-### Override ponctuel (une seule fois)
+### `HttpResponse.error()` vs status HTTP d'erreur
+
+Distinction critique :
+
+- `HttpResponse.error()` — **panne réseau** : la connexion échoue. Le `Promise` de `fetch` **rejette** avec `TypeError: Failed to fetch`. Simule un serveur injoignable, une coupure réseau.
+- `HttpResponse.json({}, { status: 500 })` — **réponse HTTP** avec code d'erreur : le réseau fonctionne, le serveur répond. `fetch` **résout** avec `res.ok === false`. Il faut tester `res.ok` pour détecter l'erreur.
 
 ```typescript
-import { http, HttpResponse } from 'msw';
+// Panne réseau — fetch rejette (TypeError)
+http.get('/api/invitations', () => HttpResponse.error());
 
-// Le handler ne repond qu'une seule fois, puis revient au handler par defaut
-server.use(
-  http.get(
-    '/api/users',
-    () => {
-      return HttpResponse.json(
-        { error: 'Server Error' },
-        { status: 500 },
-      );
-    },
-    { once: true }, // Ne s'active qu'une seule fois
-  ),
+// Erreur serveur — fetch résout, res.ok === false
+http.get('/api/invitations', () =>
+  HttpResponse.json({ error: 'Internal Server Error' }, { status: 500 })
 );
-
-// Premier appel → 500 (override)
-// Deuxieme appel → 200 (handler par defaut)
 ```
 
----
+### Latence simulée — `delay`
 
-## Mode navigateur : `setupWorker`
+```typescript
+import { http, HttpResponse, delay } from 'msw';
 
-MSW peut aussi intercepter les requêtes dans un vrai navigateur, utile pour le développement.
+// Latence fixe
+http.get('/api/invitations', async () => {
+  await delay(300); // 300 ms
+  return HttpResponse.json([]);
+});
 
-### Configuration
+// Latence réaliste aléatoire (~100-500ms)
+http.get('/api/invitations', async () => {
+  await delay();
+  return HttpResponse.json([]);
+});
+
+// Répond jamais (tester un timeout)
+http.get('/api/invitations', async () => {
+  await delay('infinite');
+  return HttpResponse.json([]); // jamais atteint
+});
+```
+
+`delay` est utile pour tester un état de chargement (`loading spinner`) ou un comportement de timeout. À utiliser avec parcimonie dans les handlers de base pour ne pas ralentir la suite de tests.
+
+### Override per-test — `server.use()`
+
+`server.use(handler)` **préfixe** la liste des handlers : la version per-test est consultée en premier. Après `afterEach(() => server.resetHandlers())`, l'override est retiré et le handler de base reprend.
+
+```typescript
+it('affiche une erreur réseau', () => {
+  server.use(
+    http.get('/api/invitations', () => HttpResponse.error()),
+  );
+  // … le handler de base ne s'applique pas ici
+});
+
+it('affiche un état vide', () => {
+  server.use(
+    http.get('/api/invitations', () => HttpResponse.json([])),
+  );
+  // …
+});
+// afterEach → resetHandlers() : les deux overrides sont retirés
+```
+
+Option `{ once: true }` : le handler s'active une seule fois puis cède au suivant. Utile pour les scénarios de retry.
+
+```typescript
+server.use(
+  http.get('/api/invitations', () =>
+    HttpResponse.json({ error: 'temp' }, { status: 503 }),
+  { once: true }),
+);
+// 1er appel → 503 ; 2e appel → handler de base
+```
+
+### `setupWorker` en dev navigateur
+
+En environnement navigateur (dev local, Storybook), MSW utilise un Service Worker enregistré dans `public/` :
 
 ```typescript
 // src/mocks/browser.ts
@@ -647,594 +247,190 @@ import { handlers } from './handlers';
 export const worker = setupWorker(...handlers);
 ```
 
-### Initialisation conditionnelle
-
 ```typescript
-// src/main.ts (ou index.ts)
-async function enableMocking(): Promise<void> {
-  if (process.env.NODE_ENV !== 'development') {
-    return;
-  }
-
+// src/main.ts — activation conditionnelle uniquement en dev
+async function enableMocking() {
+  if (import.meta.env.MODE !== 'development') return;
   const { worker } = await import('./mocks/browser');
-
-  await worker.start({
-    onUnhandledRequest: 'bypass', // Laisser passer les requetes sans handler
-    serviceWorker: {
-      url: '/mockServiceWorker.js',
-    },
-  });
+  await worker.start({ onUnhandledRequest: 'bypass' });
 }
 
-enableMocking().then(() => {
-  // Demarrer l'application
-  createApp(App).mount('#app');
-});
+enableMocking().then(() => createApp(App).mount('#app'));
 ```
 
-### Générer le service worker
-
 ```bash
-# Generer le fichier mockServiceWorker.js dans le dossier public
+# Générer le service worker dans public/
 npx msw init ./public --save
 ```
 
-### Différence serveur vs worker
+Les **mêmes `handlers`** alimentent `setupServer` (tests) et `setupWorker` (dev) — pas de duplication.
 
-| Aspect | `setupServer` (Node) | `setupWorker` (Navigateur) |
-|--------|---------------------|---------------------------|
-| Environnement | Node.js (tests) | Navigateur (dev) |
-| Mécanisme | Interception de `http`/`https` module | Service Worker |
-| Necessite fichier SW | Non | Oui (`mockServiceWorker.js`) |
-| DevTools réseau | Non visible | Visible dans l'onglet Network |
-| Usage typique | Vitest, Jest | Storybook, dev local |
+| | `setupServer` (Node) | `setupWorker` (Navigateur) |
+|--|--|--|
+| Usage | Vitest, tests | Dev local, Storybook |
+| Mécanisme | Interception `http`/`https` Node | Service Worker |
+| Fichier SW requis | Non | Oui (`public/mockServiceWorker.js`) |
+| Network DevTools | Non | Oui |
 
----
+## 3. Worked examples
 
-## Patterns de tests réels
+### Exemple A — brancher MSW dans Vitest pour l'API invitation TribuZen
 
-### Pattern 1 : GET — afficher une liste
-
-```typescript
-// src/mocks/fixtures/products.ts
-export interface Product {
-  id: string;
-  name: string;
-  price: number;
-  category: string;
-  inStock: boolean;
-}
-
-export const mockProducts: Product[] = [
-  { id: 'p1', name: 'Clavier mecanique', price: 129.99, category: 'peripheriques', inStock: true },
-  { id: 'p2', name: 'Souris ergonomique', price: 79.99, category: 'peripheriques', inStock: true },
-  { id: 'p3', name: 'Ecran 4K 27"', price: 449.99, category: 'ecrans', inStock: false },
-  { id: 'p4', name: 'Webcam HD', price: 59.99, category: 'peripheriques', inStock: true },
-];
-```
+Objectif : tester `fetchInvitations` avec des handlers MSW — pas de backend réel, vrai `fetch` exécuté.
 
 ```typescript
-// src/mocks/handlers/productHandlers.ts
+// src/mocks/handlers.ts
 import { http, HttpResponse } from 'msw';
-import { mockProducts } from '../fixtures/products';
 
-export const productHandlers = [
-  http.get('/api/products', ({ request }) => {
+export const handlers = [
+  http.get('/api/invitations', ({ request }) => {
     const url = new URL(request.url);
-    const category = url.searchParams.get('category');
-    const inStock = url.searchParams.get('inStock');
+    const familyId = url.searchParams.get('familyId') ?? 'unknown';
 
-    let filtered = [...mockProducts];
+    return HttpResponse.json([
+      { id: 'inv-1', email: 'bob@tribu.fr',   status: 'pending',  familyId },
+      { id: 'inv-2', email: 'alice@tribu.fr', status: 'accepted', familyId },
+    ]);
+  }),
 
-    if (category) {
-      filtered = filtered.filter((p) => p.category === category);
+  http.post('/api/invitations', async ({ request }) => {
+    const body = await request.json() as { email: string; familyId: string };
+
+    if (!body.email || !body.familyId) {
+      return HttpResponse.json({ error: 'email and familyId required' }, { status: 400 });
     }
-    if (inStock !== null) {
-      filtered = filtered.filter((p) => p.inStock === (inStock === 'true'));
-    }
 
-    return HttpResponse.json({ products: filtered, total: filtered.length });
+    return HttpResponse.json(
+      { id: 'inv-new', email: body.email, status: 'pending', familyId: body.familyId },
+      { status: 201 },
+    );
   }),
 ];
 ```
 
 ```typescript
-// ProductList.test.ts
-describe('ProductList', () => {
-  it('should render all products', async () => {
-    render(ProductList);
+// src/mocks/server.ts
+import { setupServer } from 'msw/node';
+import { handlers } from './handlers';
 
-    const items = await screen.findAllByRole('listitem');
-    expect(items).toHaveLength(4);
-    expect(screen.getByText('Clavier mecanique')).toBeTruthy();
-    expect(screen.getByText('Ecran 4K 27"')).toBeTruthy();
-  });
-
-  it('should filter by category', async () => {
-    const user = userEvent.setup();
-    render(ProductList);
-
-    // Attendre le chargement initial
-    await screen.findAllByRole('listitem');
-
-    // Filtrer par categorie
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: /categorie/i }),
-      'ecrans',
-    );
-
-    // Verifier le filtre
-    const items = await screen.findAllByRole('listitem');
-    expect(items).toHaveLength(1);
-    expect(screen.getByText('Ecran 4K 27"')).toBeTruthy();
-  });
-
-  it('should show "out of stock" badge for unavailable products', async () => {
-    render(ProductList);
-
-    await screen.findAllByRole('listitem');
-
-    const outOfStockItem = screen.getByText('Ecran 4K 27"').closest('[role="listitem"]');
-    expect(outOfStockItem?.textContent).toContain('Rupture de stock');
-  });
-});
+export const server = setupServer(...handlers);
 ```
 
-### Pattern 2 : POST — créer une ressource
-
 ```typescript
-describe('CreateProductForm', () => {
-  it('should create a new product and show success', async () => {
-    const user = userEvent.setup();
-    render(CreateProductForm);
+// vitest.setup.ts
+import { beforeAll, afterEach, afterAll } from 'vitest';
+import { server } from './src/mocks/server';
 
-    await user.type(screen.getByLabelText(/nom du produit/i), 'Cable USB-C');
-    await user.type(screen.getByLabelText(/prix/i), '19.99');
-    await user.selectOptions(screen.getByLabelText(/categorie/i), 'peripheriques');
-
-    await user.click(screen.getByRole('button', { name: /creer/i }));
-
-    // Verifier le message de succes
-    expect(await screen.findByText(/produit cree avec succes/i)).toBeTruthy();
-  });
-
-  it('should display validation error from server', async () => {
-    server.use(
-      http.post('/api/products', () => {
-        return HttpResponse.json(
-          { error: 'Product name already exists' },
-          { status: 409 },
-        );
-      }),
-    );
-
-    const user = userEvent.setup();
-    render(CreateProductForm);
-
-    await user.type(screen.getByLabelText(/nom du produit/i), 'Clavier mecanique');
-    await user.type(screen.getByLabelText(/prix/i), '99.99');
-    await user.click(screen.getByRole('button', { name: /creer/i }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      /ce nom de produit existe deja/i,
-    );
-  });
-});
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
 ```
 
-### Pattern 3 : Optimistic update
-
 ```typescript
-describe('TodoItem — optimistic update', () => {
-  it('should toggle todo immediately and revert on error', async () => {
-    const user = userEvent.setup();
+// src/api/invitationApi.test.ts
+import { describe, it, expect } from 'vitest';
+import { fetchInvitations } from './invitationApi';
 
-    // Handler initial : le todo est non complete
-    server.use(
-      http.get('/api/todos/1', () => {
-        return HttpResponse.json({
-          id: '1',
-          title: 'Ecrire des tests',
-          completed: false,
-        });
-      }),
-    );
+describe('fetchInvitations', () => {
+  it('retourne la liste des invitations pour une famille', async () => {
+    const invitations = await fetchInvitations('fam-1');
 
-    render(TodoItem, { props: { todoId: '1' } });
-
-    const checkbox = await screen.findByRole('checkbox', { name: /ecrire des tests/i });
-    expect(checkbox).not.toBeChecked();
-
-    // Le PATCH va echouer
-    server.use(
-      http.patch('/api/todos/1', () => {
-        return HttpResponse.json(
-          { error: 'Server error' },
-          { status: 500 },
-        );
-      }),
-    );
-
-    // Cliquer pour cocher (optimistic update)
-    await user.click(checkbox);
-
-    // Immediatement coche (optimistic)
-    expect(checkbox).toBeChecked();
-
-    // Apres l'erreur, revient a non-coche (revert)
-    await waitFor(() => {
-      expect(checkbox).not.toBeChecked();
+    expect(invitations).toHaveLength(2);
+    expect(invitations[0]).toMatchObject({
+      email: 'bob@tribu.fr',
+      status: 'pending',
     });
-
-    // Message d'erreur
-    expect(screen.getByText(/impossible de mettre a jour/i)).toBeTruthy();
   });
 });
 ```
 
-### Pattern 4 : Retry
+Pas-à-pas : (1) les handlers de base couvrent le happy path — pas de `server.use` dans les tests nominaux ; (2) `onUnhandledRequest: 'error'` détecte tout appel réseau sans handler (protection contre les oublis) ; (3) le vrai `fetch` s'exécute — l'URL `/api/invitations?familyId=fam-1` est réellement construite et interceptée par MSW ; (4) les types sont partagés avec le code de production.
+
+### Exemple B — override per-test pour les cas d'erreur
+
+Tester les branches d'erreur sans polluer les handlers de base.
 
 ```typescript
-describe('API retry logic', () => {
-  it('should retry failed request and succeed on second attempt', async () => {
-    let requestCount = 0;
-
-    server.use(
-      http.get('/api/data', () => {
-        requestCount++;
-        if (requestCount === 1) {
-          return HttpResponse.json({ error: 'Temporary error' }, { status: 503 });
-        }
-        return HttpResponse.json({ value: 42 });
-      }),
-    );
-
-    render(DataDisplay);
-
-    // Apres retry automatique, les donnees doivent s'afficher
-    expect(await screen.findByText('42')).toBeTruthy();
-    expect(requestCount).toBe(2);
-  });
-});
-```
-
-### Pattern 5 : Pagination
-
-```typescript
-describe('PaginatedList', () => {
-  it('should load next page on click', async () => {
-    const user = userEvent.setup();
-
-    server.use(
-      http.get('/api/items', ({ request }) => {
-        const url = new URL(request.url);
-        const page = Number(url.searchParams.get('page') ?? '1');
-
-        const allItems = Array.from({ length: 25 }, (_, i) => ({
-          id: i + 1,
-          name: `Item ${i + 1}`,
-        }));
-
-        const perPage = 10;
-        const start = (page - 1) * perPage;
-        const items = allItems.slice(start, start + perPage);
-
-        return HttpResponse.json({
-          items,
-          page,
-          totalPages: 3,
-          total: 25,
-        });
-      }),
-    );
-
-    render(PaginatedList);
-
-    // Page 1 : items 1-10
-    const firstPageItems = await screen.findAllByRole('listitem');
-    expect(firstPageItems).toHaveLength(10);
-    expect(screen.getByText('Item 1')).toBeTruthy();
-
-    // Cliquer sur "Page suivante"
-    await user.click(screen.getByRole('button', { name: /suivante/i }));
-
-    // Page 2 : items 11-20
-    await waitFor(() => {
-      expect(screen.getByText('Item 11')).toBeTruthy();
-    });
-    expect(screen.queryByText('Item 1')).toBeNull();
-  });
-
-  it('should disable next button on last page', async () => {
-    server.use(
-      http.get('/api/items', () => {
-        return HttpResponse.json({
-          items: [{ id: 21, name: 'Item 21' }],
-          page: 3,
-          totalPages: 3,
-          total: 25,
-        });
-      }),
-    );
-
-    render(PaginatedList, { props: { initialPage: 3 } });
-
-    await screen.findByText('Item 21');
-    expect(screen.getByRole('button', { name: /suivante/i })).toBeDisabled();
-  });
-});
-```
-
----
-
-## Exemple complet : API CRUD avec handlers et tests
-
-```typescript
-// src/mocks/fixtures/articles.ts
-export interface Article {
-  id: string;
-  title: string;
-  content: string;
-  author: string;
-  publishedAt: string;
-  tags: string[];
-}
-
-export const mockArticles: Article[] = [
-  {
-    id: 'a1',
-    title: 'Introduction a TypeScript',
-    content: 'TypeScript est un surensemble de JavaScript...',
-    author: 'Alice Martin',
-    publishedAt: '2025-01-15T10:00:00Z',
-    tags: ['typescript', 'javascript'],
-  },
-  {
-    id: 'a2',
-    title: 'Les tests en pratique',
-    content: 'Tester son code est essentiel...',
-    author: 'Bob Dupont',
-    publishedAt: '2025-02-20T14:30:00Z',
-    tags: ['testing', 'vitest'],
-  },
-];
-```
-
-```typescript
-// src/mocks/handlers/articleHandlers.ts
-import { http, HttpResponse, delay } from 'msw';
-import { mockArticles, type Article } from '../fixtures/articles';
-
-let articles = [...mockArticles];
-
-export const articleHandlers = [
-  // LIST
-  http.get('/api/articles', async ({ request }) => {
-    await delay(100);
-    const url = new URL(request.url);
-    const tag = url.searchParams.get('tag');
-
-    let result = [...articles];
-    if (tag) {
-      result = result.filter((a) => a.tags.includes(tag));
-    }
-
-    return HttpResponse.json({ articles: result, total: result.length });
-  }),
-
-  // GET by ID
-  http.get('/api/articles/:id', async ({ params }) => {
-    await delay(100);
-    const article = articles.find((a) => a.id === params.id);
-
-    if (!article) {
-      return HttpResponse.json({ error: 'Article not found' }, { status: 404 });
-    }
-    return HttpResponse.json(article);
-  }),
-
-  // CREATE
-  http.post('/api/articles', async ({ request }) => {
-    await delay(200);
-    const body = await request.json() as Omit<Article, 'id' | 'publishedAt'>;
-
-    if (!body.title || !body.content) {
-      return HttpResponse.json(
-        { error: 'Title and content are required' },
-        { status: 400 },
-      );
-    }
-
-    const newArticle: Article = {
-      id: `a${articles.length + 1}`,
-      title: body.title,
-      content: body.content,
-      author: body.author ?? 'Anonymous',
-      publishedAt: new Date().toISOString(),
-      tags: body.tags ?? [],
-    };
-
-    articles.push(newArticle);
-    return HttpResponse.json(newArticle, { status: 201 });
-  }),
-
-  // UPDATE
-  http.put('/api/articles/:id', async ({ params, request }) => {
-    await delay(200);
-    const body = await request.json() as Partial<Article>;
-    const index = articles.findIndex((a) => a.id === params.id);
-
-    if (index === -1) {
-      return HttpResponse.json({ error: 'Article not found' }, { status: 404 });
-    }
-
-    articles[index] = { ...articles[index], ...body, id: String(params.id) };
-    return HttpResponse.json(articles[index]);
-  }),
-
-  // DELETE
-  http.delete('/api/articles/:id', async ({ params }) => {
-    await delay(100);
-    const index = articles.findIndex((a) => a.id === params.id);
-
-    if (index === -1) {
-      return HttpResponse.json({ error: 'Article not found' }, { status: 404 });
-    }
-
-    articles.splice(index, 1);
-    return new HttpResponse(null, { status: 204 });
-  }),
-];
-
-// Helper pour reinitialiser les donnees entre les tests
-export function resetArticles(): void {
-  articles = [...mockArticles];
-}
-```
-
-```typescript
-// src/features/articles/__tests__/ArticleList.test.ts
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/vue';
-import userEvent from '@testing-library/user-event';
+// src/api/invitationApi.test.ts (suite)
 import { http, HttpResponse } from 'msw';
-import { server } from '../../../mocks/server';
-import { resetArticles } from '../../../mocks/handlers/articleHandlers';
-import ArticleList from '../ArticleList.vue';
+import { server } from '../mocks/server';
 
-describe('ArticleList', () => {
-  beforeEach(() => {
-    resetArticles();
-  });
-
-  it('should display all articles', async () => {
-    render(ArticleList);
-
-    expect(await screen.findByText('Introduction a TypeScript')).toBeTruthy();
-    expect(screen.getByText('Les tests en pratique')).toBeTruthy();
-  });
-
-  it('should filter articles by tag', async () => {
-    const user = userEvent.setup();
-    render(ArticleList);
-
-    await screen.findByText('Introduction a TypeScript');
-
-    await user.click(screen.getByRole('button', { name: /typescript/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Introduction a TypeScript')).toBeTruthy();
-      expect(screen.queryByText('Les tests en pratique')).toBeNull();
-    });
-  });
-
-  it('should handle delete with confirmation', async () => {
-    const user = userEvent.setup();
-    render(ArticleList);
-
-    await screen.findByText('Introduction a TypeScript');
-
-    // Cliquer sur le bouton supprimer du premier article
-    const deleteButtons = screen.getAllByRole('button', { name: /supprimer/i });
-    await user.click(deleteButtons[0]);
-
-    // Confirmer la suppression
-    await user.click(screen.getByRole('button', { name: /confirmer/i }));
-
-    // L'article doit disparaitre
-    await waitFor(() => {
-      expect(screen.queryByText('Introduction a TypeScript')).toBeNull();
-    });
-
-    // L'autre article est toujours la
-    expect(screen.getByText('Les tests en pratique')).toBeTruthy();
-  });
-
-  it('should show error toast on delete failure', async () => {
+describe('fetchInvitations — cas d\'erreur', () => {
+  it('rejette sur panne réseau (TypeError)', async () => {
+    // Override pour CE test : panne réseau totale
     server.use(
-      http.delete('/api/articles/:id', () => {
-        return HttpResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }),
+      http.get('/api/invitations', () => HttpResponse.error()),
     );
+    // fetch rejette avec TypeError: Failed to fetch
+    await expect(fetchInvitations('fam-1')).rejects.toThrow();
+  });
 
-    const user = userEvent.setup();
-    render(ArticleList);
-
-    await screen.findByText('Introduction a TypeScript');
-
-    const deleteButtons = screen.getAllByRole('button', { name: /supprimer/i });
-    await user.click(deleteButtons[0]);
-    await user.click(screen.getByRole('button', { name: /confirmer/i }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      /impossible de supprimer/i,
+  it('rejette sur erreur serveur HTTP 500', async () => {
+    // Override : réponse HTTP 500 — fetch résout, res.ok === false
+    server.use(
+      http.get('/api/invitations', () =>
+        HttpResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+      ),
     );
+    // fetchInvitations teste res.ok et lance l'erreur métier
+    await expect(fetchInvitations('fam-1')).rejects.toThrow('HTTP 500');
+  });
 
-    // L'article est toujours present
-    expect(screen.getByText('Introduction a TypeScript')).toBeTruthy();
+  it('après les overrides, le handler de base est restauré', async () => {
+    // Preuve que resetHandlers() a nettoyé les deux overrides ci-dessus
+    const invitations = await fetchInvitations('fam-1');
+    expect(invitations).toHaveLength(2);
   });
 });
 ```
 
----
+Pas-à-pas : (1) `server.use()` préfixe la liste — le handler de base ne répond pas pendant ce test ; (2) `HttpResponse.error()` simule une panne réseau, le `Promise` de `fetch` rejette ; (3) le handler 500 simule un serveur défaillant — `fetchInvitations` doit détecter `!res.ok` et rejeter ; (4) le troisième test prouve que `afterEach(() => server.resetHandlers())` a bien nettoyé les deux overrides.
 
-## Bonnes pratiques
+## 4. Pièges & misconceptions
 
-1. **Handlers par defaut = happy path** : les handlers dans `handlers.ts` representent le scenario nominal
-2. **Overrides per-test pour les erreurs** : utiliser `server.use()` pour les cas d'erreur, pas les handlers par defaut
-3. **`onUnhandledRequest: 'error'`** : détecter les appels API non prévus
-4. **Fixtures typees** : utiliser les memes interfaces TypeScript que le code de production
-5. **`resetHandlers()` dans `afterEach`** : garantir l'isolation entre tests
-6. **Pas de logique metier dans les handlers** : garder les handlers simples, pas de vraie base de donnees
-7. **Organiser par domaine** : un fichier de handlers par feature (`userHandlers.ts`, `productHandlers.ts`)
-8. **Tester les headers** : vérifier que les tokens d'authentification sont envoyes
-9. **Utiliser `delay()` avec parcimonie** : seulement quand on teste le loading state
-10. **`once: true`** pour les scenarios de retry : le premier appel echoue, le suivant reussit
+- **Mocker `fetch` à la main (`vi.stubGlobal`).** Le code de construction de la requête ne s'exécute pas. Si l'URL contient une faute, si un header d'auth est oublié ou si le `Content-Type` manque dans le POST, le test reste vert. *Correct* : MSW intercepte après `fetch` — l'URL et les headers sont réellement construits et visibles dans `request`.
 
----
+- **Oublier `resetHandlers()` en `afterEach`.** Les overrides ajoutés via `server.use()` persistent pour les tests suivants. Le test A passe en isolation mais échoue quand il suit le test B qui a ajouté un override d'erreur. *Correct* : `afterEach(() => server.resetHandlers())` dans `vitest.setup.ts` — global, systématique, pas à redéclarer dans chaque describe.
 
-## Exercice pratique
+- **Handler trop rigide sur l'URL.** Un handler `http.get('/api/invitations')` matche les URLs relatives en environment jsdom/happy-dom. En Node pur sans base URL configurée, il peut falloir une URL absolue. Si le test retourne une requête non interceptée et que `onUnhandledRequest: 'error'` est actif, on le voit immédiatement. *Correct* : tester avec `onUnhandledRequest: 'error'` pour détecter les mismatches tôt.
 
-Implementez les handlers MSW et les tests pour une API de gestion de taches (todos) :
-- `GET /api/todos` — lister toutes les taches (avec filtre `?status=completed`)
-- `POST /api/todos` — créer une tache
-- `PATCH /api/todos/:id` — mettre a jour le statut
-- `DELETE /api/todos/:id` — supprimer une tache
+- **Confondre `HttpResponse.error()` et un status 5xx.** `HttpResponse.error()` = panne réseau, `fetch` **rejette** (il faut un `try/catch`). Status 500 = réponse HTTP valide, `fetch` **résout** avec `res.ok === false` (il faut vérifier `res.ok`). La gestion côté client est différente. *Correct* : utiliser `HttpResponse.error()` pour tester les `catch` réseau, status 5xx pour tester la gestion de `!res.ok`.
 
-Tests à écrire :
-1. Afficher la liste des taches
-2. Créer une nouvelle tache (happy path + erreur validation)
-3. Cocher/decocher une tache (optimistic update + revert on error)
-4. Supprimer une tache (avec confirmation)
+- **Utiliser l'API MSW v1 (`rest`, `ctx.json`).** L'API v1 était `rest.get(url, (req, res, ctx) => res(ctx.json(data)))`. Elle est **supprimée** en MSW v2. *Correct* : `http.get(url, () => HttpResponse.json(data))` — les résolveurs renvoient directement une `Response` ou `HttpResponse`.
 
-> Solution dans le [Lab 08](../labs/lab-08-msw/)
+## 5. Ancrage TribuZen
 
----
+Couche fil-rouge : **mocker l'API famille/invitation TribuZen avec MSW pour tester le front sans backend réel** (`smaurier/tribuzen`).
 
-## Navigation
+- `GET /api/invitations?familyId=…` — handler de base dans `src/mocks/handlers.ts` : retourne la liste des invitations en attente/acceptées pour une famille. `InvitationList.vue` s'appuie dessus pour ses tests de composants (module 07 testait le composant isolé avec des props ; module 08 teste le composant avec l'appel réseau réel intercepté).
+- `POST /api/invitations` — handler avec validation du body (email + familyId obligatoires). Testé avec `server.use()` pour le cas 400 (email manquant) et 409 (déjà invité).
+- En dev local, la même configuration `src/mocks/handlers.ts` + `src/mocks/browser.ts` alimente `setupWorker` : le front TribuZen démarre avec `npm run dev` et toutes les routes invitation/famille répondent via MSW Service Worker, sans backend démarré.
+- Les handlers partagent les types TypeScript de production (`Invitation`, `Family`) — pas de drift entre le mock et le vrai contrat d'API.
 
-| Précédent | Suivant |
-|-----------|---------|
-| [07 - Tests de composants](./07-tests-de-composants) | [09 - Tests d'intégration](./09-tests-integration) |
+## 6. Points clés
 
----
+1. MSW intercepte au niveau réseau, sous `fetch` et axios : le vrai code client s'exécute, l'URL et les headers sont réellement construits.
+2. En MSW v2 : `import { http, HttpResponse, delay } from 'msw'` — pas de `rest`, pas de `ctx.json`.
+3. Un handler = `http.<méthode>(pattern, résolveur)` ; le résolveur reçoit `{ request, params, cookies }` et renvoie `HttpResponse.json(data, init?)`.
+4. `setupServer` (import `msw/node`) pour les tests Node/Vitest ; `setupWorker` (import `msw/browser`) pour le dev navigateur via Service Worker.
+5. Lifecycle canonique Vitest : `beforeAll(() => server.listen())` / `afterEach(() => server.resetHandlers())` / `afterAll(() => server.close())`.
+6. `server.use(handler)` préfixe les handlers pour le test courant ; `resetHandlers()` retire les overrides, les handlers de base restent.
+7. `HttpResponse.error()` = panne réseau (TypeError, fetch rejette) ; status 5xx = réponse HTTP d'erreur (fetch résout, `res.ok === false`).
+8. `delay(ms | undefined | 'infinite')` simule la latence ; `{ once: true }` active un handler une seule fois (pattern retry).
 
-## Ressources
+## 7. Seeds Anki
 
-- [Quiz 08 : Testez vos connaissances](../quizzes/quiz-08-msw.html)
-- [Lab 08 : MSW en pratique](../labs/lab-08-msw/)
-- MSW — [Documentation officielle](https://mswjs.io/docs/)
-- MSW — [Getting Started](https://mswjs.io/docs/getting-started)
-- MSW — [Network behavior](https://mswjs.io/docs/concepts/request-handler)
-- Kent C. Dodds — [Stop mocking fetch](https://kentcdodds.com/blog/stop-mocking-fetch)
-- Artem Zakharchenko — [Thinking in MSW](https://mswjs.io/docs/philosophy)
+```
+Pourquoi MSW est préférable à vi.stubGlobal('fetch') ?|MSW intercepte au niveau réseau — le vrai fetch s'exécute et l'URL/headers sont construits. vi.stubGlobal remplace fetch et ne teste pas le code de construction de la requête.
+Quelle est la syntaxe MSW v2 pour un handler GET qui renvoie du JSON ?|http.get('/url', () => HttpResponse.json(data)) — import { http, HttpResponse } from 'msw'
+Quel est le lifecycle MSW canonique dans Vitest ?|beforeAll(() => server.listen()) / afterEach(() => server.resetHandlers()) / afterAll(() => server.close())
+À quoi sert server.resetHandlers() en afterEach ?|Retirer les handlers ajoutés via server.use() pendant le test courant, pour éviter la pollution entre tests. Les handlers de base restent intacts.
+Différence entre HttpResponse.error() et HttpResponse.json({}, { status: 500 }) ?|error() simule une panne réseau — fetch rejette (TypeError). status 500 est une réponse HTTP — fetch résout avec res.ok === false.
+Comment overrider un handler pour un seul test en MSW 2 ?|server.use(http.get('/url', () => HttpResponse.json(...))); resetHandlers() en afterEach retire l'override automatiquement.
+Comment simuler 300ms de latence dans un handler MSW 2 ?|import { delay } from 'msw', puis await delay(300) dans le résolveur avant de retourner HttpResponse.json(...)
+Différence setupServer vs setupWorker ?|setupServer (msw/node) pour les tests Node/Vitest ; setupWorker (msw/browser) pour le dev navigateur via Service Worker.
+```
 
----
+## Pont vers le lab
 
-<!-- parcours-recommande -->
-
-::: tip Parcours recommandé
-1. **Screencast** : [screencast 08 msw](../screencasts/screencast-08-msw.md)
-2. **Lab** : [lab-08-msw](../labs/lab-08-msw/README)
-3. **Quiz** : [quiz 08 msw](../quizzes/quiz-08-msw.html)
-:::
+> Lab associé : `06-testing/labs/lab-08-msw/`. Tu y câbles `setupServer` dans Vitest, écris les handlers invitation TribuZen (`http.get`, `http.post`), et testes les cas nominal, 500, erreur réseau et override per-test — en **MSW 2 réel**. Corrigé complet commenté + variante J+30 dans le README du lab.
