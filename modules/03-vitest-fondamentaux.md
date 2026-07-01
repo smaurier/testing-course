@@ -1,176 +1,88 @@
-# Module 03 — Vitest : fondamentaux
-
-| Difficulte | Duree estimee | Lab | Quiz |
-|------------|---------------|-----|------|
-| 2/5        | 75 min        | [Lab 03](../labs/lab-03-vitest-fondamentaux/) | [Quiz 03](../quizzes/quiz-03-vitest.html) |
-
-## Objectifs
-
-- Comprendre pourquoi Vitest remplace Jest dans l'ecosysteme moderne
-- Configurer Vitest dans un projet TypeScript
-- Maîtriser l'ensemble des matchers disponibles
-- Utiliser les modificateurs .only, .skip, .todo, .each
-- Exploiter les snapshots (inline et fichier)
-- Travailler efficacement avec le watch mode et l'UI mode
-
+---
+titre: Vitest fondamentaux
+cours: 06-testing
+notions: [configuration vitest.config, matchers toBe toEqual toContain toThrow toMatchObject, test.each data-driven, hooks lifecycle beforeAll afterEach, watch mode, filtrage only skip todo, coverage v8 en survol, environnement jsdom vs node]
+outcomes: [configurer Vitest pour un projet TypeScript, utiliser les matchers courants avec la bonne intention, exécuter et filtrer des tests, lire un rapport de coverage]
+prerequis: [02-anatomie-dun-test]
+next: 04-mocking-et-test-doubles
+libs: [{ name: vitest, version: ^4.1.9 }]
+tribuzen: suite de tests unitaires des règles domaine TribuZen (invitation, RBAC)
+last-reviewed: 2026-07
 ---
 
-## Vitest vs Jest
+# Vitest fondamentaux
 
-### Pourquoi un nouveau test runner ?
+> **Outcomes — tu sauras FAIRE :** configurer Vitest pour un projet TypeScript, choisir le bon matcher selon l'intention du test, exécuter et filtrer des tests, lire un rapport de coverage v8.
+> **Difficulté :** :star::star:
 
-Jest a ete concu pour l'ecosysteme CommonJS. Avec l'adoption massive d'ESM (ES Modules), TypeScript et Vite, ses limitations deviennent evidentes :
+## 1. Cas concret d'abord
 
-| Critere | Jest | Vitest |
-|---------|------|--------|
-| Support ESM natif | Partiel, nécessité transformations | Natif via Vite |
-| Vitesse de démarrage | Lent (transformations Babel/ts-jest) | Rapide (esbuild / SWC) |
-| Configuration TypeScript | ts-jest ou @swc/jest requis | Zero config avec Vite |
-| HMR / Watch mode | Re-exécuté tous les fichiers impactes | Ne re-exécuté que le strict nécessaire |
-| Compatibilite API | Référence historique | Compatible Jest (migration facile) |
-| UI intégrée | Non (package tiers) | `vitest --ui` inclus |
-| Workspace / monorepo | `projects` config | `vitest.workspace.ts` natif |
-
-> **Node.js Test Runner (`node:test`)** : Depuis Node.js 20+, Node.js inclut un test runner natif (`import { describe, it } from 'node:test'`). Il est leger et ne nécessité aucune dépendance, mais offre moins de features que Vitest (pas de watch mode avance, pas de couverture intégrée, pas de mocking avance). Utile pour les bibliotheques simples ou les scripts, mais Vitest reste recommande pour les applications.
-
-### Migration depuis Jest
-
-L'API est quasi identique. Dans la plupart des cas, il suffit de :
+Dans TribuZen, seuls les membres `owner` ou `admin` d'une famille peuvent en inviter d'autres. Tu viens d'écrire la règle domaine :
 
 ```typescript
-// Avant (Jest)
-import { describe, it, expect, jest } from '@jest/globals';
+// src/domain/rbac.ts
+export type Role = 'owner' | 'admin' | 'member' | 'guest';
 
-const mockFn = jest.fn();
-jest.spyOn(obj, 'method');
-jest.useFakeTimers();
-
-// Apres (Vitest)
-import { describe, it, expect, vi } from 'vitest';
-
-const mockFn = vi.fn();
-vi.spyOn(obj, 'method');
-vi.useFakeTimers();
+export function canInvite(role: Role): boolean {
+  return role === 'owner' || role === 'admin';
+}
 ```
 
-La seule différence majeure : `jest.*` devient `vi.*`.
+Tu veux tester les quatre rôles et produire un rapport de coverage. Mais rien n'est encore configuré : pas de Vitest, pas de `vitest.config.ts`, pas de matchers ni de boucle sur les cas. Comment passer de zéro à une suite verte qui couvre toutes les branches et ne casse pas en CI ?
 
----
+Ce module répond exactement à ça.
 
-## Installation et configuration
+## 2. Théorie complète, concise
 
-### Installation
+### Configuration Vitest v4
+
+Installe Vitest et le provider coverage en dev-dependencies :
 
 ```bash
-# Avec pnpm (recommande)
-pnpm add -D vitest
-
-# Avec npm
-npm install -D vitest
-
-# Avec un projet Vite existant, Vitest reutilise vite.config.ts automatiquement
+pnpm add -D vitest @vitest/coverage-v8
 ```
 
-### Configuration minimale
+Crée `vitest.config.ts` à la racine du projet :
 
 ```typescript
 // vitest.config.ts
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    // Dossier racine pour la resolution des fichiers
-    root: '.',
-
-    // Globals : describe, it, expect sans import
+    // Expose describe/it/expect sans import dans chaque fichier de test
     globals: true,
 
-    // Environnement : 'node' (defaut), 'jsdom', 'happy-dom'
+    // 'node' = défaut, pour la logique pure (règles domaine, services)
+    // 'jsdom' = DOM simulé (window, document, localStorage)
+    // 'happy-dom' = jsdom allégé, moins fidèle mais plus rapide
     environment: 'node',
 
-    // Pattern des fichiers de test
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    // Fichiers de test découverts automatiquement
+    include: ['src/**/*.{test,spec}.ts'],
 
-    // Fichiers a exclure
-    exclude: ['node_modules', 'dist', '.git'],
-  },
-});
-```
+    // Exécuté avant chaque fichier de test (polyfills, reset globaux)
+    setupFiles: ['./src/test-setup.ts'],
 
-### Configuration avancee
+    // Timeouts
+    testTimeout: 5000,
+    hookTimeout: 10000,
 
-```typescript
-// vitest.config.ts
-import { defineConfig } from 'vitest/config';
-import path from 'node:path';
-
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
-
-    // Alias (reutilise ceux de vite.config.ts si present)
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@utils': path.resolve(__dirname, './src/utils'),
-    },
-
-    // Coverage
+    // Coverage v8 : fourni par le moteur V8 de Node.js, sans instrumentation
     coverage: {
-      provider: 'v8', // ou 'istanbul'
+      provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
       include: ['src/**/*.ts'],
       exclude: ['src/**/*.test.ts', 'src/**/*.d.ts'],
-      thresholds: {
-        branches: 80,
-        functions: 80,
-        lines: 80,
-        statements: 80,
-      },
-    },
-
-    // Timeouts
-    testTimeout: 5000,      // par test
-    hookTimeout: 10000,     // beforeAll, afterAll
-
-    // Reporters
-    reporters: ['default', 'html'],
-
-    // Fichier de setup global
-    setupFiles: ['./tests/setup.ts'],
-
-    // Pool de threads
-    pool: 'forks',          // 'threads' | 'forks' | 'vmThreads'
-    poolOptions: {
-      forks: {
-        singleFork: false,  // true = un seul process (utile pour debug)
-      },
+      thresholds: { lines: 80, branches: 80, functions: 80, statements: 80 },
     },
   },
-});
+})
 ```
 
-### Setup global
-
-```typescript
-// tests/setup.ts
-import { beforeEach, afterEach } from 'vitest';
-
-// Reset tous les mocks entre chaque test
-beforeEach(() => {
-  // Code execute avant CHAQUE test de TOUS les fichiers
-});
-
-afterEach(() => {
-  // Nettoyage apres chaque test
-});
-```
-
-### Activer les globals dans TypeScript
+Pour que TypeScript reconnaisse les globals `describe`, `it`, `expect` sans import, ajouter dans `tsconfig.json` :
 
 ```json
-// tsconfig.json
 {
   "compilerOptions": {
     "types": ["vitest/globals"]
@@ -178,933 +90,359 @@ afterEach(() => {
 }
 ```
 
-Avec `globals: true`, plus besoin d'importer `describe`, `it`, `expect` :
+#### `environment` — node vs jsdom
+
+| Besoin | Valeur | Raison |
+|--------|--------|--------|
+| Logique métier pure, règles domaine, calculs | `node` | Pas de DOM à simuler, démarrage plus rapide |
+| Composants accédant à `document`, `window`, `localStorage` | `jsdom` | JSDOM implémente le DOM dans Node.js |
+| DOM requis, vitesse prioritaire | `happy-dom` | Implémentation allégée de JSDOM |
+
+Surcharge par fichier : ajouter `// @vitest-environment jsdom` en première ligne du fichier.
+
+### Matchers courants — intention avant signature
+
+Choisir le bon matcher exprime **pourquoi** le test passe et produit un message d'échec lisible.
+
+#### `toBe` — identité stricte (`Object.is`)
 
 ```typescript
-// Sans globals (import explicite)
-import { describe, it, expect } from 'vitest';
-
-describe('Calculator', () => {
-  it('should add', () => {
-    expect(1 + 1).toBe(2);
-  });
-});
-
-// Avec globals (zero import pour les primitives de test)
-describe('Calculator', () => {
-  it('should add', () => {
-    expect(1 + 1).toBe(2);
-  });
-});
+// Pour les primitives : boolean, number, string, null, undefined
+expect(canInvite('owner')).toBe(true)
+expect(canInvite('guest')).toBe(false)
+expect(2 + 2).toBe(4)
+// NE PAS utiliser sur des objets : deux littéraux sont deux références différentes
+// expect({ id: 1 }).toBe({ id: 1 }) → ÉCHOUE même si les valeurs sont identiques
 ```
 
----
-
-## describe / it / expect en profondeur
-
-### describe : grouper les tests
+#### `toEqual` — égalité profonde récursive
 
 ```typescript
-// Basique
-describe('MathUtils', () => {
-  // tests ici
-});
-
-// Nested : par methode / fonctionnalite
-describe('StringUtils', () => {
-  describe('capitalize', () => {
-    it('should capitalize first letter', () => {
-      expect(capitalize('hello')).toBe('Hello');
-    });
-
-    it('should handle empty string', () => {
-      expect(capitalize('')).toBe('');
-    });
-  });
-
-  describe('slugify', () => {
-    it('should replace spaces with hyphens', () => {
-      expect(slugify('hello world')).toBe('hello-world');
-    });
-
-    it('should lowercase everything', () => {
-      expect(slugify('Hello World')).toBe('hello-world');
-    });
-
-    it('should remove special characters', () => {
-      expect(slugify('hello@world!')).toBe('helloworld');
-    });
-  });
-});
+// Pour les objets et tableaux — compare les valeurs, pas les références
+expect({ role: 'admin', active: true }).toEqual({ role: 'admin', active: true })
+expect([1, 2, 3]).toEqual([1, 2, 3])
+// NOTE : toEqual IGNORE les propriétés à valeur undefined
+expect({ a: 1, b: undefined }).toEqual({ a: 1 }) // PASSE
 ```
 
-### it vs test
-
-`it` et `test` sont des alias identiques. Convention :
+#### `toStrictEqual` — égalité profonde stricte
 
 ```typescript
-// "it" se lit comme une phrase anglaise
-it('should return the sum of two numbers', () => { /* ... */ });
+// Comme toEqual + vérifie : propriétés undefined, type de classe, sparse arrays
+expect({ a: 1, b: undefined }).toStrictEqual({ a: 1 }) // ÉCHOUE
 
-// "test" se lit comme une instruction
-test('returns the sum of two numbers', () => { /* ... */ });
-
-// Les deux sont valides — choisissez une convention et tenez-vous-y
+class Invitation { constructor(public id: string) {} }
+expect(new Invitation('i-1')).toEqual({ id: 'i-1' })       // PASSE (même forme)
+expect(new Invitation('i-1')).toStrictEqual({ id: 'i-1' }) // ÉCHOUE (classe ≠ littéral)
 ```
 
-### expect : le coeur des assertions
+Règle : `toEqual` pour les DTO/POJO, `toStrictEqual` quand le type de classe fait partie du contrat.
 
-`expect(value)` retourne un objet avec des matchers. L'assertion echoue si le matcher ne correspond pas.
+#### `toContain` — appartenance
 
 ```typescript
-const result = add(2, 3);
-
-// expect prend la valeur reelle (actual)
-// Le matcher prend la valeur attendue (expected)
-expect(result).toBe(5);
-//      ^actual  ^matcher ^expected
+// Sous-chaîne :
+expect('ALREADY_INVITED').toContain('INVITED')
+// Élément de tableau (strict === , pas deep equality) :
+expect(['owner', 'admin']).toContain('admin')
+// Pour un objet dans un tableau, utiliser toContainEqual :
+expect([{ id: 'i-1' }, { id: 'i-2' }]).toContainEqual({ id: 'i-1' })
 ```
 
----
-
-## Catalogue complet des matchers
-
-### Egalite
+#### `toThrow` — erreur synchrone
 
 ```typescript
-// toBe — egalite stricte (===)
-// Utiliser pour les primitives : number, string, boolean, null, undefined
-expect(42).toBe(42);
-expect('hello').toBe('hello');
-expect(true).toBe(true);
-expect(null).toBe(null);
+// Toujours envelopper dans une arrow function
+// Sans wrapper, l'erreur est levée AVANT que expect la reçoive
+expect(() => validate(-1)).toThrow()                  // une erreur quelconque
+expect(() => validate(-1)).toThrow('Age invalide')    // message exact (substring)
+expect(() => validate(-1)).toThrow(/invalide/)        // regex sur le message
+expect(() => validate(-1)).toThrow(RangeError)        // type d'erreur
 
-// ATTENTION : toBe echoue pour les objets (reference differente)
-expect({ a: 1 }).toBe({ a: 1 }); // ECHOUE !
-
-// toEqual — egalite profonde (deep equality)
-// Utiliser pour les objets et tableaux
-expect({ a: 1, b: { c: 2 } }).toEqual({ a: 1, b: { c: 2 } });
-expect([1, 2, 3]).toEqual([1, 2, 3]);
-
-// toEqual ignore les proprietes undefined
-expect({ a: 1, b: undefined }).toEqual({ a: 1 }); // PASSE
-
-// toStrictEqual — egalite profonde STRICTE
-// Verifie aussi : types de classes, proprietes undefined, sparse arrays
-expect({ a: 1, b: undefined }).toStrictEqual({ a: 1 }); // ECHOUE
-expect({ a: 1 }).toStrictEqual({ a: 1 }); // PASSE
-
-class User {
-  constructor(public name: string) {}
-}
-// toEqual passe (meme forme)
-expect(new User('Alice')).toEqual({ name: 'Alice' }); // PASSE
-// toStrictEqual echoue (classes differentes)
-expect(new User('Alice')).toStrictEqual({ name: 'Alice' }); // ECHOUE
+// Pour les promesses, utiliser .rejects (+ await obligatoire) :
+await expect(service.invite('fam', 'bob')).rejects.toThrow('ALREADY_INVITED')
 ```
 
-### Chaines de caracteres
+#### `toMatchObject` — correspondance partielle d'objet
 
 ```typescript
-// toContain — contient une sous-chaine
-expect('Hello World').toContain('World');
-expect('Hello World').toContain('lo Wo');
-
-// toMatch — correspond a une regex ou sous-chaine
-expect('Hello World').toMatch(/^Hello/);
-expect('Hello World').toMatch(/world$/i);  // flag insensible a la casse
-expect('error: file not found').toMatch(/error: .+/);
-
-// toHaveLength — longueur
-expect('hello').toHaveLength(5);
-expect('').toHaveLength(0);
+// Vérifie que l'objet CONTIENT les propriétés attendues ; le reste est ignoré
+const invitation = { id: 'inv-1', familyId: 'fam-1', email: 'bob@tribu.fr', createdAt: new Date() }
+expect(invitation).toMatchObject({ familyId: 'fam-1', email: 'bob@tribu.fr' })
+// Idéal quand le résultat contient des champs générés (id, timestamp) inconnus à l'avance
 ```
 
-### Tableaux
+### `test.each` — tests data-driven
+
+Évite la duplication de tests quasi-identiques en itérant sur un tableau de cas.
 
 ```typescript
-const fruits = ['apple', 'banana', 'cherry'];
-
-// toContain — contient un element (strict ===)
-expect(fruits).toContain('banana');
-
-// toContainEqual — contient un element (deep equality)
-const users = [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }];
-expect(users).toContainEqual({ id: 1, name: 'Alice' });
-
-// toHaveLength
-expect(fruits).toHaveLength(3);
-expect([]).toHaveLength(0);
-
-// toEqual — egalite profonde du tableau entier
-expect(fruits).toEqual(['apple', 'banana', 'cherry']);
-
-// Verifier qu'un tableau contient certains elements (ordre quelconque)
-expect(fruits).toEqual(expect.arrayContaining(['cherry', 'apple']));
-```
-
-### Objets
-
-```typescript
-const user = { id: 1, name: 'Alice', email: 'alice@example.com', age: 30 };
-
-// toHaveProperty — verifie l'existence d'une propriete
-expect(user).toHaveProperty('name');
-expect(user).toHaveProperty('name', 'Alice');
-
-// Notation pointee pour les proprietes imbriquees
-const config = { db: { host: 'localhost', port: 5432 } };
-expect(config).toHaveProperty('db.host', 'localhost');
-expect(config).toHaveProperty('db.port');
-
-// toMatchObject — correspondance partielle
-expect(user).toMatchObject({ name: 'Alice', age: 30 });
-// Passe meme si user a d'autres proprietes (id, email)
-
-// expect.objectContaining — dans un toEqual
-expect(user).toEqual(expect.objectContaining({
-  name: 'Alice',
-  email: expect.stringContaining('@'),
-}));
-```
-
-### Veracite et nullite
-
-```typescript
-// toBeNull / toBeUndefined / toBeDefined
-expect(null).toBeNull();
-expect(undefined).toBeUndefined();
-expect('hello').toBeDefined();
-expect(undefined).not.toBeDefined();
-
-// toBeTruthy — truthy en JavaScript (pas false, 0, '', null, undefined, NaN)
-expect(1).toBeTruthy();
-expect('hello').toBeTruthy();
-expect([]).toBeTruthy();       // tableau vide est truthy !
-expect({}).toBeTruthy();       // objet vide est truthy !
-
-// toBeFalsy — falsy en JavaScript
-expect(0).toBeFalsy();
-expect('').toBeFalsy();
-expect(null).toBeFalsy();
-expect(undefined).toBeFalsy();
-expect(NaN).toBeFalsy();
-
-// toBeNaN
-expect(NaN).toBeNaN();
-expect(Number('abc')).toBeNaN();
-```
-
-### Nombres et comparaisons
-
-```typescript
-// toBeGreaterThan / toBeGreaterThanOrEqual
-expect(10).toBeGreaterThan(5);
-expect(10).toBeGreaterThanOrEqual(10);
-
-// toBeLessThan / toBeLessThanOrEqual
-expect(5).toBeLessThan(10);
-expect(5).toBeLessThanOrEqual(5);
-
-// toBeCloseTo — pour les nombres a virgule flottante
-expect(0.1 + 0.2).toBeCloseTo(0.3);        // precision par defaut : 5 decimales
-expect(0.1 + 0.2).toBeCloseTo(0.3, 10);    // precision : 10 decimales
-expect(Math.PI).toBeCloseTo(3.14159, 4);
-```
-
-### Exceptions
-
-```typescript
-// toThrow — verifie qu'une fonction lance une erreur
-function divide(a: number, b: number): number {
-  if (b === 0) throw new Error('Division by zero');
-  return a / b;
-}
-
-// IMPORTANT : envelopper dans une fonction flechee
-expect(() => divide(10, 0)).toThrow();
-expect(() => divide(10, 0)).toThrow('Division by zero');        // message exact
-expect(() => divide(10, 0)).toThrow(/zero/);                    // regex
-expect(() => divide(10, 0)).toThrow(Error);                     // type d'erreur
-
-// Erreur personnalisee
-class ValidationError extends Error {
-  constructor(public field: string, message: string) {
-    super(message);
-    this.name = 'ValidationError';
-  }
-}
-
-function validateAge(age: number): void {
-  if (age < 0) throw new ValidationError('age', 'Age cannot be negative');
-  if (age > 150) throw new ValidationError('age', 'Age seems unrealistic');
-}
-
-expect(() => validateAge(-1)).toThrow(ValidationError);
-expect(() => validateAge(-1)).toThrow('Age cannot be negative');
-
-// Ne PAS oublier le wrapper () =>
-// expect(divide(10, 0)).toThrow(); // ERREUR : l'exception est lancee AVANT expect
-```
-
-### Promesses : resolves / rejects
-
-```typescript
-async function fetchUser(id: number): Promise<{ id: number; name: string }> {
-  if (id <= 0) throw new Error('Invalid ID');
-  return { id, name: 'Alice' };
-}
-
-// resolves — verifie qu'une promesse se resout
-await expect(fetchUser(1)).resolves.toEqual({ id: 1, name: 'Alice' });
-await expect(fetchUser(1)).resolves.toHaveProperty('name', 'Alice');
-
-// rejects — verifie qu'une promesse rejette
-await expect(fetchUser(-1)).rejects.toThrow('Invalid ID');
-await expect(fetchUser(-1)).rejects.toThrow(Error);
-await expect(fetchUser(0)).rejects.toThrow(/Invalid/);
-
-// IMPORTANT : toujours await sinon le test passe meme si la promesse echoue
-```
-
-### Negation avec .not
-
-```typescript
-expect(42).not.toBe(43);
-expect('hello').not.toContain('xyz');
-expect([1, 2, 3]).not.toContain(4);
-expect(null).not.toBeDefined();
-expect({ a: 1 }).not.toHaveProperty('b');
-expect(() => divide(10, 2)).not.toThrow();
-```
-
-### Asymmetric matchers
-
-```typescript
-// expect.any(Type) — n'importe quelle valeur de ce type
-expect(1).toEqual(expect.any(Number));
-expect('hello').toEqual(expect.any(String));
-
-// Utile dans les comparaisons d'objets
-expect({
-  id: 42,
-  name: 'Alice',
-  createdAt: new Date(),
-}).toEqual({
-  id: expect.any(Number),
-  name: expect.any(String),
-  createdAt: expect.any(Date),
-});
-
-// expect.stringContaining / expect.stringMatching
-expect('hello world').toEqual(expect.stringContaining('world'));
-expect('error: timeout').toEqual(expect.stringMatching(/error: \w+/));
-
-// expect.arrayContaining — sous-ensemble du tableau
-expect([1, 2, 3, 4, 5]).toEqual(expect.arrayContaining([3, 1, 5]));
-
-// expect.objectContaining — sous-ensemble de l'objet
-expect({ a: 1, b: 2, c: 3 }).toEqual(expect.objectContaining({ a: 1, c: 3 }));
-
-// Combiner les asymmetric matchers
-expect({
-  users: [
-    { id: 1, name: 'Alice', email: 'alice@example.com' },
-    { id: 2, name: 'Bob', email: 'bob@example.com' },
-  ],
-}).toEqual({
-  users: expect.arrayContaining([
-    expect.objectContaining({
-      name: 'Alice',
-      email: expect.stringContaining('@'),
-    }),
-  ]),
-});
-```
-
----
-
-## Modificateurs : .only, .skip, .todo, .each
-
-### .only — exécuter un seul test ou groupe
-
-```typescript
-describe('MathUtils', () => {
-  // Seul ce test s'executera dans ce describe
-  it.only('should add correctly', () => {
-    expect(add(2, 3)).toBe(5);
-  });
-
-  // Ignore (mais pas marque "skipped")
-  it('should subtract correctly', () => {
-    expect(subtract(5, 3)).toBe(2);
-  });
-});
-
-// Fonctionne aussi avec describe
-describe.only('CriticalFeature', () => {
-  // Tous les tests de ce bloc s'executent
-});
-
-describe('OtherFeature', () => {
-  // Tout ce bloc est ignore
-});
-```
-
-**Attention** : ne pas committer `.only` ! Configurez ESLint pour le détecter :
-
-```typescript
-// eslint.config.js
-// Regle : no-only-tests/no-only-tests (plugin eslint-plugin-no-only-tests)
-```
-
-### .skip — ignorer un test
-
-```typescript
-// Test ignore avec raison en commentaire
-it.skip('should handle edge case (TODO: fix #1234)', () => {
-  // Ce test ne s'execute pas
-  expect(processEdgeCase()).toBe(true);
-});
-
-describe.skip('LegacyModule', () => {
-  // Tout le bloc est ignore
-});
-```
-
-### .todo — marquer un test à écrire
-
-```typescript
-describe('PaymentProcessor', () => {
-  it('should process credit card', () => {
-    // Test implemente
-  });
-
-  // Placeholder : rappel qu'il faut ecrire ce test
-  it.todo('should handle 3D Secure authentication');
-  it.todo('should retry on network timeout');
-  it.todo('should send receipt email after successful payment');
-});
-```
-
-Les `.todo` apparaissent dans le rapport sous "todo" — pas d'echec ni de skip.
-
-### .each — tests paramètres
-
-Le pattern `it.each` permet d'exécuter le même test avec différentes donnees :
-
-```typescript
-// Syntaxe avec tableau de tableaux
-describe('isEven', () => {
-  it.each([
-    [2, true],
-    [3, false],
-    [0, true],
-    [-4, true],
-    [-7, false],
-    [100, true],
-  ])('isEven(%i) should return %s', (input, expected) => {
-    expect(isEven(input)).toBe(expected);
-  });
-});
-
-// Syntaxe avec tableau d'objets (plus lisible)
-describe('calculateDiscount', () => {
-  it.each([
-    { amount: 100, percentage: 10, expected: 90 },
-    { amount: 200, percentage: 25, expected: 150 },
-    { amount: 50, percentage: 0, expected: 50 },
-    { amount: 50, percentage: 100, expected: 0 },
-  ])(
-    'should return $expected for amount=$amount with $percentage% discount',
-    ({ amount, percentage, expected }) => {
-      expect(calculateDiscount(amount, percentage)).toBe(expected);
-    }
-  );
-});
-
-// describe.each — parametrer un groupe entier
-describe.each([
-  { currency: 'EUR', symbol: '\u20ac', decimals: 2 },
-  { currency: 'JPY', symbol: '\u00a5', decimals: 0 },
-  { currency: 'BTC', symbol: '\u20bf', decimals: 8 },
-])('Currency: $currency', ({ currency, symbol, decimals }) => {
-  it(`should format with ${symbol} symbol`, () => {
-    const result = formatCurrency(1000, currency);
-    expect(result).toContain(symbol);
-  });
-
-  it(`should have ${decimals} decimal places`, () => {
-    const result = formatCurrency(1000.123456789, currency);
-    const parts = result.replace(/[^0-9.]/g, '').split('.');
-    if (decimals > 0) {
-      expect(parts[1]).toHaveLength(decimals);
-    } else {
-      expect(parts).toHaveLength(1);
-    }
-  });
-});
-```
-
-### Combiner les modificateurs
-
-```typescript
-// Parametrer et skip
-it.skip.each([
-  [1, 1, 2],
-  [2, 3, 5],
-])('add(%i, %i) = %i', (a, b, expected) => {
-  expect(add(a, b)).toBe(expected);
-});
-
-// Only + each
-it.only.each([
+// Syntaxe tableau-d'objets (recommandée — auto-nommage via $clé)
+it.each([
+  { role: 'owner' as Role, expected: true,  label: 'peut inviter' },
+  { role: 'admin' as Role, expected: true,  label: 'peut inviter' },
+  { role: 'member' as Role, expected: false, label: 'ne peut pas inviter' },
+  { role: 'guest' as Role, expected: false,  label: 'ne peut pas inviter' },
+])('canInvite($role) → $expected ($label)', ({ role, expected }) => {
+  expect(canInvite(role)).toBe(expected)
+})
+
+// Syntaxe tableau-de-tableaux (plus concise, nommage via %s/%i/%p)
+it.each([
+  ['owner', true],
   ['admin', true],
-  ['user', false],
-])('isAdmin("%s") should return %s', (role, expected) => {
-  expect(isAdmin(role)).toBe(expected);
-});
+  ['member', false],
+  ['guest', false],
+])('canInvite("%s") → %s', (role, expected) => {
+  expect(canInvite(role as Role)).toBe(expected)
+})
 ```
 
----
+`describe.each` permet de paramétrer un bloc entier — utile pour tester plusieurs configurations ou environnements.
 
-## Snapshots
-
-### Snapshots fichier
-
-Un snapshot enregistre la sortie et la compare aux executions futures :
+### Hooks de lifecycle
 
 ```typescript
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  createdAt: Date;
-}
+describe('Suite RBAC', () => {
+  let context: Map<string, Role>
 
-function formatUserProfile(user: User): string {
-  return [
-    `Name: ${user.name}`,
-    `Email: ${user.email}`,
-    `Member since: ${user.createdAt.toLocaleDateString('fr-FR')}`,
-  ].join('\n');
-}
+  // Exécuté UNE FOIS avant tous les tests du describe
+  // Usage : setup lourd (connexion, chargement de fixtures volumineuses)
+  beforeAll(() => {
+    context = new Map([['user-1', 'owner'], ['user-2', 'member']])
+  })
 
-describe('formatUserProfile', () => {
-  it('should format profile correctly', () => {
-    const user: User = {
-      id: 1,
-      name: 'Alice Dupont',
-      email: 'alice@example.com',
-      createdAt: new Date('2024-01-15'),
-    };
+  // Exécuté avant CHAQUE test
+  // Usage : construire des objets frais, vider l'état mutable
+  beforeEach(() => {
+    // reset ou construction légère
+  })
 
-    // Premier run : cree le fichier __snapshots__/xxx.test.ts.snap
-    // Runs suivants : compare avec le snapshot existant
-    expect(formatUserProfile(user)).toMatchSnapshot();
-  });
-});
+  // Exécuté après CHAQUE test
+  // Usage : nettoyage léger, reset des mocks (ou via clearMocks: true en config)
+  afterEach(() => {
+    // cleanup
+  })
+
+  // Exécuté UNE FOIS après tous les tests
+  // Usage : fermeture de connexions (DB, serveur HTTP)
+  afterAll(() => {
+    context.clear()
+  })
+
+  it('owner peut inviter', () => {
+    expect(canInvite(context.get('user-1')!)).toBe(true)
+  })
+})
 ```
 
-Fichier généré (`__snapshots__/user.test.ts.snap`) :
+Ordre d'exécution : `beforeAll` → (`beforeEach` → test → `afterEach`) × N → `afterAll`. Les hooks d'un `describe` imbriqué s'exécutent après ceux du parent.
 
-```
-// Vitest Snapshot v1
+Règle : `beforeAll`/`afterAll` pour l'infra lourde ; `beforeEach`/`afterEach` pour l'état par-test.
 
-exports[`formatUserProfile > should format profile correctly 1`] = `
-"Name: Alice Dupont
-Email: alice@example.com
-Member since: 15/01/2024"
-`;
-```
-
-### Snapshots inline
-
-Le snapshot est stocke directement dans le fichier de test :
-
-```typescript
-describe('formatUserProfile', () => {
-  it('should format profile correctly', () => {
-    const user: User = {
-      id: 1,
-      name: 'Alice Dupont',
-      email: 'alice@example.com',
-      createdAt: new Date('2024-01-15'),
-    };
-
-    // Le snapshot est ecrit ICI par Vitest au premier run
-    expect(formatUserProfile(user)).toMatchInlineSnapshot(`
-      "Name: Alice Dupont
-      Email: alice@example.com
-      Member since: 15/01/2024"
-    `);
-  });
-});
-```
-
-### Mettre a jour les snapshots
+### Watch mode et filtrage CLI
 
 ```bash
-# Mettre a jour tous les snapshots
-pnpm vitest --update
-# ou
-pnpm vitest -u
-
-# En watch mode, appuyer sur "u" pour update
-```
-
-### Bonnes pratiques snapshots
-
-```typescript
-// BON : petits snapshots, valeurs deterministes
-expect(formatPrice(1234.56, 'EUR')).toMatchInlineSnapshot('"1 234,56 \u20ac"');
-
-// MAUVAIS : snapshot enorme (tout un composant HTML)
-expect(renderComponent()).toMatchSnapshot(); // 200 lignes de HTML...
-
-// MAUVAIS : valeurs non-deterministes
-expect({
-  id: Math.random(),
-  createdAt: new Date(),
-}).toMatchSnapshot(); // Change a chaque run !
-
-// SOLUTION : remplacer les valeurs dynamiques
-expect({
-  id: Math.random(),
-  createdAt: new Date(),
-}).toMatchSnapshot({
-  id: expect.any(Number),
-  createdAt: expect.any(Date),
-});
-```
-
----
-
-## Watch mode et UI mode
-
-### Watch mode
-
-```bash
-# Demarrer en mode watch (defaut avec `vitest` sans `run`)
+# Watch mode (défaut) — re-exécute les tests impactés par les changements de fichiers
 pnpm vitest
 
-# Vitest observe les fichiers modifies et re-execute les tests impactes
-# Raccourcis en watch mode :
-#   a — executer tous les tests
-#   f — re-executer les tests qui ont echoue
-#   u — mettre a jour les snapshots
-#   p — filtrer par nom de fichier
-#   t — filtrer par nom de test
-#   q — quitter
-```
-
-### UI mode
-
-```bash
-# Demarrer l'interface graphique
-pnpm vitest --ui
-
-# Ouvre un navigateur avec :
-# - Arbre des fichiers de test
-# - Resultats en temps reel
-# - Module graph (dependances)
-# - Code source avec couverture
-```
-
-### Lancer un fichier spécifique
-
-```bash
-# Par chemin
-pnpm vitest src/utils/math.test.ts
-
-# Par pattern
-pnpm vitest math
-
-# Mode "run" (une seule execution, pas de watch)
+# Exécution unique (CI, scripts)
 pnpm vitest run
 
-# Avec couverture
+# Filtrer par fichier ou pattern de chemin
+pnpm vitest run src/domain/rbac.test.ts
+pnpm vitest run rbac
+
+# Filtrer par nom de test (substring)
+pnpm vitest run -t "canInvite"
+
+# Lancer le coverage
+pnpm vitest run --coverage
+
+# Interface graphique (arbre de tests, coverage inline, module graph)
+pnpm vitest --ui
+```
+
+Raccourcis clavier en watch mode : `a` relancer tout, `f` relancer les échoués, `p` filtrer par fichier, `t` filtrer par nom de test, `u` mettre à jour les snapshots, `q` quitter.
+
+### Filtrage dans le code — `only`, `skip`, `todo`
+
+```typescript
+// only : seuls ces tests s'exécutent dans le fichier/la suite
+it.only('cas critique temporaire', () => { /* ... */ })
+describe.only('sous-suite isolée', () => { /* ... */ })
+// ⚠ Ne JAMAIS committer .only — configurer ESLint avec eslint-plugin-no-only-tests
+
+// skip : test ignoré (apparaît dans le rapport comme "skipped")
+it.skip('bug #42 — reproductible, fix en cours', () => { /* ... */ })
+describe.skip('module legacy désactivé', () => { /* ... */ })
+
+// todo : placeholder — visible dans le rapport, ni échec ni skip
+it.todo('canInvite après expiration temporaire du rôle')
+it.todo('canPost pour les rôles guest sur une famille archivée')
+```
+
+### Coverage v8 — lecture rapide
+
+```bash
 pnpm vitest run --coverage
 ```
 
----
+Sortie console typique :
 
-## Intégration TypeScript
-
-### Types et autocompletion
-
-Vitest est écrit en TypeScript et offre un typage complet :
-
-```typescript
-import { describe, it, expect, vi } from 'vitest';
-
-interface UserService {
-  getById(id: number): Promise<User>;
-  create(data: CreateUserDTO): Promise<User>;
-  delete(id: number): Promise<void>;
-}
-
-// vi.fn() infere les types
-const mockGetById = vi.fn<[number], Promise<User>>();
-// TypeScript sait que mockGetById prend un number et retourne Promise<User>
-
-mockGetById.mockResolvedValue({ id: 1, name: 'Alice', email: 'alice@example.com' });
-// mockGetById.mockResolvedValue('wrong'); // Erreur TS !
+```
+----------|---------|----------|---------|---------|
+File      | % Stmts | % Branch | % Funcs | % Lines |
+----------|---------|----------|---------|---------|
+rbac.ts   |   100   |    75    |   100   |   100   |
+----------|---------|----------|---------|---------|
 ```
 
-### Custom matchers types
+- **Stmts / Lines** : chaque instruction visitée.
+- **Branch** : chaque branche `if`/`else`/ternaire empruntée (ici 75% = une branche non couverte).
+- **Funcs** : chaque fonction appelée au moins une fois.
+
+Le rapport HTML dans `coverage/index.html` surligne les lignes non couvertes. Configurer `thresholds` dans `vitest.config.ts` pour faire échouer le build CI si un seuil n'est pas atteint.
+
+## 3. Worked examples
+
+### Exemple A — config + `test.each` + matchers sur les règles RBAC
 
 ```typescript
-// tests/custom-matchers.d.ts
-import 'vitest';
+// src/domain/rbac.test.ts
+import { describe, it, expect } from 'vitest'
+import { canInvite, type Role } from './rbac'
 
-interface CustomMatchers<R = unknown> {
-  toBeValidEmail(): R;
-  toBeWithinRange(min: number, max: number): R;
-}
+describe('canInvite — règle RBAC TribuZen', () => {
+  // data-driven : 4 rôles couverts en un seul bloc, noms de tests lisibles
+  it.each([
+    { role: 'owner' as Role, expected: true },
+    { role: 'admin' as Role, expected: true },
+    { role: 'member' as Role, expected: false },
+    { role: 'guest' as Role, expected: false },
+  ])('canInvite($role) → $expected', ({ role, expected }) => {
+    // toBe est correct : canInvite retourne un boolean (primitif)
+    expect(canInvite(role)).toBe(expected)
+  })
 
-declare module 'vitest' {
-  interface Assertion<T = any> extends CustomMatchers<T> {}
-  interface AsymmetricMatchersContaining extends CustomMatchers {}
-}
+  it('retourne false pour un rôle inconnu (cas défensif)', () => {
+    // TypeScript guard à la compilation ; cette branche couvre le cas runtime
+    expect(canInvite('superuser' as Role)).toBe(false)
+  })
+})
 ```
 
-```typescript
-// tests/setup.ts
-import { expect } from 'vitest';
+Pas-à-pas : (1) `it.each` génère quatre tests nommés `canInvite(owner) → true`, etc. — lisibles dans le rapport ; (2) `toBe` est l'assertion juste pour un retour booléen primitif — `toBeTruthy()` serait plus laxiste et cacherait un bug si la fonction retournait `1` au lieu de `true` ; (3) le cas "rôle inconnu" force la branche `false` qui ne serait pas couverte sinon (coverage 100% branches).
 
-expect.extend({
-  toBeValidEmail(received: string) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const pass = emailRegex.test(received);
-    return {
-      pass,
-      message: () =>
-        pass
-          ? `expected ${received} not to be a valid email`
-          : `expected ${received} to be a valid email`,
-    };
-  },
-
-  toBeWithinRange(received: number, min: number, max: number) {
-    const pass = received >= min && received <= max;
-    return {
-      pass,
-      message: () =>
-        pass
-          ? `expected ${received} not to be within range [${min}, ${max}]`
-          : `expected ${received} to be within range [${min}, ${max}]`,
-    };
-  },
-});
-```
+### Exemple B — hooks + `toMatchObject` + `toThrow` sur une règle d'assemblage
 
 ```typescript
-// Utilisation
-it('should validate email format', () => {
-  expect('alice@example.com').toBeValidEmail();
-  expect('not-an-email').not.toBeValidEmail();
-});
+// src/domain/invitation-rules.ts
+import { canInvite, type Role } from './rbac'
 
-it('should generate score within range', () => {
-  const score = calculateScore(player);
-  expect(score).toBeWithinRange(0, 100);
-});
-```
-
----
-
-## Exemple complet : tester un module utilitaire
-
-```typescript
-// src/utils/string-utils.ts
-export function capitalize(str: string): string {
-  if (!str) return '';
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+export interface InvitationDraft {
+  familyId: string
+  email: string
+  status: 'pending'
+  invitedBy: Role
 }
 
-export function slugify(str: string): string {
-  return str
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/[\s_]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-export function truncate(str: string, maxLength: number, suffix = '...'): string {
-  if (str.length <= maxLength) return str;
-  return str.slice(0, maxLength - suffix.length) + suffix;
-}
-
-export function countWords(str: string): number {
-  if (!str.trim()) return 0;
-  return str.trim().split(/\s+/).length;
-}
-
-export function toCamelCase(str: string): string {
-  return str
-    .replace(/[-_\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''))
-    .replace(/^[A-Z]/, (c) => c.toLowerCase());
+export function buildInvitation(familyId: string, email: string, role: Role): InvitationDraft {
+  if (!canInvite(role)) throw new Error('UNAUTHORIZED')
+  return { familyId, email, status: 'pending', invitedBy: role }
 }
 ```
 
 ```typescript
-// src/utils/string-utils.test.ts
-import { describe, it, expect } from 'vitest';
-import { capitalize, slugify, truncate, countWords, toCamelCase } from './string-utils';
+// src/domain/invitation-rules.test.ts
+import { describe, it, expect, beforeEach } from 'vitest'
+import { buildInvitation } from './invitation-rules'
 
-describe('StringUtils', () => {
+describe('buildInvitation', () => {
+  let familyId: string
 
-  describe('capitalize', () => {
-    it.each([
-      ['hello', 'Hello'],
-      ['HELLO', 'Hello'],
-      ['hELLO wORLD', 'Hello world'],
-      ['a', 'A'],
-    ])('capitalize("%s") should return "%s"', (input, expected) => {
-      expect(capitalize(input)).toBe(expected);
-    });
+  beforeEach(() => {
+    // familyId frais à chaque test : pas de couplage entre les cas
+    familyId = 'fam-' + Math.random().toString(36).slice(2)
+  })
 
-    it('should return empty string for empty input', () => {
-      expect(capitalize('')).toBe('');
-    });
-  });
+  it('crée une invitation avec les bonnes propriétés (owner)', () => {
+    const draft = buildInvitation(familyId, 'bob@tribu.fr', 'owner')
+    // toMatchObject : si buildInvitation ajoute plus tard un champ createdAt ou id,
+    // ce test reste vert sans modification
+    expect(draft).toMatchObject({
+      familyId,
+      email: 'bob@tribu.fr',
+      status: 'pending',
+      invitedBy: 'owner',
+    })
+  })
 
-  describe('slugify', () => {
-    it('should replace spaces with hyphens', () => {
-      expect(slugify('hello world')).toBe('hello-world');
-    });
+  it('lève UNAUTHORIZED pour un rôle insuffisant', () => {
+    // arrow function obligatoire : sans elle, l'erreur est levée avant que expect la reçoive
+    expect(() => buildInvitation(familyId, 'bob@tribu.fr', 'member')).toThrow('UNAUTHORIZED')
+  })
 
-    it('should lowercase everything', () => {
-      expect(slugify('Hello World')).toBe('hello-world');
-    });
-
-    it('should remove special characters', () => {
-      expect(slugify("it's a test!")).toBe('its-a-test');
-    });
-
-    it('should trim leading and trailing hyphens', () => {
-      expect(slugify(' hello world ')).toBe('hello-world');
-    });
-
-    it('should handle multiple consecutive spaces', () => {
-      expect(slugify('hello    world')).toBe('hello-world');
-    });
-
-    it('should handle accented characters edge case', () => {
-      expect(slugify('hello_world')).toBe('hello-world');
-    });
-  });
-
-  describe('truncate', () => {
-    it('should not truncate if string is shorter than maxLength', () => {
-      expect(truncate('hello', 10)).toBe('hello');
-    });
-
-    it('should truncate and add default suffix', () => {
-      expect(truncate('hello world foo bar', 10)).toBe('hello w...');
-    });
-
-    it('should use custom suffix', () => {
-      expect(truncate('hello world foo bar', 10, ' [more]')).toBe('hel [more]');
-    });
-
-    it('should return original if length equals maxLength', () => {
-      expect(truncate('hello', 5)).toBe('hello');
-    });
-  });
-
-  describe('countWords', () => {
-    it.each([
-      ['hello world', 2],
-      ['one', 1],
-      ['  spaced   out  ', 2],
-      ['', 0],
-      ['   ', 0],
-    ])('countWords("%s") should return %i', (input, expected) => {
-      expect(countWords(input)).toBe(expected);
-    });
-  });
-
-  describe('toCamelCase', () => {
-    it.each([
-      ['hello-world', 'helloWorld'],
-      ['hello_world', 'helloWorld'],
-      ['hello world', 'helloWorld'],
-      ['Hello World', 'helloWorld'],
-      ['already', 'already'],
-      ['SCREAMING-CASE', 'sCREAMINGCASE'],
-    ])('toCamelCase("%s") should return "%s"', (input, expected) => {
-      expect(toCamelCase(input)).toBe(expected);
-    });
-  });
-});
+  it.each(['member', 'guest'] as const)('%s ne peut pas inviter', (role) => {
+    expect(() => buildInvitation(familyId, 'x@tribu.fr', role)).toThrow('UNAUTHORIZED')
+  })
+})
 ```
 
----
+Pas-à-pas : (1) `beforeEach` génère un `familyId` isolé par test sans setup lourd ; (2) `toMatchObject` tolère les champs futurs (`id`, `createdAt`) — le test ne se casse pas lors d'une évolution de l'interface ; (3) `toThrow('UNAUTHORIZED')` vérifie le message exact (substring) — pas juste `toThrow()` qui laisserait passer n'importe quelle erreur ; (4) `it.each` sur les deux rôles invalides évite la duplication.
 
-## Commandes CLI essentielles
+## 4. Pièges & misconceptions
 
-```bash
-# Executer tous les tests
-pnpm vitest run
+- **`toBe` sur un objet.** `expect({ id: 1 }).toBe({ id: 1 })` échoue car `toBe` utilise `Object.is` (comparaison de référence). Deux littéraux d'objet sont deux allocations distinctes. *Correct* : `toEqual` pour la valeur profonde, `toStrictEqual` si le type de classe est partie du contrat.
 
-# Mode watch (defaut)
-pnpm vitest
+- **`toEqual` masque les clés `undefined`.** `expect({ a: 1, b: undefined }).toEqual({ a: 1 })` passe. Si une clé `undefined` doit être absente ou présente explicitement (DTO partiel), utiliser `toStrictEqual`. Confondre les deux produit de faux positifs sur les types avec champs optionnels.
 
-# Fichier ou pattern specifique
-pnpm vitest run src/utils/math.test.ts
-pnpm vitest run math
+- **Environnement mal choisi.** `jsdom` pour de la logique pure ajoute 100-300 ms de démarrage par fichier de test sans raison. `node` pour un composant accédant à `localStorage` lève `ReferenceError: localStorage is not defined`. *Correct* : `node` par défaut, surcharger avec `// @vitest-environment jsdom` uniquement pour les fichiers qui touchent le DOM.
 
-# Tests qui ont echoue au dernier run
-pnpm vitest run --changed
+- **Coverage 100% lines ≠ tests corrects.** `expect(canInvite('owner')).toBeTruthy()` couvre la ligne et la branche, mais `toBeTruthy()` accepterait `1`, `'yes'`, ou n'importe quelle valeur truthy. Le contrat dit `boolean` — asserter `toBe(true)`. Une suite avec 100% de coverage et des assertions larges donne une fausse confiance.
 
-# Avec couverture
-pnpm vitest run --coverage
+- **Oublier `await` avec `.rejects`.** `expect(promise).rejects.toThrow(...)` sans `await` passe toujours vert parce que la promesse de rejet n'est jamais attendue par le runner. *Correct* : `await expect(promise).rejects.toThrow(...)` systématiquement.
 
-# Interface graphique
-pnpm vitest --ui
+- **Données mutables dans `test.each`.** Si les cas sont des objets partagés et qu'un test les modifie (ex. ajout d'une propriété), le cas suivant hérite de l'état corrompu. *Correct* : données immutables dans `each` (primitifs ou littéraux d'objet) ou reconstruction dans `beforeEach`.
 
-# Reporter specifique
-pnpm vitest run --reporter=verbose
-pnpm vitest run --reporter=json --outputFile=results.json
+## 5. Ancrage TribuZen
 
-# Mode debug (single thread, pas de timeout)
-pnpm vitest run --pool=forks --poolOptions.forks.singleFork --testTimeout=0
+Couche fil-rouge : **suite de tests unitaires des règles domaine TribuZen (invitation, RBAC)** (`smaurier/tribuzen`).
 
-# Filtrer par nom de test
-pnpm vitest run -t "should calculate total"
+- `canInvite(role)`, `canPost(user, resource)`, `canKick(user, target)` — toutes les règles RBAC s'écrivent en logique pure et se testent avec `toBe` + `test.each` sur les N rôles. Zéro I/O → `environment: 'node'`, exécution < 10 ms par fichier.
+- `buildInvitation(familyId, email, role)` — règle qui assemble un DTO invitation : `toMatchObject` tolère l'ajout futur de `id` ou `createdAt` sans casser la suite.
+- Les `beforeEach` construisent des fixtures légères (familyId, email) fraîches par test — aucun `beforeAll` lourd à ce niveau (pas de vraie DB encore).
+- Le coverage v8 sur ces modules doit atteindre 100% de branches : toutes les combinaisons de rôles sont couvertes par les `test.each`.
+- Le `vitest.config.ts` du repo TribuZen utilisera `environment: 'node'` pour tout le domaine ; `jsdom` sera ajouté pour les composants Vue dans un projet séparé.
+- En CI, `pnpm vitest run --coverage` fait échouer le build si les seuils ne sont pas atteints — cela protège la suite contre l'ajout de code non testé.
+
+## 6. Points clés
+
+1. `vitest.config.ts` avec `defineConfig` — clés essentielles : `globals`, `environment`, `include`, `setupFiles`, `coverage.provider: 'v8'`.
+2. `environment: 'node'` pour la logique pure ; `jsdom` uniquement pour le code qui accède au DOM — ne pas mélanger sans raison.
+3. `toBe` = `Object.is` (primitifs) ; `toEqual` = égalité profonde (ignore undefined) ; `toStrictEqual` = toEqual + type de classe + clés undefined.
+4. `toContain` = sous-chaîne ou élément strict ; `toMatchObject` = correspondance partielle d'objet (champs supplémentaires ignorés).
+5. `toThrow` nécessite un wrapper arrow `() =>` ; pour les promesses, `await expect(...).rejects.toThrow(...)`.
+6. `test.each` élimine la duplication et génère des noms de tests lisibles à partir des données.
+7. `beforeAll`/`afterAll` pour l'infra lourde (une fois) ; `beforeEach`/`afterEach` pour l'état par-test (frais à chaque test).
+8. `only`/`skip`/`todo` pour filtrer en développement — ne jamais committer `only`.
+9. Coverage v8 : lire la colonne **Branch**, pas seulement Lines — 100% Lines avec 75% Branch indique des chemins non testés.
+
+## 7. Seeds Anki
+
+```
+Différence toBe / toEqual / toStrictEqual ?|toBe = Object.is (référence, primitifs) ; toEqual = égalité profonde (ignore clés undefined) ; toStrictEqual = toEqual + type de classe + clés undefined
+Pourquoi toThrow nécessite un wrapper () => ?|Sans wrapper, l'exception est levée AVANT que expect la reçoive — le test plante au lieu d'asserter sur l'erreur
+Quand choisir environment jsdom vs node dans Vitest ?|node pour la logique pure (règles domaine, services) ; jsdom quand le code accède à document/window/localStorage
+À quoi sert toMatchObject par rapport à toEqual ?|toMatchObject vérifie un sous-ensemble de propriétés — les champs non cités sont ignorés ; toEqual doit correspondre exactement
+Comment paramétrer plusieurs cas sans dupliquer un test ?|it.each avec un tableau de cas — Vitest génère un test nommé par cas à partir du template de nom
+Différence beforeAll vs beforeEach ?|beforeAll s'exécute UNE fois avant tous les tests du describe (infra lourde) ; beforeEach s'exécute avant CHAQUE test (état frais par-test)
+Qu'indique la colonne Branch dans le rapport coverage v8 ?|Le pourcentage de branches if/else/ternaire empruntées — 100% Lines avec 75% Branch signifie des chemins non testés
+Comment faire échouer le build CI si le coverage est insuffisant ?|Configurer thresholds dans vitest.config.ts coverage.thresholds — Vitest exit 1 si un seuil n'est pas atteint
 ```
 
----
+## Pont vers le lab
 
-## Navigation
-
-| Précédent | Suivant |
-|-----------|---------|
-| [02 - Anatomie d'un test](./02-anatomie-dun-test) | [04 - Mocking et test doubles](./04-mocking-et-test-doubles) |
-
----
-
-## Ressources
-
-- [Quiz 03 : Testez vos connaissances](../quizzes/quiz-03-vitest.html)
-- [Lab 03 : Vitest fondamentaux](../labs/lab-03-vitest-fondamentaux/)
-- [Documentation officielle Vitest](https://vitest.dev/)
-- [Vitest API Référence](https://vitest.dev/api/)
-- [Migration depuis Jest](https://vitest.dev/guide/migration.html)
-- [Vitest UI](https://vitest.dev/guide/ui.html)
-
----
-
-<!-- parcours-recommande -->
-
-::: tip Parcours recommandé
-1. **Screencast** : [screencast 03 vitest](../screencasts/screencast-03-vitest.md)
-2. **Lab** : [lab-03-vitest-fondamentaux](../labs/lab-03-vitest-fondamentaux/README)
-3. **Quiz** : [quiz 03 vitest](../quizzes/quiz-03-vitest.html)
-:::
+> Lab associé : `06-testing/labs/lab-03-vitest-fondamentaux/`. Tu y configures Vitest sur un projet TypeScript minimal, écris les tests des règles RBAC TribuZen avec les bons matchers, appliques `test.each` pour les quatre rôles, et lis le rapport de coverage v8. Corrigé complet commenté + variante J+30 dans le README du lab.
