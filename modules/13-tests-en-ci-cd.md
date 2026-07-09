@@ -102,7 +102,7 @@ jobs:
         shard: [1, 2, 3, 4]
 ```
 
-La **matrice** (`strategy.matrix`) multiplie un job : ici 4 jobs `e2e` parallèles, chacun portant `shard: 1`, `shard: 2`, etc. La valeur est accessible via `${{ matrix.shard }}`.
+La **matrice** (`strategy.matrix`) multiplie un job : ici 4 jobs `e2e` parallèles, chacun portant `shard: 1`, `shard: 2`, etc. La valeur est accessible via <code v-pre>${{ matrix.shard }}</code>.
 
 `fail-fast: false` sur la matrice E2E est délibéré : on veut tous les résultats, pas seulement le premier shard qui tombe.
 

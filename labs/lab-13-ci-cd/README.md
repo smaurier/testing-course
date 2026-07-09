@@ -20,9 +20,9 @@ Code de départ : le dépôt TribuZen avec `vitest.config.ts` et `playwright.con
 
 4. **Seuil de coverage.** Dans `vitest.config.ts`, ajoute `test.coverage.thresholds` avec `lines: 80` et `branches: 75`. Vérifie que `pnpm vitest run --coverage` échoue si la couverture est insuffisante (teste en baissant momentanément le seuil à 100 % pour provoquer l'échec).
 
-5. **Job e2e en matrice de 2 shards.** Ajoute `e2e` avec `needs: unit`. Configure `strategy.matrix.shard: [1, 2]` et `fail-fast: false`. La commande Playwright est `pnpm playwright test --shard=${{ matrix.shard }}/2`. Ajoute le step d'install des navigateurs avec la bonne option pour Linux. Ajoute l'upload du rapport avec la bonne condition.
+5. **Job e2e en matrice de 2 shards.** Ajoute `e2e` avec `needs: unit`. Configure `strategy.matrix.shard: [1, 2]` et `fail-fast: false`. La commande Playwright est <code v-pre>pnpm playwright test --shard=${{ matrix.shard }}/2</code>. Ajoute le step d'install des navigateurs avec la bonne option pour Linux. Ajoute l'upload du rapport avec la bonne condition.
 
-6. **Cache navigateurs Playwright.** Ajoute le step `actions/cache@v4` pour `~/.cache/ms-playwright` **avant** le step `playwright install`. Clé = `playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}`.
+6. **Cache navigateurs Playwright.** Ajoute le step `actions/cache@v4` pour `~/.cache/ms-playwright` **avant** le step `playwright install`. Clé = <code v-pre>playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}</code>.
 
 7. **Job e2e-report.** Ajoute le job de merge des rapports : `needs: e2e`, `if: always()`, download des artefacts `playwright-report-*`, `pnpm playwright merge-reports --reporter=html all-reports/`, re-upload du rapport fusionné.
 
