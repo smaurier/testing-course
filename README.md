@@ -7,16 +7,16 @@
 <!-- labs-gestes:start -->
 ## Labs — refonte du 22/09/2026 : un lab = un geste métier complet
 
-> Règle qualité 5 du parcours : chaque lab est **un geste métier complet**, sous deux formes — **Zéro** (construire de zéro un artefact réel et entier) ou **Intervention** (modifier de l'existant avec consommateurs, findings avant code, non-régression). Un lab n'entre en file qu'avec un **oracle exécutable** (`src/` starter · `test/` · `solution/` séparée). Les labs historiques de ce cours (un concept par lab, sans oracle) restent dans `labs/` jusqu'à remplacement et **ne sont plus la file**. Cible détaillée : [`docs/gestes-complets.md`](../docs/gestes-complets.md). État : **3/6 avec oracle**.
+> Règle qualité 5 du parcours : chaque lab est **un geste métier complet**, sous deux formes — **Zéro** (construire de zéro un artefact réel et entier) ou **Intervention** (modifier de l'existant avec consommateurs, findings avant code, non-régression). Un lab n'entre en file qu'avec un **oracle exécutable** (`src/` starter · `test/` · `solution/` séparée). Les labs historiques de ce cours (un concept par lab, sans oracle) restent dans `labs/` jusqu'à remplacement et **ne sont plus la file**. Cible détaillée : [`docs/gestes-complets.md`](../docs/gestes-complets.md). État : **6/6 avec oracle**.
 
 | # | Lab | Forme | Geste | Oracle |
 |---|-----|-------|-------|--------|
 | 01 | [`lab-01-module-metier-tdd`](labs/lab-01-module-metier-tdd/README.md) | Zéro | invitation familiale en TDD strict, doubles, contrat, de A à Z | ✅ vérifié |
-| 02 | `lab-02-pyramide-reelle` | Zéro | unit → intégration → E2E Playwright sur un écran réel | · à écrire |
+| 02 | [`lab-02-pyramide-reelle`](labs/lab-02-pyramide-reelle/README.md) | Zéro | unit → intégration → E2E Playwright sur un écran réel | ✅ vérifié |
 | 03 | [`lab-03-caracteriser-du-legacy`](labs/lab-03-caracteriser-du-legacy/README.md) | Intervention | golden master sur du code sans tests, puis refactor sous filet | ✅ vérifié |
 | 04 | [`lab-04-reparer-une-suite-flaky`](labs/lab-04-reparer-une-suite-flaky/README.md) | Intervention | diagnostiquer et stabiliser des tests intermittents | ✅ vérifié |
-| 05 | `lab-05-relire-une-pr-de-tests` | Intervention | findings avant vérité sur une PR de tests | · à écrire |
-| 06 | `lab-06-tests-de-contrat` | Zéro | contrat front/API testé des deux côtés | · à écrire |
+| 05 | [`lab-05-relire-une-pr-de-tests`](labs/lab-05-relire-une-pr-de-tests/README.md) | Intervention | findings avant vérité sur une PR de tests | ✅ vérifié |
+| 06 | [`lab-06-tests-de-contrat`](labs/lab-06-tests-de-contrat/README.md) | Zéro | contrat front/API testé des deux côtés | ✅ vérifié |
 
 <!-- labs-gestes:end -->
 
