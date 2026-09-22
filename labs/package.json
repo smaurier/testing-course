@@ -18,15 +18,22 @@
     "lab:06": "vitest run --root lab-06-tests-de-contrat",
     "solution:06": "vitest run --root lab-06-tests-de-contrat --config vitest.solution.config.ts",
     "lab:06:drift": "vitest run --root lab-06-tests-de-contrat --config vitest.drift.config.ts",
-    "check:06": "tsc --noEmit -p lab-06-tests-de-contrat"
+    "check:06": "tsc --noEmit -p lab-06-tests-de-contrat",
+    "lab:02": "node lab-02-pyramide-reelle/run-oracle.mjs lab",
+    "solution:02": "node lab-02-pyramide-reelle/run-oracle.mjs solution",
+    "check:02": "tsc --noEmit -p lab-02-pyramide-reelle"
   },
   "engines": {
     "node": ">=22.12.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@types/node": "^24.0.0",
+    "@types/supertest": "^6.0.0",
+    "supertest": "^7.0.0",
     "typescript": "7.0.2",
     "vite": "^8.3.0",
-    "vitest": "5.0.1"
+    "vitest": "5.0.1",
+    "tsx": "^4.19.0"
   }
 }
