@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "paths": {
+      "@contract": ["./contract/invitation.contract"],
+      "@consumer": ["./consumer/fetchInvitation"],
+      "@provider": ["./provider/getInvitationResponse"]
+    }
+  },
+  "include": ["contract", "consumer", "provider", "test"]
+}

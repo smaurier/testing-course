@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@contract": ["./solution/contract/invitation.contract"],
+      "@consumer": ["./consumer/fetchInvitation"],
+      "@provider": ["./provider/getInvitationResponse"]
+    }
+  },
+  "include": ["solution/contract", "consumer", "provider", "test"]
+}

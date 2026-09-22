@@ -12,9 +12,17 @@
     "solution:03": "vitest run --typecheck --root lab-03-caracteriser-du-legacy --config vitest.solution.config.ts",
     "check:03": "tsc --noEmit -p lab-03-caracteriser-du-legacy",
     "lab:04": "vitest run --root lab-04-reparer-une-suite-flaky",
-    "solution:04": "vitest run --root lab-04-reparer-une-suite-flaky --config vitest.solution.config.ts"
+    "solution:04": "vitest run --root lab-04-reparer-une-suite-flaky --config vitest.solution.config.ts",
+    "lab:05": "node lab-05-relire-une-pr-de-tests/run-oracle.mjs lab",
+    "solution:05": "node lab-05-relire-une-pr-de-tests/run-oracle.mjs solution",
+    "lab:06": "vitest run --root lab-06-tests-de-contrat",
+    "solution:06": "vitest run --root lab-06-tests-de-contrat --config vitest.solution.config.ts",
+    "lab:06:drift": "vitest run --root lab-06-tests-de-contrat --config vitest.drift.config.ts",
+    "check:06": "tsc --noEmit -p lab-06-tests-de-contrat"
   },
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "typescript": "7.0.2",
