@@ -1,0 +1,24 @@
+{
+  "name": "testing-labs",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Oracles executables des labs Testing (regle : un lab = un geste metier complet). npm run lab:NN = RED sur ton code ; solution:NN = GREEN.",
+  "type": "module",
+  "scripts": {
+    "lab:01": "vitest run --typecheck --root lab-01-module-metier-tdd",
+    "solution:01": "vitest run --typecheck --root lab-01-module-metier-tdd --config vitest.solution.config.ts",
+    "check:01": "tsc --noEmit -p lab-01-module-metier-tdd",
+    "lab:03": "vitest run --typecheck --root lab-03-caracteriser-du-legacy",
+    "solution:03": "vitest run --typecheck --root lab-03-caracteriser-du-legacy --config vitest.solution.config.ts",
+    "check:03": "tsc --noEmit -p lab-03-caracteriser-du-legacy",
+    "lab:04": "vitest run --root lab-04-reparer-une-suite-flaky",
+    "solution:04": "vitest run --root lab-04-reparer-une-suite-flaky --config vitest.solution.config.ts"
+  },
+  "engines": { "node": ">=22.12.0" },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "5.0.1"
+  }
+}
