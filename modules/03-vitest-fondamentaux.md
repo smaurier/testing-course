@@ -306,6 +306,24 @@ rbac.ts   |   100   |    75    |   100   |   100   |
 
 Le rapport HTML dans `coverage/index.html` surligne les lignes non couvertes. Configurer `thresholds` dans `vitest.config.ts` pour faire échouer le build CI si un seuil n'est pas atteint.
 
+### Jest vs Vitest — le pont si tu retrouves du Jest en mission
+
+Les deux gros employeurs de la planète test runner. L'API `describe`/`it`/`expect` est quasi identique — Jest a défini le vocabulaire, Vitest l'a repris presque à l'identique pour minimiser la friction de migration. Ce qui change réellement :
+
+| | Jest | Vitest |
+|---|---|---|
+| Mock de fonction | `jest.fn()` | `vi.fn()` |
+| Mock de module | `jest.mock('./module')` (hoisté automatiquement par le compilateur Babel/transform) | `vi.mock('./module')` (hoisté par Vite, même intention) |
+| Timers factices | `jest.useFakeTimers()` | `vi.useFakeTimers()` |
+| Transform | Babel ou ts-jest (compile TOUT le fichier avant de l'exécuter) | esbuild via Vite (transform à la volée, aucune étape de build séparée) |
+| ESM natif | Historiquement difficile (configuration `extensionsToTreatAsEsm`, souvent source de bugs) | Natif — Vitest partage la pipeline Vite, ESM par défaut |
+| Vitesse à froid | Plus lent (compile tout avant de lancer un seul test) | Plus rapide (transform à la demande, watch mode incrémental) |
+| Config | `jest.config.js` + souvent `babel.config.js` séparé | `vitest.config.ts`, peut partager `vite.config.ts` |
+
+**La règle pratique en mission** : si le projet est déjà sur Jest (cas fréquent sur du legacy ou du Create-React-App jamais migré), ne pas proposer de migrer vers Vitest juste par préférence personnelle — le coût de migration (snapshots, mocks de modules, config CI) dépasse presque toujours le gain sur un projet qui tourne déjà. Les réflexes de ce module (matchers, `test.each`, hooks, coverage) se transposent à l'identique : seul le nom de l'objet mock change (`jest.fn()` → `vi.fn()`), pas la logique.
+
+**Piège de transfert le plus fréquent** : `jest.mock()` est hoisté (déplacé en haut du fichier) par la transformation Babel au moment de la compilation — ça marche même écrit après les imports. `vi.mock()` est hoisté par un plugin Vite qui fait la même chose, mais si un jour tu écris un mock dynamique avec des variables externes, Jest et Vitest exigent tous les deux un helper (`jest.requireActual` / `vi.importActual`) — ce n'est pas spécifique à l'un ou l'autre, c'est le hoisting lui-même qui impose la règle "pas de référence à une variable non encore initialisée dans le mock".
+
 ## 3. Worked examples
 
 ### Exemple A — config + `test.each` + matchers sur les règles RBAC

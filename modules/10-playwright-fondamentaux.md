@@ -326,6 +326,14 @@ npx playwright test --ui
 
 Avec `CI=true`, la config active `retries: 2` et `workers: 1` (séquentiel). L'artifact `playwright-report` contient les traces des tests en échec — téléchargeable depuis l'interface GitHub Actions.
 
+### Puppeteer — l'alternative Google, à connaître sans l'approfondir
+
+Puppeteer (maintenu par l'équipe Chrome) a le même rôle que Playwright — piloter un vrai navigateur via le protocole DevTools — mais avec un périmètre plus étroit : Chrome/Chromium natif, Firefox en support expérimental, pas de Safari/WebKit. Playwright a été créé par une partie de l'ancienne équipe Puppeteer chez Microsoft, précisément pour couvrir les trois moteurs (Chromium, Firefox, WebKit) avec une seule API — c'est la raison principale pour laquelle Playwright a pris l'avantage sur les projets multi-navigateurs depuis.
+
+API très proche en esprit (`page.goto`, `page.click`, `page.type`), mais sans les assertions web-first ni l'auto-waiting intégrés de Playwright : en Puppeteer pur, attendre un élément s'écrit explicitement (`page.waitForSelector(...)`) plutôt que d'être implicite dans chaque assertion. Terrain où tu le croiseras : du scraping/automation pur (pas du test E2E) où Puppeteer reste très utilisé, ou un projet legacy qui l'a adopté avant que Playwright existe (2020).
+
+Pas de lab dédié dans ce cours — si une mission l'impose, les réflexes de locators/actions/attente de ce module se transposent, seule la syntaxe d'attente explicite change.
+
 ## 3. Worked examples
 
 ### Exemple A — parcours invitation complet
