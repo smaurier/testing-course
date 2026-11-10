@@ -12,6 +12,17 @@ last-reviewed: 2026-07
 
 # Tests d'accessibilité
 
+> 📐 **La méthode d'audit est dans le cours 25 HTML & CSS**, module 20 : ce qu'un outil peut
+> décider et ce qu'il ne peut pas, le protocole clavier en huit étapes, le protocole lecteur
+> d'écran, l'échantillonnage. Ce module garde ce qui est propre au **test automatisé** :
+> `vitest-axe`, l'exécution dans jsdom contre un vrai navigateur, et l'intégration en CI.
+>
+> ⚠️ **Divergence assumée :** ce module cite « 30 à 40 % » de détection automatique. Le cours 25
+> ne cite volontairement aucun pourcentage, parce que ces chiffres varient selon la méthode de
+> comptage et ne disent rien d'un site donné. Ce qui est utile, et que le module 20 donne, c'est
+> la liste de ce qui **n'est pas** automatisable.
+
+
 > **Outcomes — tu sauras FAIRE :** automatiser des tests d'accessibilité avec axe-core dans Vitest, connaître les limites réelles de l'audit automatique (~30-40 %), compléter par des tests clavier ciblés, intégrer les vérifications a11y en CI sans faux positifs.
 > **Difficulté :** :star::star::star:
 
